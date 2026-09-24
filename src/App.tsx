@@ -2492,6 +2492,12 @@ const renderIdentityStep = () => (
       <label className="creator-field"><span>Nicknames</span><input type="text" placeholder="Informal names..." value={character.nicknames} onChange={(e)=>updateCharacter("nicknames",e.target.value)}/></label>
       <label className="creator-field"><span>Titles</span><input type="text" placeholder="Royal, magical, military, earned titles..." value={character.titles} onChange={(e)=>updateCharacter("titles",e.target.value)}/></label>
       <label className="creator-field"><span>Name Pronunciation</span><input type="text" placeholder="How the name is pronounced..." value={character.pronunciation} onChange={(e)=>updateCharacter("pronunciation",e.target.value)}/></label>
+      <label className="creator-field"><span>Name Meaning</span><input type="text" placeholder="Meaning or origin of the name..." value={character.nameMeaning} onChange={(e)=>updateCharacter("nameMeaning",e.target.value)}/></label>
+      <label className="creator-field"><span>Birth Date</span><input type="text" placeholder="Date, calendar date, or TBD..." value={character.birthDate} onChange={(e)=>updateCharacter("birthDate",e.target.value)}/></label>
+      <label className="creator-field"><span>Elemental Heritage</span><input type="text" placeholder="Fire + Water, Earth + Air..." value={character.elementalHeritage} onChange={(e)=>updateCharacter("elementalHeritage",e.target.value)}/></label>
+      <label className="creator-field"><span>Canon Status</span><input type="text" placeholder="Canon, concept, alternate, draft..." value={character.canonStatus} onChange={(e)=>updateCharacter("canonStatus",e.target.value)}/></label>
+      <label className="creator-field"><span>Spoiler Level</span><input type="text" placeholder="Public, minor, major, secret..." value={character.spoilerLevel} onChange={(e)=>updateCharacter("spoilerLevel",e.target.value)}/></label>
+      <label className="creator-field"><span>Era / Period</span><input type="text" placeholder="500–1300 AD-inspired period..." value={character.era} onChange={(e)=>updateCharacter("era",e.target.value)}/></label>
       <label className="creator-field"><span>Apparent Age</span><input type="text" placeholder="Useful for immortal or long-lived characters..." value={character.apparentAge} onChange={(e)=>updateCharacter("apparentAge",e.target.value)}/></label>
       <label className="creator-field"><span>Pronouns</span><input type="text" placeholder="She/her, he/him, they/them..." value={character.pronouns} onChange={(e)=>updateCharacter("pronouns",e.target.value)}/></label>
       <label className="creator-field"><span>Subrace / Variant</span><input type="text" placeholder="Specific branch, hybrid, variant..." value={character.subrace} onChange={(e)=>updateCharacter("subrace",e.target.value)}/></label>
@@ -2593,6 +2599,9 @@ const renderAppearanceStep = () => (
         />
       </label>
 
+      <label className="creator-field"><span>Weight</span><input type="text" placeholder="Exact, approximate, or TBD..." value={character.weight} onChange={(e)=>updateCharacter("weight",e.target.value)}/></label>
+      <label className="creator-field"><span>Dominant Hand</span><input type="text" placeholder="Right, left, ambidextrous, TBD..." value={character.dominantHand} onChange={(e)=>updateCharacter("dominantHand",e.target.value)}/></label>
+
       <label className="creator-field full-width">
         <span>Body Type / Build</span>
         <input
@@ -2643,13 +2652,14 @@ const renderAppearanceStep = () => (
         />
       </label>
 
-      <label className="creator-field"><span>Skin HEX / Color Reference</span><input type="text" placeholder="#6B382B + undertone/highlight notes..." value={character.skinHex} onChange={(e)=>updateCharacter("skinHex",e.target.value)}/></label>
-      <label className="creator-field"><span>Eye HEX / Color Reference</span><input type="text" placeholder="#1769C2 + inner/outer ring..." value={character.eyeHex} onChange={(e)=>updateCharacter("eyeHex",e.target.value)}/></label>
-      <label className="creator-field"><span>Hair HEX / Color Reference</span><input type="text" placeholder="#111111 + highlights/tips..." value={character.hairHex} onChange={(e)=>updateCharacter("hairHex",e.target.value)}/></label>
+      <label className="creator-field"><span>Skin HEX / Color Reference</span><input type="text" placeholder="#6B382B + undertone/highlight notes..." value={character.skinHex} onChange={(e)=>updateCharacter("skinHex",e.target.value)}/>{character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
+      <label className="creator-field"><span>Eye HEX / Color Reference</span><input type="text" placeholder="#1769C2 + inner/outer ring..." value={character.eyeHex} onChange={(e)=>updateCharacter("eyeHex",e.target.value)}/>{character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
+      <label className="creator-field"><span>Hair HEX / Color Reference</span><input type="text" placeholder="#111111 + highlights/tips..." value={character.hairHex} onChange={(e)=>updateCharacter("hairHex",e.target.value)}/>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
       <label className="creator-field"><span>Posture / Movement</span><textarea rows={3} placeholder="How they stand, walk, move, dominant hand..." value={character.postureMovement} onChange={(e)=>updateCharacter("postureMovement",e.target.value)}/></label>
       <label className="creator-field full-width"><span>Face Details</span><textarea rows={4} placeholder="Face shape, jawline, cheekbones, nose, lips, brows, eye shape, scars, markings..." value={character.faceDetails} onChange={(e)=>updateCharacter("faceDetails",e.target.value)}/></label>
       <label className="creator-field"><span>Makeup / Face Paint</span><textarea rows={4} placeholder="Eyeshadow, liner, lips, nails, ceremonial or magical markings and colors..." value={character.makeup} onChange={(e)=>updateCharacter("makeup",e.target.value)}/></label>
-      <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, nails, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
+      <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
+      <label className="creator-field"><span>Nails</span><textarea rows={4} placeholder="Shape, length, colors, gradient, gems, magical or metal accents..." value={character.nails} onChange={(e)=>updateCharacter("nails",e.target.value)}/></label>
       <label className="creator-field full-width"><span>Official Character Color Palette</span><textarea rows={5} placeholder={"Primary — #HEX\nSecondary — #HEX\nAccent — #HEX\nMagic — #HEX\nMetal — #HEX"} value={character.colorPalette} onChange={(e)=>updateCharacter("colorPalette",e.target.value)}/></label>
       <label className="creator-field full-width"><span>Signature / Default Outfit</span><textarea rows={6} placeholder="Head, upper body, lower body, footwear, accessories, weapons carried, construction..." value={character.signatureOutfit} onChange={(e)=>updateCharacter("signatureOutfit",e.target.value)}/></label>
       <label className="creator-field"><span>Outfit Color Breakdown</span><textarea rows={6} placeholder={"Outer robe — Smoky Black #17131A\nTrim — Gold #D9B65D..."} value={character.outfitColors} onChange={(e)=>updateCharacter("outfitColors",e.target.value)}/></label>
@@ -2906,6 +2916,8 @@ const renderAbilitiesStep = () => (
         />
       </label>
 
+      <label className="creator-field full-width"><span>Combat Profile</span><textarea rows={6} placeholder="Preferred range, unarmed style, defense, speed, strength, endurance, agility, tactical behavior, battlefield role, preferred tactics..." value={character.combatProfile} onChange={(e)=>updateCharacter("combatProfile",e.target.value)}/></label>
+
       <label className="creator-field full-width"><span>Weapon / Equipment Details</span><textarea rows={5} placeholder="Names, creators, materials, colors, dimensions, abilities, history, where carried..." value={character.weaponDetails} onChange={(e)=>updateCharacter("weaponDetails",e.target.value)}/></label>
 
       <label className="creator-field full-width">
@@ -3089,6 +3101,8 @@ const renderRelationshipsStep = () => (
         />
       </label>
 
+      <label className="creator-field full-width"><span>World Connections</span><textarea rows={6} placeholder="Realm → region → homeland → birthplace; race/subrace; faction/clan/house; bloodline; religion; organizations; historical events; important locations..." value={character.worldConnections} onChange={(e)=>updateCharacter("worldConnections",e.target.value)}/></label>
+
       <label className="creator-field full-width">
         <span>Relationship Notes</span>
         <textarea
@@ -3114,6 +3128,7 @@ const renderRelationshipsStep = () => (
 const renderMediaStep = () => (
   <section className="creator-form-card">
     <style>{`
+      .master-color-preview{display:flex;align-items:center;gap:9px;margin-top:8px;color:#bbaabd}.master-color-preview i{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(0,0,0,.22)}.master-color-preview small{font-family:monospace;font-size:12px}
       .media-upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px}
       .media-upload-card{border:1px solid rgba(185,92,209,.2);border-radius:16px;padding:16px;background:rgba(18,8,21,.55)}
       .media-upload-card strong{display:block;color:#e8c96f;margin-bottom:10px}
@@ -3183,6 +3198,11 @@ const renderMediaStep = () => (
         <span>External Gallery / Video / Folder URL (optional)</span>
         <input type="url" placeholder="https://..." value={character.galleryUrl} onChange={(e) => updateCharacter("galleryUrl", e.target.value)} />
       </label>
+
+      <label className="creator-field full-width"><span>Visual Production Asset Checklist</span><textarea rows={8} placeholder={"Official portrait — Done / Needed\nFull-body front — Done / Needed\nBack / left / right views\nFace, eye, hair, makeup, nails\nOutfit breakdown\nWeapon reference\nTransformation / alternate form\nExpression and combat references"} value={character.visualAssets} onChange={(e)=>updateCharacter("visualAssets",e.target.value)}/></label>
+      <label className="creator-field full-width"><span>Blender / VRoid Production Notes</span><textarea rows={7} placeholder="Model scale, material separation, shaders, hair pieces, rigging notes, texture rules, production colors..." value={character.productionNotes} onChange={(e)=>updateCharacter("productionNotes",e.target.value)}/></label>
+      <label className="creator-field"><span>Canon Locks</span><textarea rows={7} placeholder="Facts Studio and AI must not change without approval..." value={character.canonLocks} onChange={(e)=>updateCharacter("canonLocks",e.target.value)}/></label>
+      <label className="creator-field"><span>Editable / TBD Fields</span><textarea rows={7} placeholder="Facts not established yet. Keep these editable; do not let AI autofill them as canon..." value={character.tbdFields} onChange={(e)=>updateCharacter("tbdFields",e.target.value)}/></label>
 
       <label className="creator-field full-width">
         <span>Media Notes</span>
