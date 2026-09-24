@@ -1,4 +1,4 @@
-﻿{
+{
     "$schema":  "https://schema.tauri.app/config/2",
     "productName":  "Umbra Studio",
     "version":  "1.0.1",
