@@ -633,7 +633,29 @@ if(looksLikeCharacter){
   setCharacterImportPreview(preview);setImportPreview([]);return;
 }
 const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
-function applyCharacterImport(){if(!characterImportPreview)return;openCreateCharacter();setCharacter(current=>({...current,...characterImportPreview,galleryUrls:Array.isArray(characterImportPreview.galleryUrls)?characterImportPreview.galleryUrls:current.galleryUrls}));setImportText("");setCharacterImportPreview(null);setCreatorStep(1);setPage("create");window.scrollTo({top:0,behavior:"smooth"});}
+function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
+function importedNameList(value:any){return String(value??"").split(/[\n,;|]+/).map(x=>x.trim()).filter(Boolean);}
+async function applyCharacterImport(){
+ if(!characterImportPreview)return;
+ const imported={...characterImportPreview};
+ openCreateCharacter();
+ setCharacter(current=>({...current,...imported,galleryUrls:Array.isArray(imported.galleryUrls)?imported.galleryUrls:current.galleryUrls}));
+ const availableWorld=worldRecords.length?worldRecords:(await supabase.from("studio_world_records").select("id, user_id, record_type, name, subtype, description, emblem_url, cover_url, lore_details, is_public, created_at, updated_at").order("name")).data as WorldRecord[]||[];
+ const findWorld=(type:"realm"|"race"|"faction"|"family",value:any)=>availableWorld.find(x=>x.record_type===type&&normalizeImportName(x.name)===normalizeImportName(value));
+ const realm=findWorld("realm",imported.homeland)||findWorld("realm",imported.currentResidence);
+ const race=findWorld("race",imported.race);
+ const faction=findWorld("faction",imported.affiliation);
+ const family=findWorld("family",imported.lineage);
+ if(realm)setLinkedRealmId(realm.id); if(race)setLinkedRaceId(race.id); if(faction)setLinkedFactionId(faction.id); if(family)setLinkedFamilyId(family.id);
+ if(!worldRecords.length)setWorldRecords(availableWorld);
+ const {data:characterRows}=await supabase.from("studio_characters").select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at").order("name");
+ const options=(characterRows??[]) as StudioCharacterRow[]; setRelationshipOptions(options);
+ const relationGroups:[string,string][]=[["parents","parent"],["siblings","sibling"],["children","child"],["partner","partner"],["allies","ally"],["rivals","rival"],["enemies","enemy"],["mentors","mentor"]];
+ const matched:string[]=[];
+ for(const [field,type] of relationGroups){for(const name of importedNameList(imported[field])){const target=options.find(x=>normalizeImportName(x.name)===normalizeImportName(name));if(target)matched.push(`${type}: ${target.name}`);}}
+ if(matched.length)setRelationshipError(`Matched existing records: ${matched.join(" • ")}. Review and connect them in Relationships before final save.`);
+ setImportText("");setCharacterImportPreview(null);setCreatorStep(1);setPage("create");window.scrollTo({top:0,behavior:"smooth"});
+}
 async function commitImport(){if(!session||!importPreview.length)return;setDatabaseBusy(true);setImportError("");try{for(const row of importPreview){const type=recordTypes.find(t=>t.slug===row.record_type_slug||t.name.toLowerCase()===String(row.record_type_slug).toLowerCase());if(!type)throw new Error(`Unknown record type: ${row.record_type_slug}`);const {error}=await supabase.from("studio_database_records").insert({created_by:session.user.id,updated_by:session.user.id,record_type_id:type.id,name:row.name,subtitle:row.subtitle,summary:row.summary,details:row.details,workflow_status:row.workflow_status});if(error)throw error;}setImportText("");setImportPreview([]);await loadWorldDatabase();}catch(e){setImportError(e instanceof Error?e.message:"Import failed.");}finally{setDatabaseBusy(false);}}
 function duplicateGroups(){const active=databaseRecords.filter(r=>!r.archived_at);const groups=new Map<string,StudioDatabaseRecord[]>();for(const r of active){const key=`${r.record_type_id}|${r.name.trim().toLowerCase().replace(/[^a-z0-9]/g,"")}`;groups.set(key,[...(groups.get(key)||[]),r]);}return [...groups.values()].filter(g=>g.length>1);}
 async function loadV9Production(){
