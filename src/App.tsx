@@ -2676,15 +2676,7 @@ const renderAppearanceStep = () => (
 
       <RepeatableList label="Body Type / Build" value={character.build} field="build" placeholder="Add build trait, e.g. Athletic" />
 
-      <label className="creator-field full-width">
-        <span>Distinguishing Features</span>
-        <textarea
-          rows={4}
-          placeholder="Scars, markings, horns, pointed ears, glowing runes, unusual eyes..."
-          value={character.distinguishingFeatures}
-          onChange={(e) => updateCharacter("distinguishingFeatures", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Distinguishing Features" value={character.distinguishingFeatures} field="distinguishingFeatures" placeholder="Add scar, marking, horn, ear, rune, unusual feature..." />
 
       <label className="creator-field">
         <span>Clothing / Fashion Style</span>
@@ -2698,20 +2690,12 @@ const renderAppearanceStep = () => (
 
       <RepeatableList label="Accessories" value={character.accessories} field="accessories" placeholder="Add jewelry, glasses, beads, crowns, charms..." />
 
-      <label className="creator-field full-width">
-        <span>Alternate / True Form</span>
-        <textarea
-          rows={4}
-          placeholder="Dragon form, fairy form, werebeast form, transformation..."
-          value={character.alternateForm}
-          onChange={(e) => updateCharacter("alternateForm", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Alternate / True Form" value={character.alternateForm} field="alternateForm" placeholder="Add alternate form, e.g. Dragon Form" />
 
-      <label className="creator-field"><span>Skin HEX / Color Reference</span><input type="text" placeholder="#6B382B + undertone/highlight notes..." value={character.skinHex} onChange={(e)=>updateCharacter("skinHex",e.target.value)}/>{character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
-      <label className="creator-field"><span>Eye HEX / Color Reference</span><input type="text" placeholder="#1769C2 + inner/outer ring..." value={character.eyeHex} onChange={(e)=>updateCharacter("eyeHex",e.target.value)}/>{character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
-      <label className="creator-field"><span>Hair HEX / Color Reference</span><input type="text" placeholder="#111111 + highlights/tips..." value={character.hairHex} onChange={(e)=>updateCharacter("hairHex",e.target.value)}/>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
-      <label className="creator-field"><span>Posture / Movement</span><textarea rows={3} placeholder="How they stand, walk, move, dominant hand..." value={character.postureMovement} onChange={(e)=>updateCharacter("postureMovement",e.target.value)}/></label>
+      <RepeatableColorList label="Skin HEX / Color Reference" value={character.skinHex} field="skinHex" placeholder="Add skin color, undertone, highlight..." />
+      <RepeatableColorList label="Eye HEX / Color Reference" value={character.eyeHex} field="eyeHex" placeholder="Add eye color, ring, glow, pupil detail..." />
+      <RepeatableColorList label="Hair HEX / Color Reference" value={character.hairHex} field="hairHex" placeholder="Add hair color, highlight, tip, streak..." />
+      <RepeatableList label="Posture / Movement" value={character.postureMovement} field="postureMovement" placeholder="Add posture, movement, gait, stance detail..." />
       <RepeatableList label="Face Details" value={character.faceDetails} field="faceDetails" placeholder="Add face detail, e.g. High cheekbones" />
       <RepeatableColorList label="Makeup / Face Paint" value={character.makeup} field="makeup" placeholder="Add makeup or face paint, e.g. Eyeshadow" />
       <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
