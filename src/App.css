@@ -1988,3 +1988,14 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
 @media (max-width: 620px) {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
+
+/* 1.0.4 repeatable character data */
+.repeatable-field { min-width: 0; }
+.repeatable-add-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px; align-items:center; }
+.repeatable-add-row .secondary-action { min-width:92px; }
+.repeatable-chip-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.repeatable-chip { display:flex; align-items:center; gap:8px; max-width:100%; padding:8px 10px; border:1px solid rgba(185,92,209,.25); border-radius:999px; background:rgba(31,13,35,.72); color:#dfcfe1; }
+.repeatable-chip span { overflow-wrap:anywhere; }
+.repeatable-chip button { border:0; background:transparent; color:#d99be4; font-size:18px; cursor:pointer; }
+.repeatable-empty { color:#806f83; margin-top:8px; }
+@media(max-width:620px){.repeatable-add-row{grid-template-columns:1fr}.repeatable-add-row .secondary-action{width:100%}}
