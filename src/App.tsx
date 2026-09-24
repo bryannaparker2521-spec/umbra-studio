@@ -3017,11 +3017,11 @@ const renderMediaStep = () => (
         <div className="media-upload-card" key={item.kind}>
           <strong>{item.label}</strong>
           {item.url && <img className="media-thumb" src={item.url} alt={item.label} />}
-          <input type="file" accept="image/*" disabled={uploadingMedia !== null} onChange={(e) => {
+          <label className="umbra-file-button">{uploadingMedia === item.kind ? "Uploading..." : item.url ? "Replace Image" : "Choose Image"}<input hidden type="file" accept="image/*" disabled={uploadingMedia !== null} onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void uploadCharacterImage(file, item.kind);
             e.currentTarget.value = "";
-          }} />
+          }} /></label>
           <p className="upload-help">{uploadingMedia === item.kind ? "Uploading..." : "PNG, JPG, WEBP or GIF • max 10 MB"}</p>
         </div>
       ))}
@@ -3043,11 +3043,11 @@ const renderMediaStep = () => (
 
       <div className="creator-field full-width">
         <span>Gallery Images</span>
-        <input type="file" accept="image/*" multiple disabled={uploadingMedia !== null} onChange={async (e) => {
+        <label className="umbra-file-button">+ Add Multiple Images<input hidden type="file" accept="image/*" multiple disabled={uploadingMedia !== null} onChange={async (e) => {
           const files = Array.from(e.target.files ?? []);
           for (const file of files) await uploadCharacterImage(file, "gallery");
           e.currentTarget.value = "";
-        }} />
+        }} /></label>
         <p className="upload-help">Choose multiple images. They will appear on the finished character profile.</p>
         {character.galleryUrls.length > 0 && <div className="media-gallery-editor">{character.galleryUrls.map((url, index) => <div className="media-gallery-item" key={url}><img src={url} alt={`Gallery ${index + 1}`} /><button type="button" title="Remove from profile" onClick={() => removeGalleryImage(url)}>×</button></div>)}</div>}
       </div>
