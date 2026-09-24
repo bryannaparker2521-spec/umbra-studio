@@ -2295,7 +2295,6 @@ const abilities = saved.abilities ?? {};
 const relationships = saved.relationships ?? {};
 const media = saved.media ?? {};
 const portrait = saved.portrait_url || media.portraitUrl || "";
-const productionItems = entries(media, { visualAssets:"Visual Production Asset Checklist", productionNotes:"Blender / VRoid Production Notes", canonLocks:"Canon Locks", tbdFields:"Editable / TBD Fields" });
 const mediaItems = [
   { label: "Portrait", url: media.portraitUrl || saved.portrait_url || "" },
   { label: "Reference Sheet", url: media.referenceArtUrl || "" },
@@ -2306,6 +2305,7 @@ const entries = (record: Record<string, string>, labels: Record<string, string>)
   Object.entries(labels)
     .map(([key, label]) => ({ label, value: record[key] }))
     .filter((item) => item.value && item.value.trim());
+const productionItems = entries(media, { visualAssets:"Visual Production Asset Checklist", productionNotes:"Blender / VRoid Production Notes", canonLocks:"Canon Locks", tbdFields:"Editable / TBD Fields" });
 const identityItems = entries(identity, { nicknames:"Nicknames", titles:"Titles", pronunciation:"Pronunciation", nameMeaning:"Name Meaning", birthDate:"Birth Date", elementalHeritage:"Elemental Heritage", canonStatus:"Canon Status", spoilerLevel:"Spoiler Level", era:"Era", age:"Age", apparentAge:"Apparent Age", gender:"Gender", pronouns:"Pronouns", race:"Race / Species", subrace:"Subrace / Variant", heritage:"Heritage / Ethnicity", nationality:"Nationality / People", homeland:"Homeland", currentResidence:"Current Residence", affiliation:"Affiliation", occupation:"Occupation / Role" });
 const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", skinHex:"Skin HEX / Color Reference", faceDetails:"Face Details", eyeColor:"Eye Color", eyeHex:"Eye HEX / Color Reference", hairColor:"Hair Color", hairHex:"Hair HEX / Color Reference", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", weight:"Weight", dominantHand:"Dominant Hand", build:"Build", postureMovement:"Posture / Movement", distinguishingFeatures:"Distinguishing Features", makeup:"Makeup / Face Paint", grooming:"Grooming", nails:"Nails", colorPalette:"Official Color Palette", clothingStyle:"Fashion Style", signatureOutfit:"Signature / Default Outfit", outfitColors:"Outfit Color Breakdown", outfitMaterials:"Outfit Materials / Construction", wardrobe:"Wardrobe / Alternate Outfits", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
 const loreItems = entries(origin, { birthplace:"Birthplace / Origin", lineage:"Family / Lineage", culture:"Culture / Heritage", childhood:"Childhood / Early Life", majorLifeEvents:"Major Life Events", backstory:"Full Backstory", personality:"Personality", voiceSpeech:"Voice / Speech", psychology:"Psychology / Inner Character", lifestyle:"Lifestyle / Everyday Life", likesDislikes:"Likes / Dislikes / Preferences", motivations:"Motivations", goals:"Goals / Ambitions", fears:"Fears / Inner Conflicts", beliefs:"Beliefs / Worldview", storyRole:"Current Story Role", storyArc:"Character Arc / Story Information" });
