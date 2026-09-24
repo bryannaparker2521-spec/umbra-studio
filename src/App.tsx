@@ -3129,16 +3129,17 @@ const renderMediaStep = () => (
   <section className="creator-form-card">
     <style>{`
       .master-color-preview{display:flex;align-items:center;gap:9px;margin-top:8px;color:#bbaabd}.master-color-preview i{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(0,0,0,.22)}.master-color-preview small{font-family:monospace;font-size:12px}
-      .media-upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px}
-      .media-upload-card{border:1px solid rgba(185,92,209,.2);border-radius:16px;padding:16px;background:rgba(18,8,21,.55)}
-      .media-upload-card strong{display:block;color:#e8c96f;margin-bottom:10px}
-      .media-upload-card input[type=file]{width:100%;color:#bbaabd}
+      .media-upload-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0;width:100%;min-width:0}
+      .media-upload-card{min-width:0;overflow:hidden;border:1px solid rgba(185,92,209,.2);border-radius:16px;padding:16px;box-sizing:border-box;background:rgba(18,8,21,.55);display:flex;flex-direction:column;align-items:stretch}
+      .media-upload-card strong{display:block;min-height:38px;color:#e8c96f;margin-bottom:10px;line-height:1.35}
+      .media-upload-card input[type=file]{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;color:#bbaabd;font-size:12px;overflow:hidden}
+      .media-upload-card input[type=file]::file-selector-button{max-width:100%;margin:0 8px 8px 0;padding:8px 10px;border:1px solid rgba(232,201,111,.3);border-radius:9px;background:#170d1b;color:#ead080;cursor:pointer}
       .media-thumb{width:100%;height:190px;object-fit:cover;border-radius:12px;margin-bottom:12px;background:#09060c}
       .media-gallery-editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
       .media-gallery-item{position:relative}.media-gallery-item img{width:100%;height:180px;object-fit:cover;border-radius:12px}
       .media-gallery-item button{position:absolute;right:8px;top:8px;border:0;border-radius:999px;background:rgba(8,5,12,.88);color:#fff;width:30px;height:30px;cursor:pointer}
       .upload-help{color:#9f8ba2;font-size:12px;line-height:1.6;margin-top:8px}
-      @media(max-width:800px){.media-upload-grid{grid-template-columns:1fr}}
+      @media(max-width:1050px){.media-upload-grid{grid-template-columns:1fr}.media-thumb{height:min(320px,42vw)}}
     `}</style>
     <div className="form-section-heading">
       <span className="form-section-icon">✦</span>
