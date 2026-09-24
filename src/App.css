@@ -2061,3 +2061,12 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
 .repeatable-color-row .secondary-action{min-width:92px}
 .color-chip i{width:18px;height:18px;flex:0 0 18px;border-radius:50%;border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
 @media(max-width:760px){.repeatable-color-row{grid-template-columns:1fr}.repeatable-color-row .secondary-action{width:100%}}
+
+/* 1.0.4 color entries + consistent upload controls */
+.repeatable-color-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,180px) auto;gap:9px;align-items:center}
+.repeatable-color-row input{min-width:0;width:100%;box-sizing:border-box}
+.color-chip i{width:18px;height:18px;flex:0 0 18px;border-radius:50%;border:1px solid rgba(255,255,255,.28)}
+.umbra-file-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;width:max-content;max-width:100%;padding:10px 16px;box-sizing:border-box;border:1px solid rgba(232,201,111,.3);border-radius:10px;background:rgba(31,13,35,.78);color:#ead080;font-weight:700;cursor:pointer;transition:.18s ease}
+.umbra-file-button:hover{border-color:rgba(232,201,111,.7);background:rgba(55,27,58,.9)}
+.media-upload-card .umbra-file-button{width:100%}
+@media(max-width:700px){.repeatable-color-row{grid-template-columns:1fr}.repeatable-color-row .secondary-action{width:100%}.umbra-file-button{width:100%}}
