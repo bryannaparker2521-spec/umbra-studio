@@ -2411,6 +2411,17 @@ const navItems = [
   "Media",
 ];
 
+const RepeatableList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
+  const items = value.split(/\n+/).map((item)=>item.trim()).filter(Boolean);
+  const [draft, setDraft] = useState("");
+  const saveItems = (next:string[]) => updateCharacter(field, next.join("\n") as never);
+  return <div className="creator-field full-width repeatable-field">
+    <span>{label}</span>
+    <div className="repeatable-add-row"><input value={draft} onChange={(e)=>setDraft(e.target.value)} placeholder={placeholder} onKeyDown={(e)=>{if(e.key==="Enter"){e.preventDefault();const next=draft.trim();if(next){saveItems([...items,next]);setDraft("");}}}}/><button type="button" className="secondary-action" onClick={()=>{const next=draft.trim();if(next){saveItems([...items,next]);setDraft("");}}}>+ Add</button></div>
+    {items.length>0 ? <div className="repeatable-chip-list">{items.map((item,index)=><div className="repeatable-chip" key={`${label}-${index}-${item}`}><span>{item}</span><button type="button" aria-label={`Remove ${item}`} onClick={()=>saveItems(items.filter((_,i)=>i!==index))}>×</button></div>)}</div> : <small className="repeatable-empty">Nothing added yet.</small>}
+  </div>;
+};
+
 const renderIdentityStep = () => (
   <section className="creator-form-card">
     <div className="form-section-heading">
@@ -2876,45 +2887,13 @@ const renderAbilitiesStep = () => (
         />
       </label>
 
-      <label className="creator-field full-width">
-        <span>Primary Abilities</span>
-        <textarea
-          rows={5}
-          placeholder="Describe their core powers and what each one can do..."
-          value={character.primaryAbilities}
-          onChange={(e) => updateCharacter("primaryAbilities", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Primary Abilities / Powers" value={character.primaryAbilities} field="primaryAbilities" placeholder="Add a power, e.g. Steam Manipulation" />
 
-      <label className="creator-field full-width">
-        <span>Secondary Abilities</span>
-        <textarea
-          rows={4}
-          placeholder="Supporting powers, passive abilities, senses, resistances..."
-          value={character.secondaryAbilities}
-          onChange={(e) => updateCharacter("secondaryAbilities", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Secondary Abilities" value={character.secondaryAbilities} field="secondaryAbilities" placeholder="Add a passive, resistance, sense..." />
 
-      <label className="creator-field">
-        <span>Signature Techniques</span>
-        <textarea
-          rows={5}
-          placeholder="Named attacks, special moves, ultimate techniques..."
-          value={character.signatureTechniques}
-          onChange={(e) => updateCharacter("signatureTechniques", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Signature Techniques" value={character.signatureTechniques} field="signatureTechniques" placeholder="Add a named technique..." />
 
-      <label className="creator-field">
-        <span>Weapons / Equipment</span>
-        <textarea
-          rows={5}
-          placeholder="Swords, staffs, artifacts, armor, enchanted items..."
-          value={character.weapons}
-          onChange={(e) => updateCharacter("weapons", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Weapons / Equipment" value={character.weapons} field="weapons" placeholder="Add a weapon, artifact, armor..." />
 
       <label className="creator-field full-width"><span>Combat Profile</span><textarea rows={6} placeholder="Preferred range, unarmed style, defense, speed, strength, endurance, agility, tactical behavior, battlefield role, preferred tactics..." value={character.combatProfile} onChange={(e)=>updateCharacter("combatProfile",e.target.value)}/></label>
 
@@ -3129,6 +3108,7 @@ const renderMediaStep = () => (
   <section className="creator-form-card">
     <style>{`
       .master-color-preview{display:flex;align-items:center;gap:9px;margin-top:8px;color:#bbaabd}.master-color-preview i{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(0,0,0,.22)}.master-color-preview small{font-family:monospace;font-size:12px}
+      .repeatable-add-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.repeatable-add-row .secondary-action{min-width:92px}.repeatable-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.repeatable-chip{display:flex;align-items:center;gap:8px;max-width:100%;padding:8px 10px;border:1px solid rgba(185,92,209,.25);border-radius:999px;background:rgba(31,13,35,.72);color:#dfcfe1}.repeatable-chip span{overflow-wrap:anywhere}.repeatable-chip button{border:0;background:transparent;color:#d99be4;font-size:18px;cursor:pointer}.repeatable-empty{color:#806f83;margin-top:8px}
       .media-upload-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0;width:100%;min-width:0}
       .media-upload-card{min-width:0;overflow:hidden;border:1px solid rgba(185,92,209,.2);border-radius:16px;padding:16px;box-sizing:border-box;background:rgba(18,8,21,.55);display:flex;flex-direction:column;align-items:stretch}
       .media-upload-card strong{display:block;min-height:38px;color:#e8c96f;margin-bottom:10px;line-height:1.35}
