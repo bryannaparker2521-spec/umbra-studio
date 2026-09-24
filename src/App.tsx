@@ -2844,25 +2844,9 @@ const renderAbilitiesStep = () => (
     </div>
 
     <div className="creator-form-grid">
-      <label className="creator-field">
-        <span>Power Source / Magic Type</span>
-        <input
-          type="text"
-          placeholder="Umbral Genesis, fire, runes, spiritual energy..."
-          value={character.powerSource}
-          onChange={(e) => updateCharacter("powerSource", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Power Source / Magic Type" value={character.powerSource} field="powerSource" placeholder="Add a power source or magic type..." />
 
-      <label className="creator-field">
-        <span>Combat Style</span>
-        <input
-          type="text"
-          placeholder="Martial arts, swordsmanship, ranged, magical..."
-          value={character.combatStyle}
-          onChange={(e) => updateCharacter("combatStyle", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Combat Style" value={character.combatStyle} field="combatStyle" placeholder="Add a combat style..." />
 
       <RepeatableList label="Primary Abilities / Powers" value={character.primaryAbilities} field="primaryAbilities" placeholder="Add a power, e.g. Steam Manipulation" />
 
@@ -2876,47 +2860,15 @@ const renderAbilitiesStep = () => (
 
       <label className="creator-field full-width"><span>Weapon / Equipment Details</span><textarea rows={5} placeholder="Names, creators, materials, colors, dimensions, abilities, history, where carried..." value={character.weaponDetails} onChange={(e)=>updateCharacter("weaponDetails",e.target.value)}/></label>
 
-      <label className="creator-field full-width">
-        <span>Transformations / Power States</span>
-        <textarea
-          rows={5}
-          placeholder="Dragon forms, awakened states, transformations, modes..."
-          value={character.transformations}
-          onChange={(e) => updateCharacter("transformations", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Transformations / Power States" value={character.transformations} field="transformations" placeholder="Add a transformation or power state..." />
 
       <label className="creator-field full-width"><span>Transformation Details</span><textarea rows={6} placeholder="Trigger, sequence, size, anatomy, palette, aura, abilities gained/lost, mental/voice/clothing changes, limits..." value={character.transformationDetails} onChange={(e)=>updateCharacter("transformationDetails",e.target.value)}/></label>
 
-      <label className="creator-field">
-        <span>Strengths</span>
-        <textarea
-          rows={4}
-          placeholder="What are they especially powerful or skilled at?"
-          value={character.strengths}
-          onChange={(e) => updateCharacter("strengths", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Strengths" value={character.strengths} field="strengths" placeholder="Add a strength..." />
 
-      <label className="creator-field">
-        <span>Weaknesses</span>
-        <textarea
-          rows={4}
-          placeholder="Physical, magical, emotional, tactical weaknesses..."
-          value={character.weaknesses}
-          onChange={(e) => updateCharacter("weaknesses", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Weaknesses" value={character.weaknesses} field="weaknesses" placeholder="Add a weakness..." />
 
-      <label className="creator-field full-width">
-        <span>Limits / Costs / Conditions</span>
-        <textarea
-          rows={4}
-          placeholder="Cooldowns, energy costs, conditions, consequences, restrictions..."
-          value={character.limitations}
-          onChange={(e) => updateCharacter("limitations", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Limits / Costs / Conditions" value={character.limitations} field="limitations" placeholder="Add a limit, cost, or condition..." />
 
       <label className="creator-field full-width">
         <span>Additional Ability Notes</span>
