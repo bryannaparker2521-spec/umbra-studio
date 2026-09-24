@@ -2055,3 +2055,9 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
 .database-primary-tabs button{white-space:nowrap}
 .database-more-tools{flex:0 0 190px;min-width:0;max-width:100%;padding:12px 14px;border:1px solid rgba(185,92,209,.25);border-radius:12px;background:#100914;color:#d9c5dc}
 @media(max-width:900px){.database-nav-shell{align-items:stretch;flex-direction:column}.database-more-tools{width:100%;flex-basis:auto}.database-primary-tabs{width:100%}}
+
+.repeatable-color-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.35fr) auto;gap:9px;align-items:center}
+.repeatable-color-row input,.repeatable-color-row button{min-width:0;max-width:100%;box-sizing:border-box}
+.repeatable-color-row .secondary-action{min-width:92px}
+.color-chip i{width:18px;height:18px;flex:0 0 18px;border-radius:50%;border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+@media(max-width:760px){.repeatable-color-row{grid-template-columns:1fr}.repeatable-color-row .secondary-action{width:100%}}
