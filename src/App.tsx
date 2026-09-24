@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import StudioUpdateCenter from "./StudioUpdateCenter";
+import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
 
 type StudioPage = "dashboard" | "create" | "characters" | "library" | "profile" | "connections" | "world" | "explorer" | "admin" | "database" | "canon" | "production" | "settings" | "messages" | "transfer";
@@ -289,6 +290,7 @@ const [productionError,setProductionError]=useState("");
 const [studioSettings,setStudioSettings]=useState<StudioSettings|null>(null);
 const [settingsError,setSettingsError]=useState("");
 const [settingsBusy,setSettingsBusy]=useState(false);
+const [appVersion,setAppVersion]=useState("...");
 const [directMessages,setDirectMessages]=useState<StudioDirectMessage[]>([]);
 const [messageRecipientId,setMessageRecipientId]=useState("");
 const [messageBody,setMessageBody]=useState("");
@@ -307,20 +309,42 @@ const [journeyForm,setJourneyForm]=useState({characterId:"",projectId:"",arcId:"
 const [character, setCharacter] = useState({
   name: "",
   alias: "",
+  nicknames: "",
+  titles: "",
+  pronunciation: "",
   age: "",
+  apparentAge: "",
+  pronouns: "",
+  subrace: "",
+  heritage: "",
+  nationality: "",
+  currentResidence: "",
+  occupation: "",
   race: "",
   gender: "",
   homeland: "",
   affiliation: "",
   summary: "",
   skinTone: "",
+  skinHex: "",
+  faceDetails: "",
   eyeColor: "",
+  eyeHex: "",
   hairColor: "",
+  hairHex: "",
   hairTexture: "",
   hairStyle: "",
   height: "",
   build: "",
+  postureMovement: "",
   distinguishingFeatures: "",
+  makeup: "",
+  grooming: "",
+  colorPalette: "",
+  signatureOutfit: "",
+  outfitColors: "",
+  outfitMaterials: "",
+  wardrobe: "",
   clothingStyle: "",
   accessories: "",
   alternateForm: "",
@@ -332,17 +356,24 @@ const [character, setCharacter] = useState({
   backstory: "",
   majorLifeEvents: "",
   personality: "",
+  voiceSpeech: "",
+  psychology: "",
+  lifestyle: "",
+  likesDislikes: "",
   motivations: "",
   goals: "",
   fears: "",
   beliefs: "",
   storyRole: "",
+  storyArc: "",
   powerSource: "",
   primaryAbilities: "",
   secondaryAbilities: "",
   signatureTechniques: "",
   weapons: "",
+  weaponDetails: "",
   transformations: "",
+  transformationDetails: "",
   strengths: "",
   weaknesses: "",
   limitations: "",
@@ -364,6 +395,8 @@ const [character, setCharacter] = useState({
   galleryUrls: [] as string[],
   mediaNotes: "",
 });
+
+useEffect(()=>{ getVersion().then(setAppVersion).catch(()=>setAppVersion("Unknown")); },[]);
 
 useEffect(() => {
 let mounted = true;
@@ -701,20 +734,42 @@ setLinkedFamilyId(saved.family_record_id ?? "");
 setCharacter({
   name: identity.name ?? saved.name ?? "",
   alias: identity.alias ?? "",
+  nicknames: identity.nicknames ?? "",
+  titles: identity.titles ?? "",
+  pronunciation: identity.pronunciation ?? "",
   age: identity.age ?? "",
+  apparentAge: identity.apparentAge ?? "",
+  pronouns: identity.pronouns ?? "",
+  subrace: identity.subrace ?? "",
+  heritage: identity.heritage ?? "",
+  nationality: identity.nationality ?? "",
+  currentResidence: identity.currentResidence ?? "",
+  occupation: identity.occupation ?? "",
   race: identity.race ?? "",
   gender: identity.gender ?? "",
   homeland: identity.homeland ?? "",
   affiliation: identity.affiliation ?? "",
   summary: identity.summary ?? "",
   skinTone: appearance.skinTone ?? "",
+  skinHex: appearance.skinHex ?? "",
+  faceDetails: appearance.faceDetails ?? "",
   eyeColor: appearance.eyeColor ?? "",
+  eyeHex: appearance.eyeHex ?? "",
   hairColor: appearance.hairColor ?? "",
+  hairHex: appearance.hairHex ?? "",
   hairTexture: appearance.hairTexture ?? "",
   hairStyle: appearance.hairStyle ?? "",
   height: appearance.height ?? "",
   build: appearance.build ?? "",
+  postureMovement: appearance.postureMovement ?? "",
   distinguishingFeatures: appearance.distinguishingFeatures ?? "",
+  makeup: appearance.makeup ?? "",
+  grooming: appearance.grooming ?? "",
+  colorPalette: appearance.colorPalette ?? "",
+  signatureOutfit: appearance.signatureOutfit ?? "",
+  outfitColors: appearance.outfitColors ?? "",
+  outfitMaterials: appearance.outfitMaterials ?? "",
+  wardrobe: appearance.wardrobe ?? "",
   clothingStyle: appearance.clothingStyle ?? "",
   accessories: appearance.accessories ?? "",
   alternateForm: appearance.alternateForm ?? "",
@@ -726,17 +781,24 @@ setCharacter({
   backstory: origin.backstory ?? "",
   majorLifeEvents: origin.majorLifeEvents ?? "",
   personality: origin.personality ?? "",
+  voiceSpeech: origin.voiceSpeech ?? "",
+  psychology: origin.psychology ?? "",
+  lifestyle: origin.lifestyle ?? "",
+  likesDislikes: origin.likesDislikes ?? "",
   motivations: origin.motivations ?? "",
   goals: origin.goals ?? "",
   fears: origin.fears ?? "",
   beliefs: origin.beliefs ?? "",
   storyRole: origin.storyRole ?? "",
+  storyArc: origin.storyArc ?? "",
   powerSource: abilities.powerSource ?? "",
   primaryAbilities: abilities.primaryAbilities ?? "",
   secondaryAbilities: abilities.secondaryAbilities ?? "",
   signatureTechniques: abilities.signatureTechniques ?? "",
   weapons: abilities.weapons ?? "",
+  weaponDetails: abilities.weaponDetails ?? "",
   transformations: abilities.transformations ?? "",
+  transformationDetails: abilities.transformationDetails ?? "",
   strengths: abilities.strengths ?? "",
   weaknesses: abilities.weaknesses ?? "",
   limitations: abilities.limitations ?? "",
@@ -1303,20 +1365,42 @@ void loadWorldRecords();
 setCharacter({
   name: "",
   alias: "",
+  nicknames: "",
+  titles: "",
+  pronunciation: "",
   age: "",
+  apparentAge: "",
+  pronouns: "",
+  subrace: "",
+  heritage: "",
+  nationality: "",
+  currentResidence: "",
+  occupation: "",
   race: "",
   gender: "",
   homeland: "",
   affiliation: "",
   summary: "",
   skinTone: "",
+  skinHex: "",
+  faceDetails: "",
   eyeColor: "",
+  eyeHex: "",
   hairColor: "",
+  hairHex: "",
   hairTexture: "",
   hairStyle: "",
   height: "",
   build: "",
+  postureMovement: "",
   distinguishingFeatures: "",
+  makeup: "",
+  grooming: "",
+  colorPalette: "",
+  signatureOutfit: "",
+  outfitColors: "",
+  outfitMaterials: "",
+  wardrobe: "",
   clothingStyle: "",
   accessories: "",
   alternateForm: "",
@@ -1328,17 +1412,24 @@ setCharacter({
   backstory: "",
   majorLifeEvents: "",
   personality: "",
+  voiceSpeech: "",
+  psychology: "",
+  lifestyle: "",
+  likesDislikes: "",
   motivations: "",
   goals: "",
   fears: "",
   beliefs: "",
   storyRole: "",
+  storyArc: "",
   powerSource: "",
   primaryAbilities: "",
   secondaryAbilities: "",
   signatureTechniques: "",
   weapons: "",
+  weaponDetails: "",
   transformations: "",
+  transformationDetails: "",
   strengths: "",
   weaknesses: "",
   limitations: "",
@@ -1384,7 +1475,17 @@ return {
   identity: {
     name: character.name,
     alias: character.alias,
+    nicknames: character.nicknames,
+    titles: character.titles,
+    pronunciation: character.pronunciation,
     age: character.age,
+    apparentAge: character.apparentAge,
+    pronouns: character.pronouns,
+    subrace: character.subrace,
+    heritage: character.heritage,
+    nationality: character.nationality,
+    currentResidence: character.currentResidence,
+    occupation: character.occupation,
     race: character.race,
     gender: character.gender,
     homeland: character.homeland,
@@ -1393,13 +1494,25 @@ return {
   },
   appearance: {
     skinTone: character.skinTone,
+    skinHex: character.skinHex,
+    faceDetails: character.faceDetails,
     eyeColor: character.eyeColor,
+    eyeHex: character.eyeHex,
     hairColor: character.hairColor,
+    hairHex: character.hairHex,
     hairTexture: character.hairTexture,
     hairStyle: character.hairStyle,
     height: character.height,
     build: character.build,
+    postureMovement: character.postureMovement,
     distinguishingFeatures: character.distinguishingFeatures,
+    makeup: character.makeup,
+    grooming: character.grooming,
+    colorPalette: character.colorPalette,
+    signatureOutfit: character.signatureOutfit,
+    outfitColors: character.outfitColors,
+    outfitMaterials: character.outfitMaterials,
+    wardrobe: character.wardrobe,
     clothingStyle: character.clothingStyle,
     accessories: character.accessories,
     alternateForm: character.alternateForm,
@@ -1413,11 +1526,16 @@ return {
     backstory: character.backstory,
     majorLifeEvents: character.majorLifeEvents,
     personality: character.personality,
+    voiceSpeech: character.voiceSpeech,
+    psychology: character.psychology,
+    lifestyle: character.lifestyle,
+    likesDislikes: character.likesDislikes,
     motivations: character.motivations,
     goals: character.goals,
     fears: character.fears,
     beliefs: character.beliefs,
     storyRole: character.storyRole,
+    storyArc: character.storyArc,
   },
   abilities: {
     powerSource: character.powerSource,
@@ -1425,7 +1543,9 @@ return {
     secondaryAbilities: character.secondaryAbilities,
     signatureTechniques: character.signatureTechniques,
     weapons: character.weapons,
+    weaponDetails: character.weaponDetails,
     transformations: character.transformations,
+    transformationDetails: character.transformationDetails,
     strengths: character.strengths,
     weaknesses: character.weaknesses,
     limitations: character.limitations,
@@ -2112,10 +2232,10 @@ const entries = (record: Record<string, string>, labels: Record<string, string>)
   Object.entries(labels)
     .map(([key, label]) => ({ label, value: record[key] }))
     .filter((item) => item.value && item.value.trim());
-const identityItems = entries(identity, { age:"Age", race:"Race / Species", gender:"Gender", homeland:"Homeland", affiliation:"Affiliation" });
-const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", eyeColor:"Eye Color", hairColor:"Hair Color", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", build:"Build", distinguishingFeatures:"Distinguishing Features", clothingStyle:"Clothing / Fashion", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
-const loreItems = entries(origin, { birthplace:"Birthplace / Origin", lineage:"Family / Lineage", culture:"Culture / Heritage", childhood:"Childhood / Early Life", majorLifeEvents:"Major Life Events", backstory:"Full Backstory", personality:"Personality", motivations:"Motivations", goals:"Goals / Ambitions", fears:"Fears / Inner Conflicts", beliefs:"Beliefs / Worldview", storyRole:"Current Story Role" });
-const abilityItems = entries(abilities, { powerSource:"Power Source / Magic Type", combatStyle:"Combat Style", primaryAbilities:"Primary Abilities", secondaryAbilities:"Secondary Abilities", signatureTechniques:"Signature Techniques", weapons:"Weapons / Equipment", transformations:"Transformations / Power States", strengths:"Strengths", weaknesses:"Weaknesses", limitations:"Limits / Costs / Conditions", abilityNotes:"Ability Notes" });
+const identityItems = entries(identity, { nicknames:"Nicknames", titles:"Titles", pronunciation:"Pronunciation", age:"Age", apparentAge:"Apparent Age", gender:"Gender", pronouns:"Pronouns", race:"Race / Species", subrace:"Subrace / Variant", heritage:"Heritage / Ethnicity", nationality:"Nationality / People", homeland:"Homeland", currentResidence:"Current Residence", affiliation:"Affiliation", occupation:"Occupation / Role" });
+const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", skinHex:"Skin HEX / Color Reference", faceDetails:"Face Details", eyeColor:"Eye Color", eyeHex:"Eye HEX / Color Reference", hairColor:"Hair Color", hairHex:"Hair HEX / Color Reference", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", build:"Build", postureMovement:"Posture / Movement", distinguishingFeatures:"Distinguishing Features", makeup:"Makeup / Face Paint", grooming:"Grooming", colorPalette:"Official Color Palette", clothingStyle:"Fashion Style", signatureOutfit:"Signature / Default Outfit", outfitColors:"Outfit Color Breakdown", outfitMaterials:"Outfit Materials / Construction", wardrobe:"Wardrobe / Alternate Outfits", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
+const loreItems = entries(origin, { birthplace:"Birthplace / Origin", lineage:"Family / Lineage", culture:"Culture / Heritage", childhood:"Childhood / Early Life", majorLifeEvents:"Major Life Events", backstory:"Full Backstory", personality:"Personality", voiceSpeech:"Voice / Speech", psychology:"Psychology / Inner Character", lifestyle:"Lifestyle / Everyday Life", likesDislikes:"Likes / Dislikes / Preferences", motivations:"Motivations", goals:"Goals / Ambitions", fears:"Fears / Inner Conflicts", beliefs:"Beliefs / Worldview", storyRole:"Current Story Role", storyArc:"Character Arc / Story Information" });
+const abilityItems = entries(abilities, { powerSource:"Power Source / Magic Type", combatStyle:"Combat Style", primaryAbilities:"Primary Abilities", secondaryAbilities:"Secondary Abilities", signatureTechniques:"Signature Techniques", weapons:"Weapons / Equipment", weaponDetails:"Weapon / Equipment Details", transformations:"Transformations / Power States", transformationDetails:"Transformation Details", strengths:"Strengths", weaknesses:"Weaknesses", limitations:"Limits / Costs / Conditions", abilityNotes:"Ability Notes" });
 const relationshipItems = entries(relationships, { parents:"Parents / Guardians", siblings:"Siblings", children:"Children / Descendants", partner:"Partner / Love Interest", allies:"Friends / Allies", rivals:"Rivals", enemies:"Enemies", mentors:"Mentors / Students", relationshipNotes:"Relationship Notes" });
 const profileCodexLinks = [
   { id:saved.realm_record_id, label:"Realm" }, { id:saved.race_record_id, label:"Race" },
@@ -2294,6 +2414,17 @@ const renderIdentityStep = () => (
         <input type="text" placeholder="Clan, house, crew..." value={character.affiliation} onChange={(e) => { setLinkedFactionId(""); updateCharacter("affiliation", e.target.value); }} />
       </label>
 
+      <label className="creator-field"><span>Nicknames</span><input type="text" placeholder="Informal names..." value={character.nicknames} onChange={(e)=>updateCharacter("nicknames",e.target.value)}/></label>
+      <label className="creator-field"><span>Titles</span><input type="text" placeholder="Royal, magical, military, earned titles..." value={character.titles} onChange={(e)=>updateCharacter("titles",e.target.value)}/></label>
+      <label className="creator-field"><span>Name Pronunciation</span><input type="text" placeholder="How the name is pronounced..." value={character.pronunciation} onChange={(e)=>updateCharacter("pronunciation",e.target.value)}/></label>
+      <label className="creator-field"><span>Apparent Age</span><input type="text" placeholder="Useful for immortal or long-lived characters..." value={character.apparentAge} onChange={(e)=>updateCharacter("apparentAge",e.target.value)}/></label>
+      <label className="creator-field"><span>Pronouns</span><input type="text" placeholder="She/her, he/him, they/them..." value={character.pronouns} onChange={(e)=>updateCharacter("pronouns",e.target.value)}/></label>
+      <label className="creator-field"><span>Subrace / Variant</span><input type="text" placeholder="Specific branch, hybrid, variant..." value={character.subrace} onChange={(e)=>updateCharacter("subrace",e.target.value)}/></label>
+      <label className="creator-field"><span>Heritage / Ethnicity</span><input type="text" placeholder="Cultural and ancestral heritage..." value={character.heritage} onChange={(e)=>updateCharacter("heritage",e.target.value)}/></label>
+      <label className="creator-field"><span>Nationality / People</span><input type="text" placeholder="Nation, kingdom, or people..." value={character.nationality} onChange={(e)=>updateCharacter("nationality",e.target.value)}/></label>
+      <label className="creator-field"><span>Current Residence</span><input type="text" placeholder="Where they live now..." value={character.currentResidence} onChange={(e)=>updateCharacter("currentResidence",e.target.value)}/></label>
+      <label className="creator-field"><span>Occupation / Role</span><input type="text" placeholder="Ruler, explorer, scholar, warrior..." value={character.occupation} onChange={(e)=>updateCharacter("occupation",e.target.value)}/></label>
+
       <label className="creator-field full-width">
         <span>Character Summary</span>
         <textarea
@@ -2436,6 +2567,19 @@ const renderAppearanceStep = () => (
           onChange={(e) => updateCharacter("alternateForm", e.target.value)}
         />
       </label>
+
+      <label className="creator-field"><span>Skin HEX / Color Reference</span><input type="text" placeholder="#6B382B + undertone/highlight notes..." value={character.skinHex} onChange={(e)=>updateCharacter("skinHex",e.target.value)}/></label>
+      <label className="creator-field"><span>Eye HEX / Color Reference</span><input type="text" placeholder="#1769C2 + inner/outer ring..." value={character.eyeHex} onChange={(e)=>updateCharacter("eyeHex",e.target.value)}/></label>
+      <label className="creator-field"><span>Hair HEX / Color Reference</span><input type="text" placeholder="#111111 + highlights/tips..." value={character.hairHex} onChange={(e)=>updateCharacter("hairHex",e.target.value)}/></label>
+      <label className="creator-field"><span>Posture / Movement</span><textarea rows={3} placeholder="How they stand, walk, move, dominant hand..." value={character.postureMovement} onChange={(e)=>updateCharacter("postureMovement",e.target.value)}/></label>
+      <label className="creator-field full-width"><span>Face Details</span><textarea rows={4} placeholder="Face shape, jawline, cheekbones, nose, lips, brows, eye shape, scars, markings..." value={character.faceDetails} onChange={(e)=>updateCharacter("faceDetails",e.target.value)}/></label>
+      <label className="creator-field"><span>Makeup / Face Paint</span><textarea rows={4} placeholder="Eyeshadow, liner, lips, nails, ceremonial or magical markings and colors..." value={character.makeup} onChange={(e)=>updateCharacter("makeup",e.target.value)}/></label>
+      <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, nails, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
+      <label className="creator-field full-width"><span>Official Character Color Palette</span><textarea rows={5} placeholder={"Primary — #HEX\nSecondary — #HEX\nAccent — #HEX\nMagic — #HEX\nMetal — #HEX"} value={character.colorPalette} onChange={(e)=>updateCharacter("colorPalette",e.target.value)}/></label>
+      <label className="creator-field full-width"><span>Signature / Default Outfit</span><textarea rows={6} placeholder="Head, upper body, lower body, footwear, accessories, weapons carried, construction..." value={character.signatureOutfit} onChange={(e)=>updateCharacter("signatureOutfit",e.target.value)}/></label>
+      <label className="creator-field"><span>Outfit Color Breakdown</span><textarea rows={6} placeholder={"Outer robe — Smoky Black #17131A\nTrim — Gold #D9B65D..."} value={character.outfitColors} onChange={(e)=>updateCharacter("outfitColors",e.target.value)}/></label>
+      <label className="creator-field"><span>Outfit Materials / Construction</span><textarea rows={6} placeholder="Linen, silk, wool, leather, metal, enchanted fabric; layered, wrapped, buckled..." value={character.outfitMaterials} onChange={(e)=>updateCharacter("outfitMaterials",e.target.value)}/></label>
+      <label className="creator-field full-width"><span>Wardrobe / Alternate Outfits</span><textarea rows={7} placeholder={"Outfit 02 — Casual\nOutfit 03 — Combat\nOutfit 04 — Formal / Ceremonial\nOutfit 05 — Travel..."} value={character.wardrobe} onChange={(e)=>updateCharacter("wardrobe",e.target.value)}/></label>
 
       <label className="creator-field full-width">
         <span>Additional Appearance Notes</span>
@@ -2588,6 +2732,11 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
+      <label className="creator-field"><span>Voice / Speech</span><textarea rows={5} placeholder="Voice type, pitch, accent, dialect, languages, vocabulary, verbal habits, battle voice..." value={character.voiceSpeech} onChange={(e)=>updateCharacter("voiceSpeech",e.target.value)}/></label>
+      <label className="creator-field"><span>Psychology / Inner Character</span><textarea rows={5} placeholder="Core desire, emotional wound, fatal flaw, moral boundary, breaking point, secrets, internal conflict..." value={character.psychology} onChange={(e)=>updateCharacter("psychology",e.target.value)}/></label>
+      <label className="creator-field"><span>Lifestyle / Everyday Life</span><textarea rows={5} placeholder="Home, routine, food, hobbies, music, transportation, pets, sleep, possessions..." value={character.lifestyle} onChange={(e)=>updateCharacter("lifestyle",e.target.value)}/></label>
+      <label className="creator-field"><span>Likes / Dislikes / Preferences</span><textarea rows={5} placeholder="Favorites, dislikes, comforts, pet peeves, interests, obsessions, guilty pleasures..." value={character.likesDislikes} onChange={(e)=>updateCharacter("likesDislikes",e.target.value)}/></label>
+
       <label className="creator-field full-width">
         <span>Current Story Role</span>
         <textarea
@@ -2597,6 +2746,7 @@ const renderOriginLoreStep = () => (
           onChange={(e) => updateCharacter("storyRole", e.target.value)}
         />
       </label>
+      <label className="creator-field full-width"><span>Character Arc / Story Information</span><textarea rows={6} placeholder="First appearance, current objective, starting state, turning points, ending state, unresolved threads, spoiler notes..." value={character.storyArc} onChange={(e)=>updateCharacter("storyArc",e.target.value)}/></label>
     </div>
 
     <div className="creator-form-actions">
@@ -2681,6 +2831,8 @@ const renderAbilitiesStep = () => (
         />
       </label>
 
+      <label className="creator-field full-width"><span>Weapon / Equipment Details</span><textarea rows={5} placeholder="Names, creators, materials, colors, dimensions, abilities, history, where carried..." value={character.weaponDetails} onChange={(e)=>updateCharacter("weaponDetails",e.target.value)}/></label>
+
       <label className="creator-field full-width">
         <span>Transformations / Power States</span>
         <textarea
@@ -2690,6 +2842,8 @@ const renderAbilitiesStep = () => (
           onChange={(e) => updateCharacter("transformations", e.target.value)}
         />
       </label>
+
+      <label className="creator-field full-width"><span>Transformation Details</span><textarea rows={6} placeholder="Trigger, sequence, size, anatomy, palette, aura, abilities gained/lost, mental/voice/clothing changes, limits..." value={character.transformationDetails} onChange={(e)=>updateCharacter("transformationDetails",e.target.value)}/></label>
 
       <label className="creator-field">
         <span>Strengths</span>
@@ -3155,7 +3309,7 @@ if(page==="transfer"){
 }
 
 if(page==="settings"){
- return <main className="dashboard-shell v10-settings-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>{studioSettings?.studio_name||"Umbra Studio"}</strong></div></button><div className="account-area"><span className="admin-role-pill">STUDIO 1.0</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">UMBRA STUDIO 1.0</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
+ return <main className="dashboard-shell v10-settings-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>{studioSettings?.studio_name||"Umbra Studio"}</strong></div></button><div className="account-area"><span className="admin-role-pill">{`STUDIO ${appVersion}`}</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
 }
 
 if(page==="production"){
