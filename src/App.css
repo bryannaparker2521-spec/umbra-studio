@@ -280,14 +280,16 @@ body {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
 }
 
 .dashboard-card {
   position: relative;
-  min-height: 285px;
-  padding: 32px;
+  min-width: 0;
+  min-height: 168px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -322,7 +324,7 @@ body {
 .card-icon {
   width: 52px;
   height: 52px;
-  margin-bottom: 36px;
+  margin-bottom: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -345,7 +347,7 @@ body {
   margin: 9px 0 10px;
   color: #f1dda8;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 27px;
+  font-size: 22px;
   font-weight: 500;
 }
 
@@ -353,8 +355,8 @@ body {
   margin: 0;
   padding-right: 20px;
   color: #a994a9;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .card-arrow {
@@ -1973,4 +1975,16 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
  .v101-compose{grid-template-columns:1fr}
  .v101-compose .primary-action{min-height:52px}
  .v101-transfer-grid .database-backup-actions{grid-template-columns:1fr}
+}
+
+
+/* Umbra Studio 1.0.4 — compact connected workspace */
+@media (max-width: 1250px) {
+  .dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 940px) {
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
 }
