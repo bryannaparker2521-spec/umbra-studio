@@ -2047,3 +2047,11 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
   .connection-controls { grid-template-columns:1fr; }
   .connection-controls .primary-action { grid-column:auto; }
 }
+
+
+/* 1.0.4 simplified database navigation */
+.database-nav-shell{display:flex;align-items:center;gap:12px;margin:18px 0 24px;min-width:0}
+.database-primary-tabs{flex:1;min-width:0;margin:0!important;overflow-x:auto;scrollbar-width:thin}
+.database-primary-tabs button{white-space:nowrap}
+.database-more-tools{flex:0 0 190px;min-width:0;max-width:100%;padding:12px 14px;border:1px solid rgba(185,92,209,.25);border-radius:12px;background:#100914;color:#d9c5dc}
+@media(max-width:900px){.database-nav-shell{align-items:stretch;flex-direction:column}.database-more-tools{width:100%;flex-basis:auto}.database-primary-tabs{width:100%}}
