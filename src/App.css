@@ -1999,3 +1999,51 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
 .repeatable-chip button { border:0; background:transparent; color:#d99be4; font-size:18px; cursor:pointer; }
 .repeatable-empty { color:#806f83; margin-top:8px; }
 @media(max-width:620px){.repeatable-add-row{grid-template-columns:1fr}.repeatable-add-row .secondary-action{width:100%}}
+
+
+/* Umbra Studio 1.0.4 — global creator containment */
+.creator-shell,
+.creator-main,
+.creator-form-card,
+.creator-form-grid,
+.creator-field,
+.connection-builder,
+.connection-controls,
+.media-upload-grid,
+.media-upload-card { min-width:0; max-width:100%; box-sizing:border-box; }
+
+.creator-form-card { overflow:hidden; }
+.creator-form-grid > * { min-width:0; }
+.creator-field input,
+.creator-field textarea,
+.creator-field select,
+.connection-controls select,
+.connection-controls button {
+  min-width:0;
+  max-width:100%;
+  width:100%;
+  box-sizing:border-box;
+}
+
+.connection-builder { overflow:hidden; }
+.connection-controls {
+  display:grid;
+  grid-template-columns:minmax(150px,.7fr) minmax(220px,1.6fr) minmax(120px,.55fr);
+  gap:12px;
+  width:100%;
+  align-items:stretch;
+}
+.connection-controls .primary-action { width:100%; min-width:0; }
+.connection-list { min-width:0; }
+.connection-chip { min-width:0; }
+.connection-chip-copy { min-width:0; overflow:hidden; }
+.connection-chip-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+@media(max-width:1100px){
+  .connection-controls { grid-template-columns:1fr 1fr; }
+  .connection-controls .primary-action { grid-column:1/-1; }
+}
+@media(max-width:760px){
+  .connection-controls { grid-template-columns:1fr; }
+  .connection-controls .primary-action { grid-column:auto; }
+}
