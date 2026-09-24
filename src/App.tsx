@@ -2503,6 +2503,18 @@ const RepeatableList = ({ label, value, field, placeholder }: { label:string; va
   </div>;
 };
 
+const RepeatableColorList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
+  const items=value.split(/\n+/).map(item=>item.trim()).filter(Boolean);
+  const [name,setName]=useState(""); const [hex,setHex]=useState("");
+  const save=(next:string[])=>updateCharacter(field,next.join("\n") as never);
+  const add=()=>{const n=name.trim(),h=hex.trim();if(!n&&!h)return;save([...items,[n,h].filter(Boolean).join(" — ")]);setName("");setHex("");};
+  return <div className="creator-field full-width repeatable-field color-entry-field">
+    <span>{label}</span>
+    <div className="repeatable-color-row"><input value={name} onChange={e=>setName(e.target.value)} placeholder={placeholder}/><input value={hex} onChange={e=>setHex(e.target.value)} placeholder="#HEX" onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();}}}/><button type="button" className="secondary-action" onClick={add}>+ Add</button></div>
+    {items.length>0?<div className="repeatable-chip-list">{items.map((item,index)=>{const color=item.match(/#[0-9A-Fa-f]{6}/)?.[0];return <div className="repeatable-chip color-chip" key={`${label}-${index}-${item}`}>{color&&<i style={{background:color}}/>}<span>{item}</span><button type="button" aria-label={`Remove ${item}`} onClick={()=>save(items.filter((_,i)=>i!==index))}>×</button></div>})}</div>:<small className="repeatable-empty">Nothing added yet.</small>}
+  </div>;
+};
+
 const renderIdentityStep = () => (
   <section className="creator-form-card">
     <div className="form-section-heading">
@@ -2657,9 +2669,9 @@ const renderAppearanceStep = () => (
         />
       </label>
 
-      <RepeatableList label="Height" value={character.height} field="height" placeholder="Add height, form, or measurement..." />
+      <label className="creator-field"><span>Height</span><input type="text" placeholder={'5′8″, 7′0″...'} value={character.height} onChange={(e)=>updateCharacter("height",e.target.value)}/></label>
 
-      <RepeatableList label="Weight" value={character.weight} field="weight" placeholder="Add weight, form, or estimate..." />
+      <label className="creator-field"><span>Weight</span><input type="text" placeholder="Exact, approximate, or TBD..." value={character.weight} onChange={(e)=>updateCharacter("weight",e.target.value)}/></label>
       <label className="creator-field"><span>Dominant Hand</span><input type="text" placeholder="Right, left, ambidextrous, TBD..." value={character.dominantHand} onChange={(e)=>updateCharacter("dominantHand",e.target.value)}/></label>
 
       <RepeatableList label="Body Type / Build" value={character.build} field="build" placeholder="Add build trait, e.g. Athletic" />
@@ -2701,9 +2713,9 @@ const renderAppearanceStep = () => (
       <label className="creator-field"><span>Hair HEX / Color Reference</span><input type="text" placeholder="#111111 + highlights/tips..." value={character.hairHex} onChange={(e)=>updateCharacter("hairHex",e.target.value)}/>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
       <label className="creator-field"><span>Posture / Movement</span><textarea rows={3} placeholder="How they stand, walk, move, dominant hand..." value={character.postureMovement} onChange={(e)=>updateCharacter("postureMovement",e.target.value)}/></label>
       <RepeatableList label="Face Details" value={character.faceDetails} field="faceDetails" placeholder="Add face detail, e.g. High cheekbones" />
-      <label className="creator-field"><span>Makeup / Face Paint</span><textarea rows={4} placeholder="Eyeshadow, liner, lips, nails, ceremonial or magical markings and colors..." value={character.makeup} onChange={(e)=>updateCharacter("makeup",e.target.value)}/></label>
+      <RepeatableColorList label="Makeup / Face Paint" value={character.makeup} field="makeup" placeholder="Add makeup or face paint, e.g. Eyeshadow" />
       <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
-      <label className="creator-field"><span>Nails</span><textarea rows={4} placeholder="Shape, length, colors, gradient, gems, magical or metal accents..." value={character.nails} onChange={(e)=>updateCharacter("nails",e.target.value)}/></label>
+      <RepeatableColorList label="Nails" value={character.nails} field="nails" placeholder="Add nail color/style, e.g. Gold Accent" />
       <RepeatableList label="Official Character Color Palette" value={character.colorPalette} field="colorPalette" placeholder="Add color, e.g. Steam Pink — #FF8FCB" />
       <label className="creator-field full-width"><span>Signature / Default Outfit</span><textarea rows={6} placeholder="Head, upper body, lower body, footwear, accessories, weapons carried, construction..." value={character.signatureOutfit} onChange={(e)=>updateCharacter("signatureOutfit",e.target.value)}/></label>
       <RepeatableList label="Outfit Color Breakdown" value={character.outfitColors} field="outfitColors" placeholder="Add garment/color, e.g. Trim — Gold #D9B65D" />
