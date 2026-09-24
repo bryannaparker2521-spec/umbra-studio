@@ -3081,85 +3081,21 @@ const renderRelationshipsStep = () => (
 
     <div className="creator-form-grid">
       <h4 className="written-relations-title">Written Relationship Details</h4>
-      <label className="creator-field">
-        <span>Parents / Guardians</span>
-        <textarea
-          rows={4}
-          placeholder="Names, relationships, status, important history..."
-          value={character.parents}
-          onChange={(e) => updateCharacter("parents", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Parents / Guardians" value={character.parents} field="parents" placeholder="Add a parent or guardian..." />
 
-      <label className="creator-field">
-        <span>Siblings</span>
-        <textarea
-          rows={4}
-          placeholder="Brothers, sisters, half-siblings, adopted siblings..."
-          value={character.siblings}
-          onChange={(e) => updateCharacter("siblings", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Siblings" value={character.siblings} field="siblings" placeholder="Add a sibling..." />
 
-      <label className="creator-field">
-        <span>Children / Descendants</span>
-        <textarea
-          rows={4}
-          placeholder="Children, heirs, descendants..."
-          value={character.children}
-          onChange={(e) => updateCharacter("children", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Children / Descendants" value={character.children} field="children" placeholder="Add a child or descendant..." />
 
-      <label className="creator-field">
-        <span>Partner / Love Interest</span>
-        <textarea
-          rows={4}
-          placeholder="Spouse, partner, romance, former relationship..."
-          value={character.partner}
-          onChange={(e) => updateCharacter("partner", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Partner / Love Interest" value={character.partner} field="partner" placeholder="Add a partner or love interest..." />
 
-      <label className="creator-field">
-        <span>Friends / Allies</span>
-        <textarea
-          rows={5}
-          placeholder="Closest friends, crew members, trusted allies..."
-          value={character.allies}
-          onChange={(e) => updateCharacter("allies", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Friends / Allies" value={character.allies} field="allies" placeholder="Add a friend or ally..." />
 
-      <label className="creator-field">
-        <span>Rivals</span>
-        <textarea
-          rows={5}
-          placeholder="Competitive relationships, recurring challengers..."
-          value={character.rivals}
-          onChange={(e) => updateCharacter("rivals", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Rivals" value={character.rivals} field="rivals" placeholder="Add a rival..." />
 
-      <label className="creator-field">
-        <span>Enemies</span>
-        <textarea
-          rows={5}
-          placeholder="Major enemies, antagonists, hostile factions..."
-          value={character.enemies}
-          onChange={(e) => updateCharacter("enemies", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Enemies" value={character.enemies} field="enemies" placeholder="Add an enemy..." />
 
-      <label className="creator-field">
-        <span>Mentors / Students</span>
-        <textarea
-          rows={5}
-          placeholder="Teachers, masters, apprentices, protégés..."
-          value={character.mentors}
-          onChange={(e) => updateCharacter("mentors", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Mentors / Students" value={character.mentors} field="mentors" placeholder="Add a mentor or student..." />
 
       <label className="creator-field full-width"><span>World Connections</span><textarea rows={6} placeholder="Realm → region → homeland → birthplace; race/subrace; faction/clan/house; bloodline; religion; organizations; historical events; important locations..." value={character.worldConnections} onChange={(e)=>updateCharacter("worldConnections",e.target.value)}/></label>
 
