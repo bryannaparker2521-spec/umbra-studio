@@ -312,6 +312,12 @@ const [character, setCharacter] = useState({
   nicknames: "",
   titles: "",
   pronunciation: "",
+  nameMeaning: "",
+  birthDate: "",
+  elementalHeritage: "",
+  canonStatus: "",
+  spoilerLevel: "",
+  era: "",
   age: "",
   apparentAge: "",
   pronouns: "",
@@ -335,11 +341,14 @@ const [character, setCharacter] = useState({
   hairTexture: "",
   hairStyle: "",
   height: "",
+  weight: "",
+  dominantHand: "",
   build: "",
   postureMovement: "",
   distinguishingFeatures: "",
   makeup: "",
   grooming: "",
+  nails: "",
   colorPalette: "",
   signatureOutfit: "",
   outfitColors: "",
@@ -378,6 +387,7 @@ const [character, setCharacter] = useState({
   weaknesses: "",
   limitations: "",
   combatStyle: "",
+  combatProfile: "",
   abilityNotes: "",
   parents: "",
   siblings: "",
@@ -388,6 +398,11 @@ const [character, setCharacter] = useState({
   enemies: "",
   mentors: "",
   relationshipNotes: "",
+  worldConnections: "",
+  visualAssets: "",
+  productionNotes: "",
+  canonLocks: "",
+  tbdFields: "",
   portraitUrl: "",
   referenceArtUrl: "",
   alternateFormUrl: "",
@@ -737,6 +752,12 @@ setCharacter({
   nicknames: identity.nicknames ?? "",
   titles: identity.titles ?? "",
   pronunciation: identity.pronunciation ?? "",
+  nameMeaning: identity.nameMeaning ?? "",
+  birthDate: identity.birthDate ?? "",
+  elementalHeritage: identity.elementalHeritage ?? "",
+  canonStatus: identity.canonStatus ?? "",
+  spoilerLevel: identity.spoilerLevel ?? "",
+  era: identity.era ?? "",
   age: identity.age ?? "",
   apparentAge: identity.apparentAge ?? "",
   pronouns: identity.pronouns ?? "",
@@ -760,11 +781,14 @@ setCharacter({
   hairTexture: appearance.hairTexture ?? "",
   hairStyle: appearance.hairStyle ?? "",
   height: appearance.height ?? "",
+  weight: appearance.weight ?? "",
+  dominantHand: appearance.dominantHand ?? "",
   build: appearance.build ?? "",
   postureMovement: appearance.postureMovement ?? "",
   distinguishingFeatures: appearance.distinguishingFeatures ?? "",
   makeup: appearance.makeup ?? "",
   grooming: appearance.grooming ?? "",
+  nails: appearance.nails ?? "",
   colorPalette: appearance.colorPalette ?? "",
   signatureOutfit: appearance.signatureOutfit ?? "",
   outfitColors: appearance.outfitColors ?? "",
@@ -803,6 +827,7 @@ setCharacter({
   weaknesses: abilities.weaknesses ?? "",
   limitations: abilities.limitations ?? "",
   combatStyle: abilities.combatStyle ?? "",
+  combatProfile: abilities.combatProfile ?? "",
   abilityNotes: abilities.abilityNotes ?? "",
   parents: relationships.parents ?? "",
   siblings: relationships.siblings ?? "",
@@ -813,6 +838,11 @@ setCharacter({
   enemies: relationships.enemies ?? "",
   mentors: relationships.mentors ?? "",
   relationshipNotes: relationships.relationshipNotes ?? "",
+  worldConnections: relationships.worldConnections ?? "",
+  visualAssets: media.visualAssets ?? "",
+  productionNotes: media.productionNotes ?? "",
+  canonLocks: media.canonLocks ?? "",
+  tbdFields: media.tbdFields ?? "",
   portraitUrl: media.portraitUrl ?? saved.portrait_url ?? "",
   referenceArtUrl: media.referenceArtUrl ?? "",
   alternateFormUrl: media.alternateFormUrl ?? "",
@@ -1368,6 +1398,12 @@ setCharacter({
   nicknames: "",
   titles: "",
   pronunciation: "",
+  nameMeaning: "",
+  birthDate: "",
+  elementalHeritage: "",
+  canonStatus: "",
+  spoilerLevel: "",
+  era: "",
   age: "",
   apparentAge: "",
   pronouns: "",
@@ -1391,11 +1427,14 @@ setCharacter({
   hairTexture: "",
   hairStyle: "",
   height: "",
+  weight: "",
+  dominantHand: "",
   build: "",
   postureMovement: "",
   distinguishingFeatures: "",
   makeup: "",
   grooming: "",
+  nails: "",
   colorPalette: "",
   signatureOutfit: "",
   outfitColors: "",
@@ -1434,6 +1473,7 @@ setCharacter({
   weaknesses: "",
   limitations: "",
   combatStyle: "",
+  combatProfile: "",
   abilityNotes: "",
   parents: "",
   siblings: "",
@@ -1444,6 +1484,11 @@ setCharacter({
   enemies: "",
   mentors: "",
   relationshipNotes: "",
+  worldConnections: "",
+  visualAssets: "",
+  productionNotes: "",
+  canonLocks: "",
+  tbdFields: "",
   portraitUrl: "",
   referenceArtUrl: "",
   alternateFormUrl: "",
@@ -1478,6 +1523,12 @@ return {
     nicknames: character.nicknames,
     titles: character.titles,
     pronunciation: character.pronunciation,
+    nameMeaning: character.nameMeaning,
+    birthDate: character.birthDate,
+    elementalHeritage: character.elementalHeritage,
+    canonStatus: character.canonStatus,
+    spoilerLevel: character.spoilerLevel,
+    era: character.era,
     age: character.age,
     apparentAge: character.apparentAge,
     pronouns: character.pronouns,
@@ -1503,11 +1554,14 @@ return {
     hairTexture: character.hairTexture,
     hairStyle: character.hairStyle,
     height: character.height,
+    weight: character.weight,
+    dominantHand: character.dominantHand,
     build: character.build,
     postureMovement: character.postureMovement,
     distinguishingFeatures: character.distinguishingFeatures,
     makeup: character.makeup,
     grooming: character.grooming,
+    nails: character.nails,
     colorPalette: character.colorPalette,
     signatureOutfit: character.signatureOutfit,
     outfitColors: character.outfitColors,
@@ -1550,6 +1604,7 @@ return {
     weaknesses: character.weaknesses,
     limitations: character.limitations,
     combatStyle: character.combatStyle,
+    combatProfile: character.combatProfile,
     abilityNotes: character.abilityNotes,
   },
   relationships: {
@@ -1562,6 +1617,7 @@ return {
     enemies: character.enemies,
     mentors: character.mentors,
     relationshipNotes: character.relationshipNotes,
+    worldConnections: character.worldConnections,
   },
   media: {
     portraitUrl: character.portraitUrl,
@@ -1570,6 +1626,10 @@ return {
     galleryUrl: character.galleryUrl,
     galleryUrls: character.galleryUrls,
     mediaNotes: character.mediaNotes,
+    visualAssets: character.visualAssets,
+    productionNotes: character.productionNotes,
+    canonLocks: character.canonLocks,
+    tbdFields: character.tbdFields,
   },
   portrait_url: character.portraitUrl.trim() || null,
   current_step: currentStep,
@@ -2235,6 +2295,7 @@ const abilities = saved.abilities ?? {};
 const relationships = saved.relationships ?? {};
 const media = saved.media ?? {};
 const portrait = saved.portrait_url || media.portraitUrl || "";
+const productionItems = entries(media, { visualAssets:"Visual Production Asset Checklist", productionNotes:"Blender / VRoid Production Notes", canonLocks:"Canon Locks", tbdFields:"Editable / TBD Fields" });
 const mediaItems = [
   { label: "Portrait", url: media.portraitUrl || saved.portrait_url || "" },
   { label: "Reference Sheet", url: media.referenceArtUrl || "" },
@@ -2245,11 +2306,11 @@ const entries = (record: Record<string, string>, labels: Record<string, string>)
   Object.entries(labels)
     .map(([key, label]) => ({ label, value: record[key] }))
     .filter((item) => item.value && item.value.trim());
-const identityItems = entries(identity, { nicknames:"Nicknames", titles:"Titles", pronunciation:"Pronunciation", age:"Age", apparentAge:"Apparent Age", gender:"Gender", pronouns:"Pronouns", race:"Race / Species", subrace:"Subrace / Variant", heritage:"Heritage / Ethnicity", nationality:"Nationality / People", homeland:"Homeland", currentResidence:"Current Residence", affiliation:"Affiliation", occupation:"Occupation / Role" });
-const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", skinHex:"Skin HEX / Color Reference", faceDetails:"Face Details", eyeColor:"Eye Color", eyeHex:"Eye HEX / Color Reference", hairColor:"Hair Color", hairHex:"Hair HEX / Color Reference", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", build:"Build", postureMovement:"Posture / Movement", distinguishingFeatures:"Distinguishing Features", makeup:"Makeup / Face Paint", grooming:"Grooming", colorPalette:"Official Color Palette", clothingStyle:"Fashion Style", signatureOutfit:"Signature / Default Outfit", outfitColors:"Outfit Color Breakdown", outfitMaterials:"Outfit Materials / Construction", wardrobe:"Wardrobe / Alternate Outfits", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
+const identityItems = entries(identity, { nicknames:"Nicknames", titles:"Titles", pronunciation:"Pronunciation", nameMeaning:"Name Meaning", birthDate:"Birth Date", elementalHeritage:"Elemental Heritage", canonStatus:"Canon Status", spoilerLevel:"Spoiler Level", era:"Era", age:"Age", apparentAge:"Apparent Age", gender:"Gender", pronouns:"Pronouns", race:"Race / Species", subrace:"Subrace / Variant", heritage:"Heritage / Ethnicity", nationality:"Nationality / People", homeland:"Homeland", currentResidence:"Current Residence", affiliation:"Affiliation", occupation:"Occupation / Role" });
+const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", skinHex:"Skin HEX / Color Reference", faceDetails:"Face Details", eyeColor:"Eye Color", eyeHex:"Eye HEX / Color Reference", hairColor:"Hair Color", hairHex:"Hair HEX / Color Reference", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", weight:"Weight", dominantHand:"Dominant Hand", build:"Build", postureMovement:"Posture / Movement", distinguishingFeatures:"Distinguishing Features", makeup:"Makeup / Face Paint", grooming:"Grooming", nails:"Nails", colorPalette:"Official Color Palette", clothingStyle:"Fashion Style", signatureOutfit:"Signature / Default Outfit", outfitColors:"Outfit Color Breakdown", outfitMaterials:"Outfit Materials / Construction", wardrobe:"Wardrobe / Alternate Outfits", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
 const loreItems = entries(origin, { birthplace:"Birthplace / Origin", lineage:"Family / Lineage", culture:"Culture / Heritage", childhood:"Childhood / Early Life", majorLifeEvents:"Major Life Events", backstory:"Full Backstory", personality:"Personality", voiceSpeech:"Voice / Speech", psychology:"Psychology / Inner Character", lifestyle:"Lifestyle / Everyday Life", likesDislikes:"Likes / Dislikes / Preferences", motivations:"Motivations", goals:"Goals / Ambitions", fears:"Fears / Inner Conflicts", beliefs:"Beliefs / Worldview", storyRole:"Current Story Role", storyArc:"Character Arc / Story Information" });
-const abilityItems = entries(abilities, { powerSource:"Power Source / Magic Type", combatStyle:"Combat Style", primaryAbilities:"Primary Abilities", secondaryAbilities:"Secondary Abilities", signatureTechniques:"Signature Techniques", weapons:"Weapons / Equipment", weaponDetails:"Weapon / Equipment Details", transformations:"Transformations / Power States", transformationDetails:"Transformation Details", strengths:"Strengths", weaknesses:"Weaknesses", limitations:"Limits / Costs / Conditions", abilityNotes:"Ability Notes" });
-const relationshipItems = entries(relationships, { parents:"Parents / Guardians", siblings:"Siblings", children:"Children / Descendants", partner:"Partner / Love Interest", allies:"Friends / Allies", rivals:"Rivals", enemies:"Enemies", mentors:"Mentors / Students", relationshipNotes:"Relationship Notes" });
+const abilityItems = entries(abilities, { powerSource:"Power Source / Magic Type", combatStyle:"Combat Style", combatProfile:"Combat Profile", primaryAbilities:"Primary Abilities", secondaryAbilities:"Secondary Abilities", signatureTechniques:"Signature Techniques", weapons:"Weapons / Equipment", weaponDetails:"Weapon / Equipment Details", transformations:"Transformations / Power States", transformationDetails:"Transformation Details", strengths:"Strengths", weaknesses:"Weaknesses", limitations:"Limits / Costs / Conditions", abilityNotes:"Ability Notes" });
+const relationshipItems = entries(relationships, { parents:"Parents / Guardians", siblings:"Siblings", children:"Children / Descendants", partner:"Partner / Love Interest", allies:"Friends / Allies", rivals:"Rivals", enemies:"Enemies", mentors:"Mentors / Students", relationshipNotes:"Relationship Notes", worldConnections:"World Connections" });
 const profileCodexLinks = [
   { id:saved.realm_record_id, label:"Realm" }, { id:saved.race_record_id, label:"Race" },
   { id:saved.faction_record_id, label:"Faction" }, { id:saved.family_record_id, label:"Bloodline" },
@@ -2315,6 +2376,7 @@ return (
       <ProfileSection title="Abilities & Combat" symbol="⚔" items={abilityItems} />
       {connectedRelationships.length > 0 && <section className="profile-section"><div className="profile-section-title"><span>♙</span><h2>Character Connections</h2></div><div className="profile-media-grid">{connectedRelationships.map((link) => { const target=link.target; if(!target) return null; const image=target.portrait_url || target.media?.portraitUrl || ""; return <button type="button" className="profile-media-card" style={{textAlign:"left",cursor:"pointer",color:"inherit"}} key={link.id} onClick={() => void openConnectedCharacterProfile(target)}>{image ? <img src={image} alt={`${target.name} portrait`} /> : <div style={{height:300,display:"grid",placeItems:"center",fontSize:64,color:"#e5bd57"}}>☾</div>}<span style={{textTransform:"capitalize"}}>{target.name} • {link.relationship_type}</span></button>})}</div></section>}
       <ProfileSection title="Written Relationships" symbol="♙" items={relationshipItems} />
+      <ProfileSection title="Production & Canon Control" symbol="✧" items={productionItems} />
       {(mediaItems.length > 0 || galleryImages.length > 0 || media.galleryUrl || media.mediaNotes) && <section className="profile-section"><div className="profile-section-title"><span>▣</span><h2>Media & References</h2></div>{(mediaItems.length > 0 || galleryImages.length > 0) && <div className="profile-media-grid">{mediaItems.map((item) => <a className="profile-media-card" href={item.url} target="_blank" rel="noreferrer" key={item.label}><img src={item.url} alt={`${saved.name} ${item.label}`} /><span>{item.label}</span></a>)}{galleryImages.map((url: string, index: number) => <a className="profile-media-card" href={url} target="_blank" rel="noreferrer" key={url}><img src={url} alt={`${saved.name} gallery ${index + 1}`} /><span>Gallery Image {index + 1}</span></a>)}</div>}{media.galleryUrl && <a className="profile-gallery-link" href={media.galleryUrl} target="_blank" rel="noreferrer">Open additional gallery / media →</a>}{media.mediaNotes && <p className="profile-media-notes">{media.mediaNotes}</p>}</section>}
     </div>
   </main>
