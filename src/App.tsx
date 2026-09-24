@@ -2771,15 +2771,7 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
-      <label className="creator-field full-width">
-        <span>Culture / Heritage</span>
-        <textarea
-          rows={4}
-          placeholder="Traditions, people, language, customs, beliefs, heritage..."
-          value={character.culture}
-          onChange={(e) => updateCharacter("culture", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Culture / Heritage" value={character.culture} field="culture" placeholder="Add culture, heritage, language, tradition..." />
 
       <label className="creator-field">
         <span>Childhood / Early Life</span>
@@ -2791,15 +2783,7 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
-      <label className="creator-field">
-        <span>Major Life Events</span>
-        <textarea
-          rows={5}
-          placeholder="Wars, losses, discoveries, betrayals, awakenings, turning points..."
-          value={character.majorLifeEvents}
-          onChange={(e) => updateCharacter("majorLifeEvents", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Major Life Events" value={character.majorLifeEvents} field="majorLifeEvents" placeholder="Add a major life event..." />
 
       <label className="creator-field full-width">
         <span>Full Backstory</span>
@@ -2811,60 +2795,20 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
-      <label className="creator-field full-width">
-        <span>Personality</span>
-        <textarea
-          rows={4}
-          placeholder="Temperament, habits, humor, emotional traits, strengths, flaws..."
-          value={character.personality}
-          onChange={(e) => updateCharacter("personality", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Personality" value={character.personality} field="personality" placeholder="Add personality trait..." />
 
-      <label className="creator-field">
-        <span>Motivations</span>
-        <textarea
-          rows={4}
-          placeholder="What drives them? What keeps them moving forward?"
-          value={character.motivations}
-          onChange={(e) => updateCharacter("motivations", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Motivations" value={character.motivations} field="motivations" placeholder="Add a motivation..." />
 
-      <label className="creator-field">
-        <span>Goals / Ambitions</span>
-        <textarea
-          rows={4}
-          placeholder="What are they trying to accomplish?"
-          value={character.goals}
-          onChange={(e) => updateCharacter("goals", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Goals / Ambitions" value={character.goals} field="goals" placeholder="Add a goal or ambition..." />
 
-      <label className="creator-field">
-        <span>Fears / Inner Conflicts</span>
-        <textarea
-          rows={4}
-          placeholder="Fears, regrets, insecurities, internal struggles..."
-          value={character.fears}
-          onChange={(e) => updateCharacter("fears", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Fears / Inner Conflicts" value={character.fears} field="fears" placeholder="Add a fear or inner conflict..." />
 
-      <label className="creator-field">
-        <span>Beliefs / Worldview</span>
-        <textarea
-          rows={4}
-          placeholder="Values, philosophy, faith, loyalties, view of the world..."
-          value={character.beliefs}
-          onChange={(e) => updateCharacter("beliefs", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Beliefs / Worldview" value={character.beliefs} field="beliefs" placeholder="Add a belief, value, loyalty..." />
 
-      <label className="creator-field"><span>Voice / Speech</span><textarea rows={5} placeholder="Voice type, pitch, accent, dialect, languages, vocabulary, verbal habits, battle voice..." value={character.voiceSpeech} onChange={(e)=>updateCharacter("voiceSpeech",e.target.value)}/></label>
-      <label className="creator-field"><span>Psychology / Inner Character</span><textarea rows={5} placeholder="Core desire, emotional wound, fatal flaw, moral boundary, breaking point, secrets, internal conflict..." value={character.psychology} onChange={(e)=>updateCharacter("psychology",e.target.value)}/></label>
-      <label className="creator-field"><span>Lifestyle / Everyday Life</span><textarea rows={5} placeholder="Home, routine, food, hobbies, music, transportation, pets, sleep, possessions..." value={character.lifestyle} onChange={(e)=>updateCharacter("lifestyle",e.target.value)}/></label>
-      <label className="creator-field"><span>Likes / Dislikes / Preferences</span><textarea rows={5} placeholder="Favorites, dislikes, comforts, pet peeves, interests, obsessions, guilty pleasures..." value={character.likesDislikes} onChange={(e)=>updateCharacter("likesDislikes",e.target.value)}/></label>
+      <RepeatableList label="Voice / Speech" value={character.voiceSpeech} field="voiceSpeech" placeholder="Add voice, accent, language, speech trait..." />
+      <RepeatableList label="Psychology / Inner Character" value={character.psychology} field="psychology" placeholder="Add desire, wound, flaw, boundary, secret..." />
+      <RepeatableList label="Lifestyle / Everyday Life" value={character.lifestyle} field="lifestyle" placeholder="Add routine, hobby, home, food, pet, possession..." />
+      <RepeatableList label="Likes / Dislikes / Preferences" value={character.likesDislikes} field="likesDislikes" placeholder="Add a like, dislike, favorite, preference..." />
 
       <label className="creator-field full-width">
         <span>Current Story Role</span>
