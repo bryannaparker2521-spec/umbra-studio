@@ -2724,15 +2724,7 @@ const renderAppearanceStep = () => (
         />
       </label>
 
-      <label className="creator-field">
-        <span>Accessories</span>
-        <textarea
-          rows={4}
-          placeholder="Jewelry, glasses, beads, crowns, belts, charms..."
-          value={character.accessories}
-          onChange={(e) => updateCharacter("accessories", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Accessories" value={character.accessories} field="accessories" placeholder="Add jewelry, glasses, beads, crowns, charms..." />
 
       <label className="creator-field full-width">
         <span>Alternate / True Form</span>
@@ -2752,11 +2744,11 @@ const renderAppearanceStep = () => (
       <label className="creator-field"><span>Makeup / Face Paint</span><textarea rows={4} placeholder="Eyeshadow, liner, lips, nails, ceremonial or magical markings and colors..." value={character.makeup} onChange={(e)=>updateCharacter("makeup",e.target.value)}/></label>
       <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
       <label className="creator-field"><span>Nails</span><textarea rows={4} placeholder="Shape, length, colors, gradient, gems, magical or metal accents..." value={character.nails} onChange={(e)=>updateCharacter("nails",e.target.value)}/></label>
-      <label className="creator-field full-width"><span>Official Character Color Palette</span><textarea rows={5} placeholder={"Primary — #HEX\nSecondary — #HEX\nAccent — #HEX\nMagic — #HEX\nMetal — #HEX"} value={character.colorPalette} onChange={(e)=>updateCharacter("colorPalette",e.target.value)}/></label>
+      <RepeatableList label="Official Character Color Palette" value={character.colorPalette} field="colorPalette" placeholder="Add color, e.g. Steam Pink — #FF8FCB" />
       <label className="creator-field full-width"><span>Signature / Default Outfit</span><textarea rows={6} placeholder="Head, upper body, lower body, footwear, accessories, weapons carried, construction..." value={character.signatureOutfit} onChange={(e)=>updateCharacter("signatureOutfit",e.target.value)}/></label>
-      <label className="creator-field"><span>Outfit Color Breakdown</span><textarea rows={6} placeholder={"Outer robe — Smoky Black #17131A\nTrim — Gold #D9B65D..."} value={character.outfitColors} onChange={(e)=>updateCharacter("outfitColors",e.target.value)}/></label>
+      <RepeatableList label="Outfit Color Breakdown" value={character.outfitColors} field="outfitColors" placeholder="Add garment/color, e.g. Trim — Gold #D9B65D" />
       <label className="creator-field"><span>Outfit Materials / Construction</span><textarea rows={6} placeholder="Linen, silk, wool, leather, metal, enchanted fabric; layered, wrapped, buckled..." value={character.outfitMaterials} onChange={(e)=>updateCharacter("outfitMaterials",e.target.value)}/></label>
-      <label className="creator-field full-width"><span>Wardrobe / Alternate Outfits</span><textarea rows={7} placeholder={"Outfit 02 — Casual\nOutfit 03 — Combat\nOutfit 04 — Formal / Ceremonial\nOutfit 05 — Travel..."} value={character.wardrobe} onChange={(e)=>updateCharacter("wardrobe",e.target.value)}/></label>
+      <RepeatableList label="Wardrobe / Alternate Outfits" value={character.wardrobe} field="wardrobe" placeholder="Add outfit, e.g. Outfit 02 — Casual" />
 
       <label className="creator-field full-width">
         <span>Additional Appearance Notes</span>
