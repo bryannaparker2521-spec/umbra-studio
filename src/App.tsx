@@ -1754,6 +1754,7 @@ return (
         margin-top: 32px;
       }
       .saved-character-card {
+        min-width: 0;
         overflow: hidden;
         border: 1px solid rgba(185, 92, 209, .24);
         border-radius: 22px;
@@ -1793,7 +1794,7 @@ return (
         color: #e8c96f;
       }
       .character-status.complete { color: #f1d878; }
-      .saved-character-body { padding: 24px; }
+      .saved-character-body { min-width: 0; padding: 24px; }
       .saved-character-body h3 {
         margin: 8px 0 4px;
         font-family: Georgia, serif;
@@ -1819,15 +1820,27 @@ return (
         font-size: 12px;
       }
       .saved-character-actions {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
         align-items: stretch;
+        width: 100%;
+        min-width: 0;
       }
-      .saved-character-actions .primary-action { flex: 1; }
+      .saved-character-actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 54px;
+        padding: 11px 12px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+      }
+      .saved-character-actions .primary-action { width: 100%; }
       .danger-action { color: #d79aa7 !important; }
       @media (max-width: 700px) {
         .my-characters-grid { grid-template-columns: 1fr; }
-        .saved-character-actions { flex-direction: column; }
+        .saved-character-actions { grid-template-columns: 1fr; }
       }
     `}</style>
     <header className="studio-header">
