@@ -3368,7 +3368,7 @@ return <main className="dashboard-shell admin-center-page"><header className="st
 {adminTab==="team"&&<section className="admin-panel"><span className="card-label">ACCESS & ROLES</span><h2>Studio Team</h2>{adminRole==="primary_admin"&&<div className="admin-add-member"><input type="email" value={adminMemberEmail} onChange={e=>setAdminMemberEmail(e.target.value)} placeholder="Existing Umbra Studio account email"/><select value={adminMemberRole} onChange={e=>setAdminMemberRole(e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button className="primary-action" onClick={()=>void addStudioAdmin()}>Add Collaborator</button></div>}<div className="admin-team-grid">{adminMembers.map(m=><article className="admin-member-card" key={m.user_id}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><span>{m.email}</span></div><span className="admin-role-pill">{m.role}</span><small>Last login: {m.last_login_at?new Date(m.last_login_at).toLocaleString():"Never recorded"}</small>{adminRole==="primary_admin"&&<div className="admin-member-actions"><button onClick={()=>{const n=prompt("Studio display name",m.display_name||"");if(n)void setMemberDisplayName(m.user_id,n)}}>Rename</button><select value={m.role} disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onChange={e=>void changeAdminRole(m.user_id,e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onClick={()=>void removeStudioAdmin(m.user_id)}>Remove</button></div>}</article>)}</div></section>}</section></main>;
 }
 
-return ( <main className="dashboard-shell"> <header className="studio-header"> <div className="brand"> <div className="brand-moon">
+return ( <main className="dashboard-shell"> <header className="studio-header v104-topbar"> <button type="button" className="brand v104-brand-button" onClick={()=>setPage("dashboard")}> <div className="brand-moon">
 ☾ </div>
 
       <div>
@@ -3380,7 +3380,8 @@ return ( <main className="dashboard-shell"> <header className="studio-header"> <
           Umbra Studio
         </h2>
       </div>
-    </div>
+    </button>
+    <nav className="v104-topnav"><button onClick={openMyCharacters}>Characters</button><button onClick={()=>void openWorldOrganization()}>World</button><button onClick={()=>void openProduction()}>Story</button><button onClick={()=>void openWorldDatabase("media")}>Media</button><button onClick={()=>void openMessages()}>Messages</button></nav>
 
     <div className="account-area">
       <div className="connection-dot" />
@@ -3406,20 +3407,7 @@ return ( <main className="dashboard-shell"> <header className="studio-header"> <
   </header>
 
   <section className="dashboard-content">
-    <div className="welcome-section">
-      <p className="eyebrow">
-        THE UMBRAL WORLD AWAITS
-      </p>
-
-      <h1>
-        Welcome to Umbra Studio
-      </h1>
-
-      <p>
-        Create, organize, and develop the
-        characters that inhabit your world.
-      </p>
-    </div>
+    <section className="v104-quickbar"><strong>Quick Access</strong><button className="v104-quick-primary" onClick={openCreateCharacter}>+ Create Character</button><button onClick={()=>void openWorldExplorer("map")}>World Map</button><button onClick={()=>void openWorldDatabase("import")}>Import & Autofill</button><button onClick={openMyCharacters}>My Characters</button><button onClick={()=>void openWorldOrganization()}>World & Codex</button><button onClick={()=>void openProduction("scenes")}>Scenes</button><span className="v104-quick-spacer"/><button onClick={()=>void openAdminCenter()}>Admin</button><button onClick={()=>void openStudioSettings()}>Settings</button></section>
 
     <section className="studio-command-center">
       <div className="command-search"><span>⌕</span><input type="search" value={studioSearch} onChange={e=>setStudioSearch(e.target.value)} placeholder="Search your Studio — characters, Codex, locations, timeline..."/></div>
@@ -3429,25 +3417,7 @@ return ( <main className="dashboard-shell"> <header className="studio-header"> <
 
     <section className="v10-dashboard-pulse"><div className="v10-pulse-head"><div><span className="card-label">STUDIO 1.0 COMMAND CENTER</span><h2>{studioSettings?.studio_subtitle||"Production Pulse"}</h2></div><div className="v10-quick-actions"><button onClick={()=>void openProduction("projects")}>+ Story Project</button><button onClick={()=>void openWorldDatabase("records")}>+ Lore Record</button><button onClick={()=>void openProduction("inbox")}>Inbox</button></div></div><div className="v10-pulse-grid"><button onClick={()=>void openProduction("inbox")}><strong>{studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread Notifications</span></button><button onClick={()=>void openProduction("assignments")}><strong>{studioAssignments.filter(x=>!["done","cancelled"].includes(x.status)).length}</strong><span>Open Assignments</span></button><button onClick={()=>void openWorldDatabase("continuity")}><strong>{continuityIssues.filter(x=>["open","reviewing"].includes(x.status)).length}</strong><span>Continuity Alerts</span></button><button onClick={()=>void openProduction("overview")}><strong>{changesSinceVisit.length}</strong><span>Changes Since Visit</span></button></div>{studioSettings?.show_dashboard_activity!==false&&changesSinceVisit.length>0&&<div className="v10-recent-strip">{changesSinceVisit.slice(0,4).map(x=><span key={x.id}><strong>{x.actor_name}</strong> {x.action.replace(/_/g," ")} <em>{x.entity_label||x.entity_type}</em></span>)}</div>}</section>
 
-    <section className="v104-workspace">
-      <div className="v104-workspace-head"><div><span className="card-label">CONNECTED WORKSPACE</span><h2>Build the Umbral World</h2><p>Four focused areas. The shared database, links, canon tools, and media system work underneath them.</p></div><button className="primary-action" onClick={openCreateCharacter}>+ Create Character</button></div>
-      <div className="v104-main-grid">
-        <button className="v104-main-card" onClick={openMyCharacters}><span>✦</span><div><small>CHARACTERS</small><h3>Characters</h3><p>Create, import, edit, connect, and publish character profiles.</p><strong>{studioCharacters.length} character{studioCharacters.length===1?"":"s"}</strong></div></button>
-        <button className="v104-main-card" onClick={()=>void openWorldOrganization()}><span>⌘</span><div><small>WORLD</small><h3>World & Codex</h3><p>Build peoples, bloodlines, factions, realms, lore, locations, maps, and history.</p><strong>{worldRecords.length} Codex • {worldLocations.filter(x=>!x.archived_at).length} locations</strong></div></button>
-        <button className="v104-main-card" onClick={()=>void openProduction()}><span>✧</span><div><small>STORY</small><h3>Story Production</h3><p>Plan projects, arcs, scenes, plot beats, journeys, and linked world records.</p><strong>{storyProjects.length} projects • {storyScenes.length} scenes</strong></div></button>
-        <button className="v104-main-card" onClick={()=>void openWorldDatabase("media")}><span>▣</span><div><small>MEDIA</small><h3>Media & References</h3><p>Manage shared artwork and production references without digging through the database.</p><strong>{mediaAssets.length} shared assets</strong></div></button>
-      </div>
-      <div className="v104-shortcuts">
-        <button onClick={()=>void openWorldExplorer("map")}>Map & Locations</button>
-        <button onClick={()=>void openWorldDatabase("import")}>Import & Autofill</button>
-        <button onClick={openCharacterLibrary}>Character Library</button>
-        <button onClick={()=>void openWorldDatabase("records")}>Advanced Database</button>
-        <button onClick={()=>void openMessages()}>Messages</button>
-        <button onClick={()=>void openAdminCenter()}>Admin Center</button>
-        <button onClick={()=>void openTransferCenter()}>Backup</button>
-        <button onClick={()=>void openStudioSettings()}>Settings</button>
-      </div>
-    </section>
+    <section className="v104-home-panel"><div className="v104-home-main"><div><span className="card-label">UMBRA STUDIO 1.0.4</span><h1>Studio Overview</h1><p>Everything you use most is above. Search or jump directly into current work below.</p></div><div className="v104-home-counts"><button onClick={openMyCharacters}><strong>{studioCharacters.length}</strong><span>Characters</span></button><button onClick={()=>void openWorldOrganization()}><strong>{worldRecords.length}</strong><span>Codex</span></button><button onClick={()=>void openWorldExplorer("locations")}><strong>{worldLocations.filter(x=>!x.archived_at).length}</strong><span>Locations</span></button><button onClick={()=>void openProduction("scenes")}><strong>{storyScenes.length}</strong><span>Scenes</span></button></div></div></section>
 
     <div className="studio-footer-card">
       <div>
