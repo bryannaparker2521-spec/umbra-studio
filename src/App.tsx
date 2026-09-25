@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
@@ -71,7 +71,7 @@ type StudioNotification = { id:string; recipient_user_id:string; actor_user_id:s
 type StudioDirectMessage = { id:string; sender_user_id:string; recipient_user_id:string; body:string; entity_type:string|null; entity_id:string|null; read_at:string|null; created_at:string; };
 type CharacterJourney = { id:string; character_id:string; project_id:string|null; arc_id:string|null; scene_id:string|null; journey_type:string; title:string; description:string|null; before_value:string|null; after_value:string|null; sort_order:number; created_at:string; };
 type V9Health = { projects:number; arcs:number; scenes:number; beats:number; open_comments:number; open_assignments:number; my_unread_notifications:number; continuity_open:number; };
-type StudioSettings = { id:boolean; studio_name:string; studio_subtitle:string; default_canon_status:string; default_spoiler_level:string; autosave_enabled:boolean; autosave_seconds:number; stale_session_minutes:number; show_dashboard_activity:boolean; updated_at:string; };
+type StudioSettings = { id:boolean; studio_name:string; studio_subtitle:string; default_canon_status:string; default_spoiler_level:string; autosave_enabled:boolean; autosave_seconds:number; stale_session_minutes:number; show_dashboard_activity:boolean; show_help_descriptions:boolean; updated_at:string; };
 type ChangeSinceVisit = { id:string; actor_user_id:string|null; actor_name:string; action:string; entity_type:string; entity_id:string|null; entity_label:string|null; details:Record<string,any>|null; created_at:string; };
 type StudioActivity = { id:string; actor_user_id:string|null; actor_email:string|null; action:string; entity_type:string; entity_id:string|null; entity_label:string|null; details:Record<string,any>|null; created_at:string; };
 type StudioRevision = { id:string; entity_type:string; entity_id:string; entity_label:string|null; changed_by:string|null; changed_by_email:string|null; snapshot:Record<string,any>; created_at:string; };
@@ -124,7 +124,20 @@ const [password, setPassword] = useState("");
 const [loading, setLoading] = useState(true);
 const [signingIn, setSigningIn] = useState(false);
 const [error, setError] = useState("");
-const [page, setPage] = useState<StudioPage>("dashboard");
+const [page, changePage] = useState<StudioPage>("dashboard");
+const pageRef = useRef<StudioPage>("dashboard");
+const pageHistory = useRef<StudioPage[]>([]);
+function setPage(next: StudioPage) {
+  if (next !== pageRef.current) pageHistory.current.push(pageRef.current);
+  pageRef.current = next;
+  changePage(next);
+}
+function goBack() {
+  const previous = pageHistory.current.pop() || "dashboard";
+  pageRef.current = previous;
+  changePage(previous);
+  window.scrollTo({top:0,behavior:"smooth"});
+}
 const [creatorStep, setCreatorStep] = useState(1);
 const [studioCharacterId, setStudioCharacterId] = useState<string | null>(null);
 const [savingCharacter, setSavingCharacter] = useState(false);
@@ -136,7 +149,6 @@ const [libraryCharacters, setLibraryCharacters] = useState<StudioCharacterRow[]>
 const [loadingLibrary, setLoadingLibrary] = useState(false);
 const [libraryError, setLibraryError] = useState("");
 const [selectedCharacter, setSelectedCharacter] = useState<StudioCharacterRow | null>(null);
-const [profileReturnPage, setProfileReturnPage] = useState<"characters" | "library">("library");
 const [librarySearch, setLibrarySearch] = useState("");
 const [libraryRace, setLibraryRace] = useState("");
 const [libraryHomeland, setLibraryHomeland] = useState("");
@@ -239,7 +251,6 @@ const [assignmentTagId,setAssignmentTagId]=useState("");
 const [mediaForm,setMediaForm]=useState({title:"",assetUrl:"",mediaType:"image",caption:"",credit:"",altText:"",tags:""});
 const [mediaFile,setMediaFile]=useState<File|null>(null);
 const [mediaUploading,setMediaUploading]=useState(false);
-const [showStudioGuidance,setShowStudioGuidance]=useState(()=>{try{return localStorage.getItem("umbra-studio-guidance")!=="off";}catch{return true;}});
 const [backupLabel,setBackupLabel]=useState("");
 const [databaseHealth,setDatabaseHealth]=useState<DatabaseHealth|null>(null);
 const [databaseRevisions,setDatabaseRevisions]=useState<DatabaseRevision[]>([]);
@@ -293,6 +304,7 @@ const [v9Health,setV9Health]=useState<V9Health|null>(null);
 const [productionBusy,setProductionBusy]=useState(false);
 const [productionError,setProductionError]=useState("");
 const [studioSettings,setStudioSettings]=useState<StudioSettings|null>(null);
+const [showStudioGuidance,setShowStudioGuidance]=useState(()=>{try{return localStorage.getItem("umbra-studio-guidance")!=="off";}catch{return true;}});
 const [settingsError,setSettingsError]=useState("");
 const [settingsBusy,setSettingsBusy]=useState(false);
 const [appVersion,setAppVersion]=useState("...");
@@ -565,8 +577,7 @@ async function assignTag(recordId:string){if(!assignmentTagId)return;const {erro
 async function removeTagAssignment(id:string){const {error}=await supabase.from("studio_tag_assignments").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 async function createUniversalLink(){if(!session||!linkForm.sourceId||!linkForm.targetId||!linkForm.label.trim())return;const {error}=await supabase.from("studio_universal_links").insert({source_type:"database",source_id:linkForm.sourceId,target_type:linkForm.targetType,target_id:linkForm.targetId,relation_label:linkForm.label.trim(),notes:linkForm.notes.trim()||null,created_by:session.user.id});if(error)setDatabaseError(error.message);else{setLinkForm({sourceId:"",targetType:"database",targetId:"",label:"",notes:""});await loadWorldDatabase();}}
 async function deleteUniversalLink(id:string){const {error}=await supabase.from("studio_universal_links").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
-function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);try{localStorage.setItem("umbra-studio-guidance",enabled?"on":"off");}catch{}}
-function StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>${title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips</button></div>:null;}
+function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);try{localStorage.setItem("umbra-studio-guidance",enabled?"on":"off");}catch{}}\nfunction StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>{title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips for me</button></div>:null;}
 async function uploadCatalogFile(file:File){
  if(!session)return "";
  const imageKinds=["image","map","reference"]; if(imageKinds.includes(mediaForm.mediaType)&&!file.type.startsWith("image/"))throw new Error("Choose an image file for this media type.");
@@ -796,6 +807,14 @@ async function createJourneyEvent(){if(!session||!journeyForm.characterId||!jour
 function productionEntityOptions(type:string){if(type==="story_project")return storyProjects.map(x=>({id:x.id,label:x.title}));if(type==="story_arc")return storyArcs.map(x=>({id:x.id,label:x.title}));if(type==="story_scene")return storyScenes.map(x=>({id:x.id,label:x.title}));if(type==="database")return databaseRecords.map(x=>({id:x.id,label:x.name}));if(type==="character")return studioCharacters.map(x=>({id:x.id,label:x.name}));if(type==="codex")return worldRecords.map(x=>({id:x.id,label:x.name}));if(type==="location")return worldLocations.map(x=>({id:x.id,label:x.name}));return timelineEvents.map(x=>({id:x.id,label:x.title}));}
 
 async function loadStudioSettings(){const {data,error}=await supabase.from("studio_settings").select("*").eq("id",true).maybeSingle();if(error){setSettingsError(error.message);return;}if(data)setStudioSettings(data as StudioSettings);}
+// Keep the global help preference in sync when another administrator changes it.
+useEffect(()=>{
+  if(!session||page==="settings")return;
+  const refresh=()=>{if(document.visibilityState==="visible")void loadStudioSettings();};
+  const timer=window.setInterval(refresh,30000);
+  document.addEventListener("visibilitychange",refresh);
+  return()=>{window.clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};
+},[session?.user.id,page]);
 async function openStudioSettings(){setPage("settings");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadStudioSettings(),loadAdminCenter(),loadV9Production()]);}
 async function loadDirectMessages(){if(!session)return;setMessagesBusy(true);setMessagesError("");try{const {data,error}=await supabase.from("studio_direct_messages").select("id,sender_user_id,recipient_user_id,body,entity_type,entity_id,read_at,created_at").or(`sender_user_id.eq.${session.user.id},recipient_user_id.eq.${session.user.id}`).order("created_at",{ascending:true}).limit(1000);if(error)throw error;setDirectMessages((data??[]) as StudioDirectMessage[]);}catch(f){setMessagesError(f instanceof Error?f.message:"Messages could not be loaded.");}finally{setMessagesBusy(false);}}
 async function openMessages(){setPage("messages");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadAdminCenter(),loadDirectMessages()]);}
@@ -888,17 +907,11 @@ try {
 } finally { setLoadingLibrary(false); }
 }
 
-function openCharacterProfile(saved: StudioCharacterRow, from: "characters" | "library") {
+function openCharacterProfile(saved: StudioCharacterRow, _from: "characters" | "library") {
 setSelectedCharacter(saved);
-setProfileReturnPage(from);
 setPage("profile");
 void loadConnectedRelationships(saved.id);
 void loadWorldRecords();
-window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function returnFromProfile() {
-setPage(profileReturnPage);
 window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1100,7 +1113,7 @@ async function removeConnectedRelationship(link: CharacterRelationship) {
 }
 
 async function openConnectedCharacterProfile(target: StudioCharacterRow) {
-  setSelectedCharacter(target); setProfileReturnPage("characters"); setPage("profile");
+  setSelectedCharacter(target); setPage("profile");
   await loadConnectedRelationships(target.id); window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1148,18 +1161,6 @@ async function openConnections(saved: StudioCharacterRow) {
 async function moveConnectionCenter(target: StudioCharacterRow) {
   await openConnections(target);
 }
-
-function returnFromConnections() {
-  if (connectionCenter) {
-    setSelectedCharacter(connectionCenter);
-    setPage("profile");
-    void loadConnectedRelationships(connectionCenter.id);
-  } else {
-    setPage("characters");
-  }
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
 
 async function loadWorldRecords() {
   if (!session) return;
@@ -1678,6 +1679,7 @@ const StudioTopNav = () => (
     <header className="practical-topbar">
       <button className="practical-brand" onClick={()=>setPage("dashboard")}><span>☾</span><div><small>UMBRA CONNECT</small><strong>Umbra Studio</strong></div></button>
       <div className="practical-utilities">
+        {page!=="dashboard"&&<button type="button" onClick={goBack}>← Back</button>}
         <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
         <button onClick={()=>void openAdminCenter()}>Admin</button>
         <button onClick={()=>void openStudioSettings()}>Settings</button>
@@ -2460,8 +2462,8 @@ return (
       .connections-content{width:min(1220px,calc(100% - 48px));margin:0 auto;padding:58px 0 100px}
       .connections-heading{text-align:center;max-width:760px;margin:0 auto 28px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0 12px}.connections-heading p{color:#aa94ae;line-height:1.7}
       .connection-tabs{display:flex;justify-content:center;gap:10px;margin:26px 0 42px;flex-wrap:wrap}.connection-tab{padding:11px 18px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd;cursor:pointer}.connection-tab.active{border-color:rgba(232,201,111,.55);color:#f0d481;background:rgba(92,52,23,.18)}
-      .family-tree{display:grid;gap:28px}.tree-level{position:relative;text-align:center}.tree-level-title{display:block;margin-bottom:13px;color:#9e77a5;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.tree-row{display:flex;justify-content:center;align-items:flex-start;gap:18px;flex-wrap:wrap}.tree-connector{width:1px;height:28px;background:linear-gradient(#b55dc4,#e5bd57);margin:0 auto;opacity:.65}
-      .connection-center{width:min(440px,100%);margin:0 auto;padding:22px;border-radius:24px;border:1px solid rgba(232,201,111,.38);background:linear-gradient(180deg,rgba(54,24,58,.9),rgba(14,8,18,.96));box-shadow:0 24px 70px rgba(0,0,0,.34);display:flex;align-items:center;gap:18px;text-align:left}.connection-center-image{width:110px;height:130px;flex:0 0 auto;border-radius:16px;overflow:hidden;background:#100914;display:grid;place-items:center;color:#e5bd57;font-size:42px}.connection-center-image img{width:100%;height:100%;object-fit:cover}.connection-center h2{margin:4px 0;font-family:Georgia,serif;color:#f0d481;font-size:30px}.connection-center p{margin:0;color:#a994ad}.connection-center .creator-kicker{font-size:10px}
+      .family-tree{display:grid;gap:28px;padding:32px 14px;border:1px solid rgba(185,92,209,.2);border-radius:28px;background:radial-gradient(ellipse at center,rgba(92,44,112,.2),transparent 70%)}.tree-level{position:relative;text-align:center}.tree-level-title{display:block;margin-bottom:13px;color:#9e77a5;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.tree-row{display:flex;justify-content:center;align-items:flex-start;gap:18px;flex-wrap:wrap}.tree-connector{width:1px;height:28px;background:linear-gradient(#b55dc4,#e5bd57);margin:0 auto;opacity:.65}
+      .connection-center{width:min(560px,100%);margin:0 auto;padding:22px;border-radius:24px;border:1px solid rgba(232,201,111,.38);background:linear-gradient(180deg,rgba(54,24,58,.9),rgba(14,8,18,.96));box-shadow:0 24px 70px rgba(0,0,0,.34);display:flex;align-items:center;gap:18px;text-align:left}.connection-center-image{width:110px;height:130px;flex:0 0 auto;border-radius:16px;overflow:hidden;background:#100914;display:grid;place-items:center;color:#e5bd57;font-size:42px}.connection-center-image img{width:100%;height:100%;object-fit:cover}.connection-center>div:last-child{min-width:0;overflow-wrap:anywhere}.connection-center h2{margin:4px 0;font-family:Georgia,serif;color:#f0d481;font-size:30px}.connection-center p{margin:0;color:#a994ad}.connection-center .creator-kicker{font-size:10px}
       .connection-node{width:180px;padding:0 0 14px;overflow:hidden;border-radius:18px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#ddd;cursor:pointer;transition:.18s transform,.18s border-color;text-align:center}.connection-node:hover{transform:translateY(-4px);border-color:rgba(232,201,111,.55)}.connection-node-image{height:190px;background:radial-gradient(circle,rgba(105,35,119,.3),#09060c);display:grid;place-items:center;color:#e5bd57;font-size:48px}.connection-node-image img{width:100%;height:100%;object-fit:cover}.connection-node strong{display:block;padding:12px 10px 2px;color:#ead7ec}.connection-node small{display:block;color:#b66ec3;text-transform:uppercase;font-size:10px;letter-spacing:.12em}.relation-parent,.relation-child{border-color:rgba(232,201,111,.28)}.relation-partner{border-color:rgba(197,91,143,.32)}
       .all-connections-map{position:relative;min-height:620px;border:1px solid rgba(185,92,209,.14);border-radius:28px;background:radial-gradient(circle at center,rgba(75,26,84,.24),transparent 34%),rgba(10,6,14,.72);padding:44px 24px;overflow:hidden}.all-map-center{position:relative;z-index:2;margin:190px auto 0}.connection-orbit{position:absolute;inset:24px;display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start;gap:20px;z-index:1}.connection-orbit .connection-node{width:160px}.connection-orbit .connection-node-image{height:155px}
       .connections-empty{text-align:center;padding:58px 24px;border:1px solid rgba(185,92,209,.16);border-radius:22px;background:rgba(18,8,21,.55)}.connections-empty strong{display:block;color:#e8c96f;font-family:Georgia,serif;font-size:25px;margin-bottom:10px}.connections-empty p{color:#a994ad}
@@ -2470,7 +2472,7 @@ return (
     `}</style>
     <header className="studio-header">
       <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
-      <div className="account-area"><button type="button" className="sign-out-button" onClick={returnFromConnections}>← Back to Profile</button></div>
+      <div className="account-area"><button type="button" className="sign-out-button" onClick={goBack}>← Back</button></div>
     </header>
     <section className="connections-content">
       <div className="connections-heading">
@@ -2491,7 +2493,7 @@ return (
             <span className="tree-level-title">Current Character</span>
             <div className="tree-row">
               {grouped.partner.map((link) => <ConnectionNode key={link.id} link={link} />)}
-              <div className="connection-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF TREE</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.alias || connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
+              <div className="connection-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF TREE</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
             </div>
           </div>
           {grouped.siblings.length > 0 && <div className="tree-level"><div className="tree-connector" /><span className="tree-level-title">Siblings</span><div className="tree-row">{grouped.siblings.map((link) => <ConnectionNode key={link.id} link={link} />)}</div></div>}
@@ -2501,7 +2503,7 @@ return (
         visibleLinks.length === 0 ? <div className="connections-empty"><strong>No connections yet</strong><p>Add connected characters from the Relationships step to build this map.</p></div> :
         <div className="all-connections-map">
           <div className="connection-orbit">{visibleLinks.map((link) => <ConnectionNode key={link.id} link={link} />)}</div>
-          <div className="connection-center all-map-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF MAP</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.alias || connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
+          <div className="connection-center all-map-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF MAP</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
         </div>
       )}
       <p className="connections-hint">Click a connected character to make them the center and continue exploring their relationships.</p>
@@ -2552,26 +2554,26 @@ return (
   <main className="dashboard-shell profile-page">
     <style>{`
       .profile-page{min-height:100vh;background:radial-gradient(circle at 50% 0%,rgba(80,26,89,.16),transparent 34%),#07050a;color:#eee;}
-      .profile-hero{position:relative;min-height:390px;display:flex;align-items:flex-end;overflow:hidden;border-bottom:1px solid rgba(185,92,209,.18);}
+      .profile-hero{position:relative;min-height:75vh;display:flex;align-items:stretch;overflow:hidden;border-bottom:1px solid rgba(185,92,209,.18);}
       .profile-hero-bg{position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,rgba(126,44,139,.32),transparent 34%),linear-gradient(110deg,#08050b 15%,#18091b 55%,#07050a);}
       .profile-hero-bg img{width:100%;height:100%;object-fit:cover;opacity:.28;filter:blur(3px);transform:scale(1.04);}
       .profile-hero-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,5,10,.96) 12%,rgba(7,5,10,.68) 52%,rgba(7,5,10,.9)),linear-gradient(0deg,#07050a 0%,transparent 55%);}
-      .profile-hero-content{position:relative;z-index:2;width:min(1180px,calc(100% - 48px));margin:0 auto;padding:48px 0 38px;display:grid;grid-template-columns:190px 1fr;gap:30px;align-items:center;}
-      .profile-portrait{height:240px;border-radius:26px;overflow:hidden;border:1px solid rgba(232,201,111,.3);background:radial-gradient(circle,rgba(105,35,119,.35),#0b0710 70%);box-shadow:0 30px 80px rgba(0,0,0,.45);display:grid;place-items:center;font-size:88px;color:#e5bd57;}
-      .profile-portrait img{width:100%;height:100%;object-fit:cover;}
-      .profile-copy .creator-kicker{display:block;margin-bottom:10px}.profile-copy h1{margin:0;font-family:Georgia,serif;font-size:clamp(46px,7vw,82px);line-height:.98;color:#f0d481;}
+      .profile-hero-content{position:relative;z-index:2;width:min(1180px,calc(100% - 48px));margin:0 auto;padding:48px 0 38px;display:grid;grid-template-columns:minmax(260px,38%) minmax(0,1fr);gap:clamp(24px,4vw,64px);align-items:stretch;}
+      .profile-portrait{height:100%;min-height:560px;border-radius:26px;overflow:hidden;border:1px solid rgba(232,201,111,.3);background:radial-gradient(circle,rgba(105,35,119,.35),#0b0710 70%);box-shadow:0 30px 80px rgba(0,0,0,.45);display:grid;place-items:center;font-size:88px;color:#e5bd57;}
+      .profile-portrait img{width:100%;height:100%;object-fit:contain;object-position:center top;}
+      .profile-copy{display:flex;flex-direction:column;justify-content:center;min-width:0}.profile-copy .creator-kicker{display:block;margin-bottom:10px}.profile-copy h1{margin:0;font-family:Georgia,serif;font-size:clamp(46px,7vw,82px);line-height:.98;color:#f0d481;}
       .profile-alias{display:block;margin:14px 0;color:#d7bddb;font-size:20px}.profile-summary{max-width:760px;color:#bca9bf;font-size:17px;line-height:1.8;white-space:pre-wrap;}
       .profile-tags{display:flex;flex-wrap:wrap;gap:9px;margin:22px 0}.profile-tags span{padding:7px 11px;border-radius:999px;border:1px solid rgba(185,92,209,.25);background:rgba(22,10,25,.65);color:#d6bdd9;font-size:12px;}
-      .profile-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}.profile-content{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:50px 0 90px;}
+      .profile-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:auto;padding-top:28px}.profile-content{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:50px 0 90px;}
       .profile-section{padding:34px 0;border-bottom:1px solid rgba(185,92,209,.13)}.profile-section-title{display:flex;gap:12px;align-items:center;margin-bottom:22px}.profile-section-title span{color:#e5bd57;font-size:22px}.profile-section-title h2{margin:0;font-family:Georgia,serif;color:#edd080;font-size:30px;}
       .profile-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.profile-detail{padding:19px;border:1px solid rgba(185,92,209,.16);border-radius:16px;background:rgba(21,10,24,.52)}.profile-detail span{display:block;color:#b66ec3;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px}.profile-detail p{margin:0;color:#c8b9ca;line-height:1.75;white-space:pre-wrap;}
       .profile-media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}.profile-media-card{overflow:hidden;border-radius:18px;border:1px solid rgba(185,92,209,.18);background:#100914}.profile-media-card img{width:100%;height:300px;object-fit:cover;display:block}.profile-media-card span{display:block;padding:13px 15px;color:#d8c0db;font-weight:700}.profile-gallery-link{margin-top:18px;display:inline-block;color:#e8c96f;word-break:break-all}.profile-media-notes{margin-top:20px;color:#bbaabd;line-height:1.75;white-space:pre-wrap;}
       .library-profile-button{width:100%;margin-top:20px}.saved-character-actions{flex-wrap:wrap}.saved-character-actions .secondary-action{flex:1;min-width:120px}
-      @media(max-width:760px){.profile-hero-content{grid-template-columns:1fr;padding-top:40px}.profile-portrait{height:420px;max-width:360px}.profile-detail-grid{grid-template-columns:1fr}.profile-content,.profile-hero-content{width:min(100% - 28px,1180px)}}
+      @media(max-width:760px){.profile-hero-content{grid-template-columns:1fr;padding-top:40px}.profile-portrait{height:min(70vh,650px);min-height:0;max-width:100%}.profile-detail-grid{grid-template-columns:1fr}.profile-content,.profile-hero-content{width:min(100% - 28px,1180px)}}
     `}</style>
     <header className="studio-header">
       <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
-      <div className="account-area"><button type="button" className="sign-out-button" onClick={returnFromProfile}>← Back</button></div>
+      <div className="account-area"><button type="button" className="sign-out-button" onClick={goBack}>← Back</button></div>
     </header>
     <section className="profile-hero">
       <div className="profile-hero-bg">{portrait && <img src={portrait} alt="" />}</div>
@@ -2588,7 +2590,7 @@ return (
             {saved.is_complete && saved.user_id === session.user.id && <button type="button" className="primary-action" onClick={() => setCharacterPublication(saved, !saved.is_public)}>{saved.is_public ? "Unpublish Character" : "Publish to Library"}</button>}
             <button type="button" className="secondary-action" onClick={() => void openConnections(saved)}>View Connections</button>
             {saved.user_id === session.user.id && <button type="button" className="secondary-action" onClick={() => loadCharacterIntoEditor(saved)}>Edit Character</button>}
-            <button type="button" className="secondary-action" onClick={returnFromProfile}>Back to {profileReturnPage === "library" ? "Library" : "My Characters"}</button>
+            <button type="button" className="secondary-action" onClick={goBack}>← Back</button>
           </div>
         </div>
       </div>
@@ -3377,11 +3379,11 @@ if(page==="messages"){
 }
 
 if(page==="transfer"){
- return <main className="dashboard-shell v101-transfer-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">BACKUP & TRANSFER</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">SAFETY • PORTABILITY • COLLABORATION</p><h1>Backup & Transfer Center</h1><p>Keep local safety copies of Studio data and set up another administrator without splitting the live Umbra database.</p></div></div><div className="v101-transfer-grid"><section className="admin-panel"><span className="card-label">LOCAL SAFETY COPY</span><h2>Download Studio Backup</h2><p className="admin-help">Downloads a Studio 1.0 JSON archive to this computer. Keep dated copies somewhere safe. This file is for backup/recovery—not live collaboration.</p><button className="primary-action" onClick={exportStudioData}>Download Complete Studio Backup</button></section><section className="admin-panel"><span className="card-label">SUPABASE SNAPSHOT</span><h2>Create Cloud Backup</h2><p className="admin-help">Create a named server-side snapshot before major edits or imports.</p>{adminRole==="primary_admin"?<div className="database-backup-actions"><input placeholder="Backup label" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Cloud Backup</button></div>:<p className="admin-help">Only a Primary Admin can create server snapshots.</p>}<div className="admin-feed">{backups.slice(0,8).map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section><section className="admin-panel"><span className="card-label">RECOVERY CHECK</span><h2>Validate Backup File</h2><p className="admin-help">Choose a downloaded Studio backup. Validation reads it locally and does not change Supabase.</p><input type="file" accept="application/json,.json" onChange={e=>validateBackupFile(e.target.files?.[0]||null)}/>{backupValidation&&<div className={backupValidation.ok?"v101-valid":"v101-invalid"}><strong>{backupValidation.ok?"✓ Valid backup":"⚠ Backup problem"}</strong><p>{backupValidation.message}</p>{backupValidation.summary&&<small>{backupValidation.summary}</small>}</div>}<p className="admin-help"><strong>Restore safety:</strong> automatic destructive restore is intentionally not performed from this screen. A validated backup should be restored only after creating a fresh cloud snapshot and reviewing what will be replaced.</p></section><section className="admin-panel v101-admin-setup"><span className="card-label">OTHER ADMIN COMPUTER</span><h2>Set Up Another Administrator</h2><ol><li>Keep this Supabase project as the single live database.</li><li>Make sure the other person has their own Umbra Connect account and is listed in Admin Center → Team.</li><li>Send them the current Umbra Studio Desktop installer or your permanent Studio download page.</li><li>The installed desktop app already targets the shared Umbra Studio backend; they do not configure Supabase or download a database.</li><li>They sign in with their own authorized Umbra Connect account. Do not share your password.</li><li>Both computers use the same live characters, lore, story production, messages, assignments, and changes automatically.</li><li>Future database/content edits require no reinstall. Application feature updates are delivered as signed Umbra Studio Desktop releases.</li></ol><p className="admin-help">Do not import the downloaded JSON onto their computer for everyday collaboration. That would create a separate copy instead of a shared Studio.</p></section></div></section></main>;
+ return <main className="dashboard-shell v101-transfer-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">BACKUP & TRANSFER</span><button className="back-button" onClick={goBack}>← Back</button></div></header><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">SAFETY • PORTABILITY • COLLABORATION</p><h1>Backup & Transfer Center</h1><p>Keep local safety copies of Studio data and set up another administrator without splitting the live Umbra database.</p></div></div><div className="v101-transfer-grid"><section className="admin-panel"><span className="card-label">LOCAL SAFETY COPY</span><h2>Download Studio Backup</h2><p className="admin-help">Downloads a Studio 1.0 JSON archive to this computer. Keep dated copies somewhere safe. This file is for backup/recovery—not live collaboration.</p><button className="primary-action" onClick={exportStudioData}>Download Complete Studio Backup</button></section><section className="admin-panel"><span className="card-label">SUPABASE SNAPSHOT</span><h2>Create Cloud Backup</h2><p className="admin-help">Create a named server-side snapshot before major edits or imports.</p>{adminRole==="primary_admin"?<div className="database-backup-actions"><input placeholder="Backup label" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Cloud Backup</button></div>:<p className="admin-help">Only a Primary Admin can create server snapshots.</p>}<div className="admin-feed">{backups.slice(0,8).map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section><section className="admin-panel"><span className="card-label">RECOVERY CHECK</span><h2>Validate Backup File</h2><p className="admin-help">Choose a downloaded Studio backup. Validation reads it locally and does not change Supabase.</p><input type="file" accept="application/json,.json" onChange={e=>validateBackupFile(e.target.files?.[0]||null)}/>{backupValidation&&<div className={backupValidation.ok?"v101-valid":"v101-invalid"}><strong>{backupValidation.ok?"✓ Valid backup":"⚠ Backup problem"}</strong><p>{backupValidation.message}</p>{backupValidation.summary&&<small>{backupValidation.summary}</small>}</div>}<p className="admin-help"><strong>Restore safety:</strong> automatic destructive restore is intentionally not performed from this screen. A validated backup should be restored only after creating a fresh cloud snapshot and reviewing what will be replaced.</p></section><section className="admin-panel v101-admin-setup"><span className="card-label">OTHER ADMIN COMPUTER</span><h2>Set Up Another Administrator</h2><ol><li>Keep this Supabase project as the single live database.</li><li>Make sure the other person has their own Umbra Connect account and is listed in Admin Center → Team.</li><li>Send them the current Umbra Studio Desktop installer or your permanent Studio download page.</li><li>The installed desktop app already targets the shared Umbra Studio backend; they do not configure Supabase or download a database.</li><li>They sign in with their own authorized Umbra Connect account. Do not share your password.</li><li>Both computers use the same live characters, lore, story production, messages, assignments, and changes automatically.</li><li>Future database/content edits require no reinstall. Application feature updates are delivered as signed Umbra Studio Desktop releases.</li></ol><p className="admin-help">Do not import the downloaded JSON onto their computer for everyday collaboration. That would create a separate copy instead of a shared Studio.</p></section></div></section></main>;
 }
 
 if(page==="settings"){
- return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
+ return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label><label className="v10-toggle"><input type="checkbox" checked={showStudioGuidance} onChange={e=>setGuidancePreference(e.target.checked)}/> Show help descriptions on this computer</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
 }
 
 if(page==="production"){
