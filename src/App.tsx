@@ -1722,6 +1722,32 @@ return {
 };
 }
 
+async function ensureCharacterCodexLinks(){
+ if(!session)return {realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
+ const values:{kind:"realm"|"race"|"faction"|"family";name:string;current:string}[]=[
+  {kind:"realm",name:character.homeland.trim(),current:linkedRealmId},
+  {kind:"race",name:character.race.trim(),current:linkedRaceId},
+  {kind:"faction",name:character.affiliation.trim(),current:linkedFactionId},
+  {kind:"family",name:character.lineage.trim(),current:linkedFamilyId},
+ ];
+ const result:any={realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
+ let available=[...worldRecords];
+ for(const item of values){
+  if(!item.name||item.current)continue;
+  const normalized=normalizeImportName(item.name);
+  let match=available.find(x=>x.record_type===item.kind&&normalizeImportName(x.name)===normalized);
+  if(!match){
+   const {data,error}=await supabase.from("studio_world_records").insert({user_id:session.user.id,record_type:item.kind,name:item.name,subtype:null,description:null,is_public:false}).select("id,user_id,record_type,name,subtype,description,emblem_url,cover_url,lore_details,is_public,created_at,updated_at").single();
+   if(error)throw error;
+   match=data as WorldRecord; available.push(match);
+  }
+  result[item.kind]=match.id;
+ }
+ setWorldRecords(available);
+ setLinkedRealmId(result.realm||"");setLinkedRaceId(result.race||"");setLinkedFactionId(result.faction||"");setLinkedFamilyId(result.family||"");
+ return result as {realm:string;race:string;faction:string;family:string};
+}
+
 async function saveCharacter(nextStep: number, complete = false) {
 if (!session || savingCharacter) return;
 
@@ -1729,7 +1755,8 @@ setSaveError("");
 setSavingCharacter(true);
 
 try {
-  const record = buildStudioCharacterRecord(nextStep, complete);
+  const codexLinks = complete ? await ensureCharacterCodexLinks() : {realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
+  const record = {...buildStudioCharacterRecord(nextStep, complete),realm_record_id:codexLinks.realm||null,race_record_id:codexLinks.race||null,faction_record_id:codexLinks.faction||null,family_record_id:codexLinks.family||null};
 
   if (studioCharacterId) {
     const { error: updateError } = await supabase
