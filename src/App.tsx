@@ -578,20 +578,32 @@ function applyTemplate(t:FieldTemplate){const selectedRecord=databaseRecords.fin
 async function attachMediaToRecord(recordId:string){if(!recordMediaId)return;const {error}=await supabase.from("studio_media_attachments").upsert({media_id:recordMediaId,entity_type:"database",entity_id:recordId},{onConflict:"media_id,entity_type,entity_id"});if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 async function detachMedia(id:string){const {error}=await supabase.from("studio_media_attachments").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 function parseLabelledCharacterText(raw:string){
- const clean=raw.replace(/\r/g,"");
+ const clean=raw.replace(/\r/g,"").replace(/\u00a0/g," ");
  const aliases:Record<string,string>={
-  "name":"name","character name":"name","full name":"name","alias":"alias","aliases":"alias","nicknames":"nicknames","titles":"titles","age":"age","apparent age":"apparentAge","pronouns":"pronouns","race":"race","species":"race","subrace":"subrace","gender":"gender","homeland":"homeland","birthplace":"birthplace","current residence":"currentResidence","occupation":"occupation","affiliation":"affiliation","faction":"affiliation","family / bloodline":"lineage","family":"lineage","bloodline":"lineage","lineage":"lineage","heritage":"heritage","culture":"culture","summary":"summary","quick character summary":"summary","skin tone / complexion":"skinTone","skin tone":"skinTone","skin hex / color reference":"skinHex","eye color":"eyeColor","eye hex / color reference":"eyeHex","hair color":"hairColor","hair hex / color reference":"hairHex","hair texture":"hairTexture","hair style":"hairStyle","height":"height","weight":"weight","dominant hand":"dominantHand","body type / build":"build","build":"build","distinguishing features":"distinguishingFeatures","posture / movement":"postureMovement","alternate / true form":"alternateForm","personality":"personality","voice / speech":"voiceSpeech","psychology / inner character":"psychology","childhood / early life":"childhood","full backstory":"backstory","major life events":"majorLifeEvents","motivations":"motivations","goals / ambitions":"goals","fears / inner conflicts":"fears","beliefs / worldview":"beliefs","lifestyle / everyday life":"lifestyle","likes / dislikes / preferences":"likesDislikes","current story role":"storyRole","character arc / story information":"storyArc","power source / magic type":"powerSource","combat style":"combatStyle","primary abilities":"primaryAbilities","secondary abilities":"secondaryAbilities","signature techniques":"signatureTechniques","weapons / equipment":"weapons","weapon / equipment details":"weaponDetails","transformations / power states":"transformations","transformation details":"transformationDetails","strengths":"strengths","weaknesses":"weaknesses","limits / costs / conditions":"limitations","additional ability notes":"abilityNotes","parents / guardians":"parents","siblings":"siblings","children / descendants":"children","partner / love interest":"partner","friends / allies":"allies","rivals":"rivals","enemies":"enemies","mentors / students":"mentors","world connections":"worldConnections","relationship notes":"relationshipNotes","visual production asset checklist":"visualAssets","canon locks":"canonLocks","editable / tbd fields":"tbdFields","media notes":"mediaNotes"
+  "name":"name","character name":"name","full name":"name","alias":"alias","aliases":"alias","nicknames":"nicknames","titles":"titles","age":"age","apparent age":"apparentAge","pronouns":"pronouns","race":"race","species":"race","race / species":"race","subrace":"subrace","gender":"gender","homeland":"homeland","realm":"homeland","birthplace":"birthplace","place of origin":"birthplace","birthplace / place of origin":"birthplace","current residence":"currentResidence","occupation":"occupation","occupation / role":"occupation","affiliation":"affiliation","faction":"affiliation","family / bloodline":"lineage","family / lineage":"lineage","family":"lineage","bloodline":"lineage","lineage":"lineage","heritage":"heritage","culture":"culture","culture / heritage":"culture","summary":"summary","quick summary":"summary","quick character summary":"summary",
+  "skin tone / complexion":"skinTone","skin tone":"skinTone","skin hex / color reference":"skinHex","eye color":"eyeColor","eye hex / color reference":"eyeHex","hair color":"hairColor","hair hex / color reference":"hairHex","hair texture":"hairTexture","hair style":"hairStyle","height":"height","weight":"weight","dominant hand":"dominantHand","body type / build":"build","build":"build","distinguishing features":"distinguishingFeatures","posture / movement":"postureMovement","alternate / true form":"alternateForm",
+  "personality":"personality","voice / speech":"voiceSpeech","psychology / inner character":"psychology","childhood / early life":"childhood","full backstory":"backstory","backstory":"backstory","major life events":"majorLifeEvents","motivations":"motivations","goals / ambitions":"goals","fears / inner conflicts":"fears","beliefs / worldview":"beliefs","lifestyle / everyday life":"lifestyle","likes / dislikes / preferences":"likesDislikes","current story role":"storyRole","character arc / story information":"storyArc","character arc":"storyArc",
+  "power source / magic type":"powerSource","combat style":"combatStyle","primary abilities":"primaryAbilities","primary abilities / powers":"primaryAbilities","powers":"primaryAbilities","secondary abilities":"secondaryAbilities","signature techniques":"signatureTechniques","weapons / equipment":"weapons","weapon / equipment details":"weaponDetails","transformations / power states":"transformations","transformation details":"transformationDetails","strengths":"strengths","weaknesses":"weaknesses","limits / costs / conditions":"limitations","additional ability notes":"abilityNotes",
+  "parents / guardians":"parents","parents":"parents","siblings":"siblings","children / descendants":"children","children":"children","partner / love interest":"partner","friends / allies":"allies","allies":"allies","rivals":"rivals","enemies":"enemies","mentors / students":"mentors","world connections":"worldConnections","relationship notes":"relationshipNotes",
+  "visual production asset checklist":"visualAssets","canon locks":"canonLocks","editable / tbd fields":"tbdFields","media notes":"mediaNotes","additional text":"additionalImportNotes","additional notes":"additionalImportNotes","notes":"additionalImportNotes"
  };
- const out:any={}; let current="";
- for(const line of clean.split("\n")){
-  const trimmed=line.trim(); if(!trimmed)continue;
-  const normalized=trimmed.replace(/^[-*#\s]+/,"").replace(/\*\*/g,"").trim();
-  const colon=normalized.match(/^([^:]{1,80}):\s*(.*)$/);
-  const heading=aliases[normalized.toLowerCase().replace(/:$/,"")];
-  if(colon){const key=aliases[colon[1].trim().toLowerCase()];if(key){current=key;if(colon[2].trim())out[key]=colon[2].trim();continue;}}
-  if(heading){current=heading;continue;}
-  if(current)out[current]=out[current]?String(out[current])+"\n"+normalized:normalized;
+ const out:any={additionalImportNotes:""}; let current=""; let unknownHeading="";
+ const append=(key:string,value:string)=>{if(!value)return;out[key]=out[key]?String(out[key])+"\n"+value:value;};
+ for(const original of clean.split("\n")){
+  const trimmed=original.trim();
+  if(!trimmed){if(current&&out[current]&&!String(out[current]).endsWith("\n"))out[current]+="\n";continue;}
+  const normalized=trimmed.replace(/^[-*#>\s]+/,"").replace(/\*\*/g,"").trim();
+  const colon=normalized.match(/^([^:]{1,90}):\s*(.*)$/);
+  const rawLabel=(colon?colon[1]:normalized.replace(/:$/,"")).trim();
+  const labelKey=rawLabel.toLowerCase().replace(/[✦🌑🌿⚡🔥💧🪨🐉•]+/g,"").trim();
+  const known=aliases[labelKey];
+  if(known){current=known;unknownHeading="";if(colon&&colon[2].trim())append(known,colon[2].trim());continue;}
+  const looksHeading=/^#{1,6}\s/.test(trimmed)||/^\*\*[^*]{2,90}\*\*:?$/.test(trimmed)||(!colon&&normalized.length<70&&/^[A-Z][A-Za-z0-9 &'\/()–—-]+:?$/.test(normalized));
+  if(colon&&!known){current="";unknownHeading=rawLabel;append("additionalImportNotes",rawLabel+": "+colon[2].trim());continue;}
+  if(looksHeading&&!known){current="";unknownHeading=normalized.replace(/:$/,"");append("additionalImportNotes","["+unknownHeading+"]");continue;}
+  if(current)append(current,normalized); else append("additionalImportNotes",(unknownHeading?"" : "")+normalized);
  }
+ for(const key of Object.keys(out))if(typeof out[key]==="string")out[key]=out[key].replace(/\n{3,}/g,"\n\n").trim();
  return out;
 }
 async function loadImportFile(file:File){
@@ -645,7 +657,7 @@ if(looksLikeCharacter){
     secondaryAbilities:lines(pick(c.secondaryAbilities,abilities.secondaryAbilities)), signatureTechniques:lines(pick(c.signatureTechniques,abilities.signatureTechniques)),
     weapons:lines(pick(c.weapons,abilities.weapons)), weaponDetails:pick(c.weaponDetails,abilities.weaponDetails), transformations:lines(pick(c.transformations,abilities.transformations)),
     transformationDetails:pick(c.transformationDetails,abilities.transformationDetails), strengths:lines(pick(c.strengths,abilities.strengths)), weaknesses:lines(pick(c.weaknesses,abilities.weaknesses)),
-    limitations:pick(c.limitations,abilities.limitations), combatStyle:pick(c.combatStyle,abilities.combatStyle), combatProfile:pick(c.combatProfile,abilities.combatProfile), abilityNotes:pick(c.abilityNotes,abilities.abilityNotes),
+    limitations:pick(c.limitations,abilities.limitations), combatStyle:pick(c.combatStyle,abilities.combatStyle), combatProfile:pick(c.combatProfile,abilities.combatProfile), abilityNotes:[pick(c.abilityNotes,abilities.abilityNotes),pick(c.additionalImportNotes,origin.additionalImportNotes)].filter(Boolean).join("\n\n"),
     parents:lines(pick(c.parents,relationships.parents)), siblings:lines(pick(c.siblings,relationships.siblings)), children:lines(pick(c.children,relationships.children)),
     partner:pick(c.partner,relationships.partner), allies:lines(pick(c.allies,relationships.allies)), rivals:lines(pick(c.rivals,relationships.rivals)), enemies:lines(pick(c.enemies,relationships.enemies)),
     mentors:lines(pick(c.mentors,relationships.mentors)), relationshipNotes:pick(c.relationshipNotes,relationships.relationshipNotes), worldConnections:lines(pick(c.worldConnections,relationships.worldConnections)),
@@ -660,6 +672,10 @@ if(looksLikeCharacter){
 const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
 function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
 function importedNameList(value:any){return String(value??"").split(/[\n,;|]+/).map(x=>x.trim()).filter(Boolean);}
+function matchImportedCharacter(options:StudioCharacterRow[],raw:string){
+ const normalized=normalizeImportName(raw);
+ return options.find(x=>{const name=normalizeImportName(x.name);return normalized===name||normalized.startsWith(name)||normalized.endsWith(name)||normalized.includes(name+"the")||normalized.includes(name+"father")||normalized.includes(name+"mother")||normalized.includes(name+"sibling")||normalized.includes(name+"brother")||normalized.includes(name+"sister");});
+}
 async function applyCharacterImport(){
  if(!characterImportPreview)return;
  const imported={...characterImportPreview};
@@ -677,7 +693,7 @@ async function applyCharacterImport(){
  const options=(characterRows??[]) as StudioCharacterRow[]; setRelationshipOptions(options);
  const relationGroups:[string,string][]=[["parents","parent"],["siblings","sibling"],["children","child"],["partner","partner"],["allies","ally"],["rivals","rival"],["enemies","enemy"],["mentors","mentor"]];
  const matched:string[]=[];
- for(const [field,type] of relationGroups){for(const name of importedNameList(imported[field])){const target=options.find(x=>normalizeImportName(x.name)===normalizeImportName(name));if(target)matched.push(`${type}: ${target.name}`);}}
+ for(const [field,type] of relationGroups){for(const name of importedNameList(imported[field])){const target=matchImportedCharacter(options,name);if(target)matched.push(`${type}: ${target.name}`);}}
  if(matched.length)setRelationshipError(`Recognized existing characters: ${matched.join(" • ")}. These exact-name relationships will connect automatically when you finish the character; review them before saving.`);
  setImportText("");setCharacterImportPreview(null);setCreatorStep(1);setPage("create");window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -1625,7 +1641,7 @@ const StudioTopNav = () => (
     <nav className="practical-actions">
       <button className="primary" onClick={openCreateCharacter}>+ Character</button>
       <button onClick={()=>void openWorldDatabase("import")}>Import</button>
-      <button onClick={()=>void openWorldExplorer("map")}>World Map</button>
+      <button onClick={()=>void openWorldExplorer("map")}>World Map</button><button onClick={()=>{const target=studioCharacters.find(x=>x.is_complete)||studioCharacters[0];if(target)void openConnections(target);else openMyCharacters();}}>Family Tree</button>
     </nav>
   </>
 );
@@ -1809,7 +1825,7 @@ async function resolveWrittenCharacterRelationships(sourceId:string){
  ];
  for(const group of groups){
   for(const name of importedNameList(group.value)){
-   const target=candidates.find(x=>normalizeImportName(x.name)===normalizeImportName(name));
+   const target=matchImportedCharacter(candidates as StudioCharacterRow[],name);
    if(!target)continue;
    const reverseType=reciprocalRelationship[group.type]||group.type;
    const {error:first}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:sourceId,target_character_id:target.id,relationship_type:group.type},{onConflict:"source_character_id,target_character_id,relationship_type"});
@@ -1838,7 +1854,7 @@ try {
     if (insertError) throw insertError;
     savedCharacterId=data.id; setStudioCharacterId(data.id);
   }
-  if(complete&&savedCharacterId)await resolveWrittenCharacterRelationships(savedCharacterId);
+  if(savedCharacterId)await resolveWrittenCharacterRelationships(savedCharacterId);
 
   if (complete) {
     setPage("dashboard");
@@ -2130,7 +2146,7 @@ return (
                   </span>
                   <h3>{saved.name || "Unnamed Character"}</h3>
                   {identity.alias && <strong>{identity.alias}</strong>}
-                  <p>
+                  <p className="character-card-summary">
                     {identity.summary ||
                       [identity.homeland, identity.affiliation].filter(Boolean).join(" • ") ||
                       "This character is waiting for their story to unfold."}
@@ -3386,7 +3402,7 @@ return ( <main className="dashboard-shell"> <StudioTopNav />
 
     <section className="v10-dashboard-pulse"><div className="v10-pulse-head"><div><span className="card-label">STUDIO 1.0 COMMAND CENTER</span><h2>{studioSettings?.studio_subtitle||"Production Pulse"}</h2></div><div className="v10-quick-actions"><button onClick={()=>void openProduction("projects")}>+ Story Project</button><button onClick={()=>void openWorldDatabase("records")}>+ Lore Record</button><button onClick={()=>void openProduction("inbox")}>Inbox</button></div></div><div className="v10-pulse-grid"><button onClick={()=>void openProduction("inbox")}><strong>{studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread Notifications</span></button><button onClick={()=>void openProduction("assignments")}><strong>{studioAssignments.filter(x=>!["done","cancelled"].includes(x.status)).length}</strong><span>Open Assignments</span></button><button onClick={()=>void openWorldDatabase("continuity")}><strong>{continuityIssues.filter(x=>["open","reviewing"].includes(x.status)).length}</strong><span>Continuity Alerts</span></button><button onClick={()=>void openProduction("overview")}><strong>{changesSinceVisit.length}</strong><span>Changes Since Visit</span></button></div>{studioSettings?.show_dashboard_activity!==false&&changesSinceVisit.length>0&&<div className="v10-recent-strip">{changesSinceVisit.slice(0,4).map(x=><span key={x.id}><strong>{x.actor_name}</strong> {x.action.replace(/_/g," ")} <em>{x.entity_label||x.entity_type}</em></span>)}</div>}</section>
 
-    <section className="v104-home-panel"><div className="v104-home-main"><div><span className="card-label">UMBRA STUDIO 1.0.4</span><h1>Studio Overview</h1><p>Everything you use most is above. Search or jump directly into current work below.</p></div><div className="v104-home-counts"><button onClick={openMyCharacters}><strong>{studioCharacters.length}</strong><span>Characters</span></button><button onClick={()=>void openWorldOrganization()}><strong>{worldRecords.length}</strong><span>Codex</span></button><button onClick={()=>void openWorldExplorer("locations")}><strong>{worldLocations.filter(x=>!x.archived_at).length}</strong><span>Locations</span></button><button onClick={()=>void openProduction("scenes")}><strong>{storyScenes.length}</strong><span>Scenes</span></button></div></div></section>
+    <section className="v104-home-panel"><div className="v104-home-main"><div><span className="card-label">UMBRA STUDIO 1.0.4</span><h1>Studio Overview</h1><p>Everything you use most is above. Search or jump directly into current work below.</p></div><div className="v104-home-counts"><button onClick={openMyCharacters}><strong>{studioCharacters.length}</strong><span>Characters</span></button><button onClick={()=>void openWorldOrganization()}><strong>{worldRecords.length}</strong><span>Codex</span></button><button onClick={()=>void openWorldExplorer("locations")}><strong>{worldLocations.filter(x=>!x.archived_at).length}</strong><span>Locations</span></button><button onClick={()=>void openProduction("scenes")}><strong>{storyScenes.length}</strong><span>Scenes</span></button><button onClick={()=>{const target=studioCharacters.find(x=>x.is_complete)||studioCharacters[0];if(target)void openConnections(target);else openMyCharacters();}}><strong>↗</strong><span>Family Tree</span></button></div></div></section>
 
     <div className="studio-footer-card">
       <div>
