@@ -2543,10 +2543,24 @@ const mediaItems = [
   { label: "Alternate / True Form", url: media.alternateFormUrl || "" },
 ].filter((item) => item.url);
 const galleryImages = Array.isArray(media.galleryUrls) ? media.galleryUrls : [];
-const entries = (record: Record<string, string>, labels: Record<string, string>) =>
+const displayProfileValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => typeof item === "string" ? item : item == null ? "" : String(item))
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (value == null) return "";
+  if (typeof value === "object") {
+    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
+  }
+  return String(value).trim();
+};
+const entries = (record: Record<string, unknown>, labels: Record<string, string>) =>
   Object.entries(labels)
-    .map(([key, label]) => ({ label, value: record[key] }))
-    .filter((item) => item.value && item.value.trim());
+    .map(([key, label]) => ({ label, value: displayProfileValue(record?.[key]) }))
+    .filter((item) => item.value.length > 0);
 const productionItems = entries(media, { visualAssets:"Visual Production Asset Checklist", productionNotes:"Blender / VRoid Production Notes", canonLocks:"Canon Locks", tbdFields:"Editable / TBD Fields" });
 const identityItems = entries(identity, { nicknames:"Nicknames", titles:"Titles", pronunciation:"Pronunciation", nameMeaning:"Name Meaning", birthDate:"Birth Date", elementalHeritage:"Elemental Heritage", canonStatus:"Canon Status", spoilerLevel:"Spoiler Level", era:"Era", age:"Age", apparentAge:"Apparent Age", gender:"Gender", pronouns:"Pronouns", race:"Race / Species", subrace:"Subrace / Variant", heritage:"Heritage / Ethnicity", nationality:"Nationality / People", homeland:"Homeland", currentResidence:"Current Residence", affiliation:"Affiliation", occupation:"Occupation / Role" });
 const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", skinHex:"Skin HEX / Color Reference", faceDetails:"Face Details", eyeColor:"Eye Color", eyeHex:"Eye HEX / Color Reference", hairColor:"Hair Color", hairHex:"Hair HEX / Color Reference", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", weight:"Weight", dominantHand:"Dominant Hand", build:"Build", postureMovement:"Posture / Movement", distinguishingFeatures:"Distinguishing Features", makeup:"Makeup / Face Paint", grooming:"Grooming", nails:"Nails", colorPalette:"Official Color Palette", clothingStyle:"Fashion Style", signatureOutfit:"Signature / Default Outfit", outfitColors:"Outfit Color Breakdown", outfitMaterials:"Outfit Materials / Construction", wardrobe:"Wardrobe / Alternate Outfits", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
@@ -2654,7 +2668,7 @@ const navItems = [
 ];
 
 const RepeatableList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
-  const items = value.split(/\n+/).map((item)=>item.trim()).filter(Boolean);
+  const items = (Array.isArray(value) ? value : String(value ?? "").split(/\n+/)).flatMap((item:any) => typeof item === "string" ? item.split(/\n+/) : [String(item ?? "")]).map((item:string)=>item.trim()).filter(Boolean);
   const [draft, setDraft] = useState("");
   const saveItems = (next:string[]) => updateCharacter(field, next.join("\n") as never);
   return <div className="creator-field full-width repeatable-field">
@@ -2665,7 +2679,7 @@ const RepeatableList = ({ label, value, field, placeholder }: { label:string; va
 };
 
 const RepeatableColorList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
-  const items=value.split(/\n+/).map(item=>item.trim()).filter(Boolean);
+  const items=(Array.isArray(value) ? value : String(value ?? "").split(/\n+/)).flatMap((item:any)=>typeof item==="string" ? item.split(/\n+/) : [String(item ?? "")]).map((item:string)=>item.trim()).filter(Boolean);
   const [name,setName]=useState(""); const [hex,setHex]=useState("");
   const save=(next:string[])=>updateCharacter(field,next.join("\n") as never);
   const add=()=>{const n=name.trim(),h=hex.trim();if(!n&&!h)return;save([...items,[n,h].filter(Boolean).join(" — ")]);setName("");setHex("");};
