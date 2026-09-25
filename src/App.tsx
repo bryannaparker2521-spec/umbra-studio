@@ -794,33 +794,6 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 await loadMyCharacters();
 }
 
-async function openCharacterLibrary() {
-setPage("library");
-setLibraryError("");
-setLoadingLibrary(true);
-window.scrollTo({ top: 0, behavior: "smooth" });
-
-try {
-  const { data, error: loadError } = await supabase
-    .from("studio_characters")
-    .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
-    .eq("is_complete", true)
-    .eq("is_public", true)
-    .order("updated_at", { ascending: false });
-
-  if (loadError) throw loadError;
-  setLibraryCharacters((data ?? []) as StudioCharacterRow[]);
-} catch (loadFailure) {
-  setLibraryError(
-    loadFailure instanceof Error
-      ? loadFailure.message
-      : "The Character Library could not be loaded."
-  );
-} finally {
-  setLoadingLibrary(false);
-}
-}
-
 function openCharacterProfile(saved: StudioCharacterRow, from: "characters" | "library") {
 setSelectedCharacter(saved);
 setProfileReturnPage(from);
