@@ -3,6 +3,22 @@ import { getVersion } from "@tauri-apps/api/app";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
+function getUpdaterErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 export default function StudioUpdateCenter() {
   const [currentVersion, setCurrentVersion] = useState("...");
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
@@ -13,7 +29,10 @@ export default function StudioUpdateCenter() {
   useEffect(() => {
     getVersion()
       .then(setCurrentVersion)
-      .catch(() => setCurrentVersion("Unknown"));
+      .catch((error) => {
+        console.error("Unable to read Umbra Studio version:", error);
+        setCurrentVersion("Unknown");
+      });
   }, []);
 
   async function checkForUpdates() {
@@ -32,14 +51,19 @@ export default function StudioUpdateCenter() {
         return;
       }
 
+      console.info("Umbra Studio update found:", {
+        currentVersion,
+        availableVersion: update.version
+      });
+
       setAvailableUpdate(update);
       setStatus(`Umbra Studio ${update.version} is available.`);
     } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? `Update check failed: ${error.message}`
-          : "Update check failed."
-      );
+      console.error("Umbra Studio updater check failed:", error);
+
+      const message = getUpdaterErrorMessage(error);
+
+      setStatus(`Update check failed: ${message}`);
     } finally {
       setBusy(false);
     }
@@ -60,15 +84,23 @@ export default function StudioUpdateCenter() {
         if (event.event === "Started") {
           total = event.data.contentLength ?? 0;
           downloaded = 0;
+
           setProgress(0);
-          setStatus(`Downloading Umbra Studio ${availableUpdate.version}...`);
+          setStatus(
+            `Downloading Umbra Studio ${availableUpdate.version}...`
+          );
         }
 
         if (event.event === "Progress") {
           downloaded += event.data.chunkLength;
 
           if (total > 0) {
-            setProgress(Math.min(100, Math.round((downloaded / total) * 100)));
+            const percentage = Math.min(
+              100,
+              Math.round((downloaded / total) * 100)
+            );
+
+            setProgress(percentage);
           }
         }
 
@@ -80,11 +112,11 @@ export default function StudioUpdateCenter() {
 
       await relaunch();
     } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? `Update installation failed: ${error.message}`
-          : "Update installation failed."
-      );
+      console.error("Umbra Studio update installation failed:", error);
+
+      const message = getUpdaterErrorMessage(error);
+
+      setStatus(`Update installation failed: ${message}`);
       setBusy(false);
     }
   }
@@ -92,6 +124,7 @@ export default function StudioUpdateCenter() {
   return (
     <section className="admin-panel studio-update-center">
       <span className="card-label">DESKTOP UPDATE CENTER</span>
+
       <h2>Umbra Studio Updates</h2>
 
       <p className="admin-help">
@@ -123,13 +156,21 @@ export default function StudioUpdateCenter() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "12px",
+          flexWrap: "wrap"
+        }}
+      >
         <button
           className="secondary-action"
           disabled={busy}
           onClick={() => void checkForUpdates()}
         >
-          {busy && !availableUpdate ? "Checking..." : "Check for Updates"}
+          {busy && !availableUpdate
+            ? "Checking..."
+            : "Check for Updates"}
         </button>
 
         {availableUpdate && (
