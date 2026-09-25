@@ -164,6 +164,10 @@ const [relationshipError, setRelationshipError] = useState("");
 const [connectionView, setConnectionView] = useState<"family" | "all">("family");
 const [connectionCenter, setConnectionCenter] = useState<StudioCharacterRow | null>(null);
 const [connectionLinks, setConnectionLinks] = useState<CharacterRelationship[]>([]);
+const [familyGraphRows, setFamilyGraphRows] = useState<CharacterRelationship[]>([]);
+const [familyGraphCharacters, setFamilyGraphCharacters] = useState<StudioCharacterRow[]>([]);
+const connectionHistory = useRef<StudioCharacterRow[]>([]);
+const [connectionCharacterSearch, setConnectionCharacterSearch] = useState("");
 const [loadingConnections, setLoadingConnections] = useState(false);
 const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
 const [loadingWorld, setLoadingWorld] = useState(false);
@@ -720,10 +724,29 @@ if(looksLikeCharacter){
 }
 const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
 function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
-function importedNameList(value:any){return String(value??"").split(/[\n,;|]+/).map(x=>x.trim()).filter(Boolean);}
-function matchImportedCharacter(options:StudioCharacterRow[],raw:string){
- const normalized=normalizeImportName(raw);
- return options.find(x=>{const name=normalizeImportName(x.name);return normalized===name||normalized.startsWith(name)||normalized.endsWith(name)||normalized.includes(name+"the")||normalized.includes(name+"father")||normalized.includes(name+"mother")||normalized.includes(name+"sibling")||normalized.includes(name+"brother")||normalized.includes(name+"sister");});
+function importedNameList(value:any){return String(value??"").split(/[\n|]+/).map(x=>x.replace(/^[-*•\d.\s]+/,"").trim()).filter(Boolean);}
+function namedCharactersInText(options:StudioCharacterRow[],raw:string){
+ const text=String(raw??"").toLowerCase();
+ return options.map(character=>({character,index:text.indexOf(character.name.toLowerCase())})).filter(x=>x.index>=0).sort((a,b)=>a.index-b.index||b.character.name.length-a.character.name.length).map(x=>x.character);
+}
+function relationshipMeaning(raw:string,fallbackType:string,sourceId:string,options:StudioCharacterRow[]){
+ const text=String(raw??"").trim();
+ const people=namedCharactersInText(options,text);
+ const first=people[0];
+ const second=people[1];
+ const lower=text.toLowerCase();
+ const explicitParentOf=/\b(father|mother|parent|dad|mom)\s+of\b/.test(lower);
+ const explicitChildOf=/\b(son|daughter|child)\s+of\b/.test(lower);
+ const childWith=/\b(son|daughter|child)\s+with\b/.test(lower);
+ if(explicitParentOf&&first&&second)return [{source:first.id,target:second.id,type:"parent"}];
+ if(explicitChildOf&&first&&second)return [{source:first.id,target:second.id,type:"child"}];
+ if(childWith&&first){
+   const links=[{source:sourceId,target:first.id,type:"child"}];
+   if(second&&second.id!==sourceId)links.push({source:second.id,target:first.id,type:"parent"});
+   return links;
+ }
+ if(first&&first.id!==sourceId)return [{source:sourceId,target:first.id,type:fallbackType}];
+ return [];
 }
 async function stageImportedConnectedDrafts(imported:any){
  if(!session)return {locations:0,timeline:0,projects:0,scenes:0};
@@ -765,7 +788,9 @@ async function applyCharacterImport(){
  const options=(characterRows??[]) as StudioCharacterRow[]; setRelationshipOptions(options);
  const relationGroups:[string,string][]=[["parents","parent"],["siblings","sibling"],["children","child"],["partner","partner"],["allies","ally"],["rivals","rival"],["enemies","enemy"],["mentors","mentor"]];
  const matched:string[]=[];
- for(const [field,type] of relationGroups){for(const name of importedNameList(imported[field])){const target=matchImportedCharacter(options,name);if(target)matched.push(`${type}: ${target.name}`);}}
+ const previewSource={id:"__importing__",name:String(imported.name||"")} as StudioCharacterRow;
+ const previewOptions=[previewSource,...options];
+ for(const [field,type] of relationGroups){for(const line of importedNameList(imported[field])){for(const link of relationshipMeaning(line,type,previewSource.id,previewOptions)){const target=previewOptions.find(x=>x.id===link.target);const source=previewOptions.find(x=>x.id===link.source);if(target&&source)matched.push(`${source.name} → ${target.name} (${link.type})`);}}}
  const staged=await stageImportedConnectedDrafts(imported);
  const notices:string[]=[];
  if(matched.length)notices.push(`Recognized relationships: ${matched.join(" • ")}. They will connect when this draft is saved.`);
@@ -1084,7 +1109,8 @@ async function loadConnectedRelationships(characterId: string) {
     .in("id", targetIds);
   if (targetError) { setRelationshipError(targetError.message); return; }
   const targetMap = new Map(((targets ?? []) as StudioCharacterRow[]).map((item) => [item.id, item]));
-  setConnectedRelationships(rows.map((row) => ({ ...row, target: targetMap.get(row.target_character_id) ?? null })));
+  const uniqueRows=rows.filter((row,index,list)=>list.findIndex(x=>x.target_character_id===row.target_character_id&&x.relationship_type===row.relationship_type)===index);
+  setConnectedRelationships(uniqueRows.map((row) => ({ ...row, target: targetMap.get(row.target_character_id) ?? null })));
 }
 
 const reciprocalRelationship: Record<string, string> = {
@@ -1128,11 +1154,61 @@ async function removeConnectedRelationship(link: CharacterRelationship) {
   finally { setRelationshipBusy(false); }
 }
 
+function downloadRelationshipBackup() {
+  const current = selectedCharacter || studioCharacters.find((item) => item.id === studioCharacterId) || null;
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    character: current ? { id: current.id, name: current.name } : { id: studioCharacterId, name: character.name },
+    relationships: connectedRelationships.map((link) => ({
+      targetCharacterId: link.target_character_id,
+      targetCharacterName: link.target?.name || "",
+      relationshipType: link.relationship_type,
+    })),
+    note: "Manual Connected Characters are the Family Tree source of truth. Written Relationship notes do not overwrite these links."
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(current?.name || character.name || "character").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}-relationship-backup.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function clearCurrentCharacterFamilyLinks() {
+  if (!session || relationshipBusy) return;
+  const sourceId = studioCharacterId || selectedCharacter?.id;
+  if (!sourceId) { setRelationshipError("Save the character before clearing family links."); return; }
+  const confirmed = window.confirm("Clear this character’s Parent, Child, Sibling, and Partner links? Written Relationship text will NOT be deleted. You can reconnect the correct family members immediately afterward.");
+  if (!confirmed) return;
+  setRelationshipBusy(true); setRelationshipError("");
+  try {
+    const familyTypes = ["parent", "child", "sibling", "partner"];
+    const { error: outgoingError } = await supabase.from("studio_character_relationships").delete().eq("source_character_id", sourceId).in("relationship_type", familyTypes);
+    if (outgoingError) throw outgoingError;
+    const { error: incomingError } = await supabase.from("studio_character_relationships").delete().eq("target_character_id", sourceId).in("relationship_type", familyTypes);
+    if (incomingError) throw incomingError;
+    await loadConnectedRelationships(sourceId);
+    setRelationshipError("Family links cleared. Written Relationship notes were preserved. Reconnect only the correct family members above.");
+  } catch (failure) {
+    setRelationshipError(failure instanceof Error ? failure.message : "Family links could not be cleared.");
+  } finally { setRelationshipBusy(false); }
+}
+
 async function openConnectedCharacterProfile(target: StudioCharacterRow) {
   setSelectedCharacter(target); setPage("profile");
   await loadConnectedRelationships(target.id); window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+
+function downloadCharacterProfile(saved:StudioCharacterRow){
+ const esc=(value:any)=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]||ch));
+ const sections:[string,Record<string,any>|null][]=[["Identity",saved.identity],["Appearance",saved.appearance],["Origin & Lore",saved.origin_lore],["Abilities & Combat",saved.abilities],["Written Relationships",saved.relationships],["Production & Media",saved.media]];
+ const rows=(data:Record<string,any>|null)=>Object.entries(data||{}).filter(([,v])=>Array.isArray(v)?v.length:String(v??"").trim()).map(([k,v])=>`<div class="row"><b>${esc(k.replace(/([A-Z])/g," $1").replace(/^./,c=>c.toUpperCase()))}</b><div>${esc(Array.isArray(v)?v.join("\n"):v).replace(/\n/g,"<br>")}</div></div>`).join("");
+ const portrait=saved.portrait_url||saved.media?.portraitUrl||"";
+ const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(saved.name)} — Umbra Studio</title><style>body{font-family:Georgia,serif;background:#0a0710;color:#eadfec;max-width:980px;margin:auto;padding:48px}h1,h2{color:#efd37d}header{display:grid;grid-template-columns:${portrait?"220px 1fr":"1fr"};gap:28px;align-items:center;margin-bottom:34px}img{width:220px;height:290px;object-fit:cover;border-radius:18px}.section{border:1px solid #3a2140;border-radius:18px;padding:22px;margin:18px 0;background:#120b16}.row{display:grid;grid-template-columns:210px 1fr;gap:18px;padding:10px 0;border-bottom:1px solid #29172e}.row:last-child{border:0}.row b{color:#c67bd3}small{color:#a58ca8}@media print{body{background:white;color:#222}.section{background:white;border-color:#ddd}h1,h2{color:#6a3b74}}</style></head><body><header>${portrait?`<img src="${esc(portrait)}" alt="${esc(saved.name)} portrait">`:""}<div><small>UMBRA STUDIO CHARACTER DOSSIER</small><h1>${esc(saved.name)}</h1><p>${esc(saved.identity?.summary||"")}</p></div></header>${sections.map(([title,data])=>`<section class="section"><h2>${title}</h2>${rows(data)}</section>`).join("")}<small>Exported from Umbra Studio • ${new Date().toLocaleString()}</small></body></html>`;
+ const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${saved.name.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")||"character"}-Umbra-Profile.html`;a.click();URL.revokeObjectURL(url);
+}
 
 async function openConnections(saved: StudioCharacterRow) {
   setConnectionCenter(saved);
@@ -1149,24 +1225,35 @@ async function openConnections(saved: StudioCharacterRow) {
       .select("id, source_character_id, target_character_id, relationship_type")
       .eq("source_character_id", saved.id)
       .order("created_at", { ascending: true });
-
     if (linkError) throw linkError;
     const rows = (data ?? []) as CharacterRelationship[];
-    const ids = rows.map((row) => row.target_character_id);
 
-    if (!ids.length) {
+    const familyTypes = ["parent", "child", "sibling", "partner"];
+    const { data: graphData, error: graphError } = await supabase
+      .from("studio_character_relationships")
+      .select("id, source_character_id, target_character_id, relationship_type")
+      .in("relationship_type", familyTypes);
+    if (graphError) throw graphError;
+    const graphRows = (graphData ?? []) as CharacterRelationship[];
+    setFamilyGraphRows(graphRows);
+
+    const graphIds = Array.from(new Set([saved.id, ...rows.flatMap((row) => [row.source_character_id, row.target_character_id]), ...graphRows.flatMap((row) => [row.source_character_id, row.target_character_id])])).filter(Boolean);
+    if (!graphIds.length) {
       setConnectionLinks([]);
+      setFamilyGraphCharacters([saved]);
       return;
     }
 
     const { data: targets, error: targetError } = await supabase
       .from("studio_characters")
       .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
-      .in("id", ids);
-
+      .in("id", graphIds);
     if (targetError) throw targetError;
-    const targetMap = new Map(((targets ?? []) as StudioCharacterRow[]).map((item) => [item.id, item]));
-    setConnectionLinks(rows.map((row) => ({ ...row, target: targetMap.get(row.target_character_id) ?? null })));
+    const characters = (targets ?? []) as StudioCharacterRow[];
+    setFamilyGraphCharacters(characters);
+    const targetMap = new Map(characters.map((item) => [item.id, item]));
+    const uniqueRows = rows.filter((row,index,list)=>list.findIndex(x=>x.target_character_id===row.target_character_id&&x.relationship_type===row.relationship_type)===index);
+    setConnectionLinks(uniqueRows.map((row) => ({ ...row, target: targetMap.get(row.target_character_id) ?? null })));
   } catch (failure) {
     setRelationshipError(failure instanceof Error ? failure.message : "Connections could not be loaded.");
   } finally {
@@ -1175,7 +1262,12 @@ async function openConnections(saved: StudioCharacterRow) {
 }
 
 async function moveConnectionCenter(target: StudioCharacterRow) {
+  if(connectionCenter&&connectionCenter.id!==target.id)connectionHistory.current.push(connectionCenter);
   await openConnections(target);
+}
+async function goBackConnectionCenter(){
+ const previous=connectionHistory.current.pop();
+ if(previous)await openConnections(previous); else goBack();
 }
 
 async function loadWorldRecords() {
@@ -1692,6 +1784,7 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 
 const StudioTopNav = () => (
   <>
+    <StudioUpdateCenter mode="startup" />
     <header className="practical-topbar">
       <button className="practical-brand" onClick={()=>setPage("dashboard")}><span>☾</span><div><small>UMBRA CONNECT</small><strong>Umbra Studio</strong></div></button>
       <div className="practical-utilities">
@@ -1699,6 +1792,7 @@ const StudioTopNav = () => (
         <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
         <button onClick={()=>void openAdminCenter()}>Admin</button>
         <button onClick={()=>void openStudioSettings()}>Settings</button>
+        <button type="button" onClick={()=>void handleSignOut()}>Sign Out</button>
       </div>
     </header>
     <aside className="practical-sidebar">
@@ -1886,28 +1980,6 @@ async function ensureCharacterCodexLinks(){
  return result as {realm:string;race:string;faction:string;family:string};
 }
 
-async function resolveWrittenCharacterRelationships(sourceId:string){
- if(!session)return;
- const {data,error}=await supabase.from("studio_characters").select("id,name").neq("id",sourceId);
- if(error)throw error;
- const candidates=(data??[]) as Array<{id:string;name:string}>;
- const groups:{value:string;type:string}[]=[
-  {value:character.parents,type:"parent"},{value:character.siblings,type:"sibling"},{value:character.children,type:"child"},
-  {value:character.partner,type:"partner"},{value:character.allies,type:"ally"},{value:character.rivals,type:"rival"},
-  {value:character.enemies,type:"enemy"},{value:character.mentors,type:"mentor"}
- ];
- for(const group of groups){
-  for(const name of importedNameList(group.value)){
-   const target=matchImportedCharacter(candidates as StudioCharacterRow[],name);
-   if(!target)continue;
-   const reverseType=reciprocalRelationship[group.type]||group.type;
-   const {error:first}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:sourceId,target_character_id:target.id,relationship_type:group.type},{onConflict:"source_character_id,target_character_id,relationship_type"});
-   if(first)throw first;
-   const {error:reverse}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:target.id,target_character_id:sourceId,relationship_type:reverseType},{onConflict:"source_character_id,target_character_id,relationship_type"});
-   if(reverse)throw reverse;
-  }
- }
-}
 async function saveCharacter(nextStep: number, complete = false) {
 if (!session || savingCharacter) return;
 
@@ -1918,16 +1990,14 @@ try {
   const codexLinks = complete ? await ensureCharacterCodexLinks() : {realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
   const record = {...buildStudioCharacterRecord(nextStep, complete),realm_record_id:codexLinks.realm||null,race_record_id:codexLinks.race||null,faction_record_id:codexLinks.faction||null,family_record_id:codexLinks.family||null};
 
-  let savedCharacterId=studioCharacterId;
   if (studioCharacterId) {
     const { error: updateError } = await supabase.from("studio_characters").update(record).eq("id", studioCharacterId);
     if (updateError) throw updateError;
   } else {
     const { data, error: insertError } = await supabase.from("studio_characters").insert(record).select("id").single();
     if (insertError) throw insertError;
-    savedCharacterId=data.id; setStudioCharacterId(data.id);
+    setStudioCharacterId(data.id);
   }
-  if(savedCharacterId)await resolveWrittenCharacterRelationships(savedCharacterId);
 
   if (complete) {
     setPage("dashboard");
@@ -2444,88 +2514,53 @@ return (
 
 if (page === "connections" && connectionCenter) {
 const familyTypes = new Set(["parent", "child", "sibling", "partner"]);
-const visibleLinks = connectionView === "family"
-  ? connectionLinks.filter((link) => familyTypes.has(link.relationship_type))
-  : connectionLinks;
-const grouped = {
-  parents: visibleLinks.filter((link) => link.relationship_type === "parent"),
-  partner: visibleLinks.filter((link) => link.relationship_type === "partner"),
-  siblings: visibleLinks.filter((link) => link.relationship_type === "sibling"),
-  children: visibleLinks.filter((link) => link.relationship_type === "child"),
-  others: visibleLinks.filter((link) => !familyTypes.has(link.relationship_type)),
-};
-const centerPortrait = connectionCenter.portrait_url || connectionCenter.media?.portraitUrl || "";
-const relationLabel: Record<string,string> = {
-  parent:"Parent", child:"Child", sibling:"Sibling", partner:"Partner",
-  ally:"Ally", rival:"Rival", enemy:"Enemy", mentor:"Mentor", student:"Student"
-};
-const ConnectionNode = ({ link }: { link: CharacterRelationship }) => {
-  const target = link.target;
-  if (!target) return null;
-  const image = target.portrait_url || target.media?.portraitUrl || "";
-  return (
-    <button type="button" className={`connection-node relation-${link.relationship_type}`} onClick={() => void moveConnectionCenter(target)}>
-      <div className="connection-node-image">{image ? <img src={image} alt={`${target.name} portrait`} /> : <span>☾</span>}</div>
-      <strong>{target.name || "Unnamed Character"}</strong>
-      <small>{relationLabel[link.relationship_type] || link.relationship_type}</small>
-    </button>
-  );
-};
-return (
-  <main className="dashboard-shell connections-page">
-    <style>{`
-      .connections-page{min-height:100vh;background:radial-gradient(circle at 50% 8%,rgba(91,31,101,.2),transparent 32%),#07050a;color:#eee}
-      .connections-content{width:min(1220px,calc(100% - 48px));margin:0 auto;padding:58px 0 100px}
-      .connections-heading{text-align:center;max-width:760px;margin:0 auto 28px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0 12px}.connections-heading p{color:#aa94ae;line-height:1.7}
-      .connection-tabs{display:flex;justify-content:center;gap:10px;margin:26px 0 42px;flex-wrap:wrap}.connection-tab{padding:11px 18px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd;cursor:pointer}.connection-tab.active{border-color:rgba(232,201,111,.55);color:#f0d481;background:rgba(92,52,23,.18)}
-      .family-tree{display:grid;gap:28px;padding:32px 14px;border:1px solid rgba(185,92,209,.2);border-radius:28px;background:radial-gradient(ellipse at center,rgba(92,44,112,.2),transparent 70%)}.tree-level{position:relative;text-align:center}.tree-level-title{display:block;margin-bottom:13px;color:#9e77a5;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.tree-row{display:flex;justify-content:center;align-items:flex-start;gap:18px;flex-wrap:wrap}.tree-connector{width:1px;height:28px;background:linear-gradient(#b55dc4,#e5bd57);margin:0 auto;opacity:.65}
-      .connection-center{width:min(560px,100%);margin:0 auto;padding:22px;border-radius:24px;border:1px solid rgba(232,201,111,.38);background:linear-gradient(180deg,rgba(54,24,58,.9),rgba(14,8,18,.96));box-shadow:0 24px 70px rgba(0,0,0,.34);display:flex;align-items:center;gap:18px;text-align:left}.connection-center-image{width:110px;height:130px;flex:0 0 auto;border-radius:16px;overflow:hidden;background:#100914;display:grid;place-items:center;color:#e5bd57;font-size:42px}.connection-center-image img{width:100%;height:100%;object-fit:cover}.connection-center>div:last-child{min-width:0;overflow-wrap:anywhere}.connection-center h2{margin:4px 0;font-family:Georgia,serif;color:#f0d481;font-size:30px}.connection-center p{margin:0;color:#a994ad}.connection-center .creator-kicker{font-size:10px}
-      .connection-node{width:180px;padding:0 0 14px;overflow:hidden;border-radius:18px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#ddd;cursor:pointer;transition:.18s transform,.18s border-color;text-align:center}.connection-node:hover{transform:translateY(-4px);border-color:rgba(232,201,111,.55)}.connection-node-image{height:190px;background:radial-gradient(circle,rgba(105,35,119,.3),#09060c);display:grid;place-items:center;color:#e5bd57;font-size:48px}.connection-node-image img{width:100%;height:100%;object-fit:cover}.connection-node strong{display:block;padding:12px 10px 2px;color:#ead7ec}.connection-node small{display:block;color:#b66ec3;text-transform:uppercase;font-size:10px;letter-spacing:.12em}.relation-parent,.relation-child{border-color:rgba(232,201,111,.28)}.relation-partner{border-color:rgba(197,91,143,.32)}
-      .all-connections-map{position:relative;min-height:620px;border:1px solid rgba(185,92,209,.14);border-radius:28px;background:radial-gradient(circle at center,rgba(75,26,84,.24),transparent 34%),rgba(10,6,14,.72);padding:44px 24px;overflow:hidden}.all-map-center{position:relative;z-index:2;margin:190px auto 0}.connection-orbit{position:absolute;inset:24px;display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start;gap:20px;z-index:1}.connection-orbit .connection-node{width:160px}.connection-orbit .connection-node-image{height:155px}
-      .connections-empty{text-align:center;padding:58px 24px;border:1px solid rgba(185,92,209,.16);border-radius:22px;background:rgba(18,8,21,.55)}.connections-empty strong{display:block;color:#e8c96f;font-family:Georgia,serif;font-size:25px;margin-bottom:10px}.connections-empty p{color:#a994ad}
-      .connections-hint{text-align:center;color:#8e7b91;font-size:12px;margin-top:22px}
-      @media(max-width:700px){.connections-content{width:min(100% - 28px,1220px)}.connection-center{flex-direction:column;text-align:center}.all-connections-map{min-height:auto}.all-map-center{margin:30px auto}.connection-orbit{position:relative;inset:auto}.connection-node{width:150px}.connection-node-image{height:155px}}
-    `}</style>
-    <header className="studio-header">
-      <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
-      <div className="account-area"><button type="button" className="sign-out-button" onClick={goBack}>← Back</button></div>
-    </header>
-    <section className="connections-content">
-      <div className="connections-heading">
-        <p className="eyebrow">BONDS OF THE UMBRAL WORLD</p>
-        <h1>{connectionView === "family" ? "Family Tree" : "Relationship Map"}</h1>
-        <p>Explore the people connected to <strong>{connectionCenter.name}</strong>. Select any portrait to recenter the map on that character.</p>
-      </div>
-      <div className="connection-tabs">
-        <button type="button" className={`connection-tab ${connectionView === "family" ? "active" : ""}`} onClick={() => setConnectionView("family")}>Family Tree</button>
-        <button type="button" className={`connection-tab ${connectionView === "all" ? "active" : ""}`} onClick={() => setConnectionView("all")}>All Connections</button>
-      </div>
-      {relationshipError && <p className="login-error" role="alert">{relationshipError}</p>}
-      {loadingConnections ? <div className="connections-empty"><strong>Tracing connections...</strong><p>Following the bonds surrounding this character.</p></div> : connectionView === "family" ? (
-        visibleLinks.length === 0 ? <div className="connections-empty"><strong>No family connections yet</strong><p>Add parents, children, siblings, or a partner from the Relationships step.</p></div> :
-        <div className="family-tree">
-          {grouped.parents.length > 0 && <div className="tree-level"><span className="tree-level-title">Parents</span><div className="tree-row">{grouped.parents.map((link) => <ConnectionNode key={link.id} link={link} />)}</div><div className="tree-connector" /></div>}
-          <div className="tree-level">
-            <span className="tree-level-title">Current Character</span>
-            <div className="tree-row">
-              {grouped.partner.map((link) => <ConnectionNode key={link.id} link={link} />)}
-              <div className="connection-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF TREE</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
-            </div>
-          </div>
-          {grouped.siblings.length > 0 && <div className="tree-level"><div className="tree-connector" /><span className="tree-level-title">Siblings</span><div className="tree-row">{grouped.siblings.map((link) => <ConnectionNode key={link.id} link={link} />)}</div></div>}
-          {grouped.children.length > 0 && <div className="tree-level"><div className="tree-connector" /><span className="tree-level-title">Children</span><div className="tree-row">{grouped.children.map((link) => <ConnectionNode key={link.id} link={link} />)}</div></div>}
-        </div>
-      ) : (
-        visibleLinks.length === 0 ? <div className="connections-empty"><strong>No connections yet</strong><p>Add connected characters from the Relationships step to build this map.</p></div> :
-        <div className="all-connections-map">
-          <div className="connection-orbit">{visibleLinks.map((link) => <ConnectionNode key={link.id} link={link} />)}</div>
-          <div className="connection-center all-map-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF MAP</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
-        </div>
-      )}
-      <p className="connections-hint">Click a connected character to make them the center and continue exploring their relationships.</p>
-    </section>
-  </main>
-);
+const visibleLinks = connectionView === "family" ? connectionLinks.filter(link=>familyTypes.has(link.relationship_type)) : connectionLinks;
+const familyCharacterMap = new Map(familyGraphCharacters.map(item=>[item.id,item]));
+familyCharacterMap.set(connectionCenter.id,connectionCenter);
+const parentIdsFor=(id:string)=>Array.from(new Set(familyGraphRows.filter(row=>row.source_character_id===id&&row.relationship_type==="parent").map(row=>row.target_character_id)));
+const childIdsFor=(id:string)=>Array.from(new Set([
+ ...familyGraphRows.filter(row=>row.source_character_id===id&&row.relationship_type==="child").map(row=>row.target_character_id),
+ ...familyGraphRows.filter(row=>row.target_character_id===id&&row.relationship_type==="parent").map(row=>row.source_character_id)
+]));
+const partnerIdsFor=(id:string)=>Array.from(new Set([
+ ...familyGraphRows.filter(row=>row.source_character_id===id&&row.relationship_type==="partner").map(row=>row.target_character_id),
+ ...childIdsFor(id).flatMap(childId=>parentIdsFor(childId).filter(parentId=>parentId!==id))
+]));
+const centerParents=parentIdsFor(connectionCenter.id).map(id=>familyCharacterMap.get(id)).filter(Boolean) as StudioCharacterRow[];
+const centerChildren=childIdsFor(connectionCenter.id).map(id=>familyCharacterMap.get(id)).filter(Boolean) as StudioCharacterRow[];
+const centerPartners=partnerIdsFor(connectionCenter.id).map(id=>familyCharacterMap.get(id)).filter(Boolean) as StudioCharacterRow[];
+const siblingCandidates=Array.from(new Set(centerParents.flatMap(parent=>childIdsFor(parent.id)))).filter(id=>id!==connectionCenter.id);
+const centerParentIds=parentIdsFor(connectionCenter.id);
+const siblingInfo=siblingCandidates.map(id=>{
+ const character=familyCharacterMap.get(id); if(!character)return null;
+ const siblingParents=parentIdsFor(id); const shared=centerParentIds.filter(pid=>siblingParents.includes(pid));
+ let label="Sibling";
+ if(shared.length>=2) label="Full Sibling";
+ else if(shared.length===1){
+   const p=familyCharacterMap.get(shared[0]); const g=`${p?.identity?.gender??""} ${p?.identity?.pronouns??""}`.toLowerCase();
+   label=/female|woman|mother|she|her/.test(g)?"Maternal Half-Sibling":/male|man|father|he|him/.test(g)?"Paternal Half-Sibling":"Half-Sibling";
+ }
+ return {character,label};
+}).filter(Boolean) as {character:StudioCharacterRow;label:string}[];
+const childGroups=(()=>{const m=new Map<string,{partner:StudioCharacterRow|null;children:StudioCharacterRow[]}>();for(const child of centerChildren){const otherId=parentIdsFor(child.id).find(id=>id!==connectionCenter.id)||"";const partner=otherId?familyCharacterMap.get(otherId)||null:null;const key=otherId||"solo";const g=m.get(key)||{partner,children:[]};g.children.push(child);m.set(key,g)}return Array.from(m.values())})();
+
+const relationLabel:Record<string,string>={parent:"Parent",child:"Child",sibling:"Sibling",partner:"Partner",ally:"Ally",rival:"Rival",enemy:"Enemy",mentor:"Mentor",student:"Student"};
+const Node=({character,label,selected=false}:{character:StudioCharacterRow;label:string;selected?:boolean})=>{const image=character.portrait_url||character.media?.portraitUrl||"";return <button type="button" className={`gene-node ${selected?"selected":""}`} onClick={()=>void moveConnectionCenter(character)}><div className="gene-image">{image?<img src={image} alt={`${character.name} portrait`}/>:<span>☾</span>}</div><strong>{character.name}</strong><small>{label}</small></button>};
+const LinkNode=({link}:{link:CharacterRelationship})=>link.target?<Node character={link.target} label={relationLabel[link.relationship_type]||link.relationship_type}/>:null;
+return <main className="dashboard-shell connections-page">
+<style>{`
+.connections-page{min-height:100vh;background:#07050a;color:#eee}.connections-content{width:min(1380px,calc(100% - 36px));margin:0 auto;padding:52px 0 100px}.connections-heading{text-align:center;max-width:780px;margin:0 auto 24px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0}.connections-heading p{color:#aa94ae;line-height:1.6}.connection-character-picker{display:flex;gap:10px;justify-content:center;margin:20px auto 0;max-width:650px}.connection-character-picker input,.connection-character-picker select{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.28);background:#100914;color:#eadfec}.connection-tabs{display:flex;justify-content:center;gap:10px;margin:24px 0 34px}.connection-tab{padding:11px 18px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd}.connection-tab.active{border-color:rgba(232,201,111,.55);color:#f0d481}.genealogy{--line:rgba(224,190,111,.78);padding:38px 24px 54px;border:1px solid rgba(185,92,209,.2);border-radius:28px;overflow-x:auto;background:rgba(8,5,11,.8)}.generation{display:flex;justify-content:center;align-items:flex-start;gap:26px;min-width:max-content}.generation-title{text-align:center;color:#9e77a5;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;margin:0 0 14px}.gene-node{width:150px;padding:0 0 11px;border:0;background:transparent;color:#eee;text-align:center;cursor:pointer;position:relative}.gene-image{width:118px;height:118px;margin:0 auto 8px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:38px}.gene-image img{width:100%;height:100%;object-fit:cover}.gene-node strong{display:block;color:#ead7ec}.gene-node small{display:block;margin-top:3px;color:#b66ec3;text-transform:uppercase;font-size:9px;letter-spacing:.1em}.gene-node.selected .gene-image{border-color:#f0d481;box-shadow:0 0 0 5px rgba(185,92,209,.2)}.gene-node.selected strong{color:#f0d481}.couple{display:flex;align-items:flex-start;position:relative;padding-bottom:44px}.couple>.gene-node+ .gene-node{margin-left:52px}.couple:before{content:"";position:absolute;top:59px;left:134px;right:134px;height:2px;background:var(--line)}.couple:after{content:"";position:absolute;left:50%;bottom:0;width:2px;height:45px;background:var(--line)}.parent-couple{margin-bottom:0}.parent-to-generation{width:2px;height:34px;background:var(--line);margin:0 auto}.sibling-rail{position:relative;display:flex;justify-content:center;gap:24px;padding-top:35px;min-width:max-content}.sibling-rail:before{content:"";position:absolute;top:0;left:75px;right:75px;height:2px;background:var(--line)}.sibling-branch{position:relative}.sibling-branch:before{content:"";position:absolute;top:-35px;left:50%;width:2px;height:35px;background:var(--line)}.current-generation{margin:0 auto 18px}.family-pair-grid{display:flex;justify-content:center;gap:46px;align-items:flex-start;flex-wrap:wrap}.family-unit{position:relative;display:flex;flex-direction:column;align-items:center}.family-unit .couple{padding-bottom:42px}.children-rail{position:relative;display:flex;justify-content:center;gap:24px;padding-top:34px}.children-rail:before{content:"";position:absolute;top:0;left:75px;right:75px;height:2px;background:var(--line)}.children-rail.single:before{left:50%;right:auto;width:2px;height:34px}.child-branch{position:relative}.child-branch:before{content:"";position:absolute;top:-34px;left:50%;width:2px;height:34px;background:var(--line)}.children-rail.single .child-branch:before{display:none}.line-label{position:absolute;background:#07050a;color:#e6c56e;padding:2px 6px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;z-index:2}.couple .line-label{top:48px;left:50%;transform:translateX(-50%)}.gene-section{margin-top:26px}.all-connections-map{display:flex;flex-wrap:wrap;gap:22px;justify-content:center;padding:38px;border:1px solid rgba(185,92,209,.18);border-radius:24px}.connections-empty{text-align:center;padding:50px;color:#aa94ae}.connections-hint{text-align:center;color:#8e7b91;font-size:12px;margin-top:22px}@media(max-width:700px){.connections-content{width:calc(100% - 20px)}.genealogy{padding-left:12px;padding-right:12px}.connection-character-picker{flex-direction:column}}
+`}</style>
+<header className="studio-header"><div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div><div className="account-area"><button type="button" className="sign-out-button" onClick={()=>void goBackConnectionCenter()}>← Back</button></div></header>
+<section className="connections-content"><div className="connections-heading"><p className="eyebrow">BONDS OF THE UMBRAL WORLD</p><h1>{connectionView==="family"?"Family Tree":"Relationship Map"}</h1><p>Traditional genealogy view. Select any portrait to make that character the focus.</p><div className="connection-character-picker"><input value={connectionCharacterSearch} onChange={e=>setConnectionCharacterSearch(e.target.value)} placeholder="Search any character..."/><select value={connectionCenter.id} onChange={e=>{const target=studioCharacters.find(x=>x.id===e.target.value);if(target)void moveConnectionCenter(target)}}><option value={connectionCenter.id}>{connectionCenter.name}</option>{studioCharacters.filter(x=>x.id!==connectionCenter.id&&(!connectionCharacterSearch.trim()||x.name.toLowerCase().includes(connectionCharacterSearch.toLowerCase()))).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div></div><div className="connection-tabs"><button type="button" className={`connection-tab ${connectionView==="family"?"active":""}`} onClick={()=>setConnectionView("family")}>Family Tree</button><button type="button" className={`connection-tab ${connectionView==="all"?"active":""}`} onClick={()=>setConnectionView("all")}>All Connections</button></div>
+{relationshipError&&<p className="login-error" role="alert">{relationshipError}</p>}
+{loadingConnections?<div className="connections-empty">Tracing connections...</div>:connectionView==="family"?<div className="genealogy">
+{centerParents.length>0&&<div className="gene-section"><div className="generation-title">Parents</div><div className="generation">{centerParents.length===2?<div className="couple parent-couple"><Node character={centerParents[0]} label="Parent"/><span className="line-label">Parents</span><Node character={centerParents[1]} label="Parent"/></div>:centerParents.map(p=><Node key={p.id} character={p} label="Parent"/>)}</div><div className="parent-to-generation"/></div>}
+<div className="gene-section"><div className="generation-title">Generation</div><div className="sibling-rail">{siblingInfo.map(s=><div className="sibling-branch" key={s.character.id}><Node character={s.character} label={s.label}/></div>)}<div className="sibling-branch"><Node character={connectionCenter} label="Current Character" selected/></div></div></div>
+{childGroups.length>0&&<div className="gene-section"><div className="generation-title">Partners & Children</div><div className="family-pair-grid">{childGroups.map((g,i)=><div className="family-unit" key={`${g.partner?.id||"solo"}-${i}`}><div className="couple"><Node character={connectionCenter} label="Parent" selected/>{g.partner&&<><span className="line-label">Partner</span><Node character={g.partner} label="Parent"/></>}</div><div className={`children-rail ${g.children.length===1?"single":""}`}>{g.children.map(c=><div className="child-branch" key={c.id}><Node character={c} label="Child"/></div>)}</div></div>)}</div></div>}
+{centerParents.length===0&&centerChildren.length===0&&siblingInfo.length===0&&centerPartners.length===0&&<div className="connections-empty">No family connections yet.</div>}
+</div>:<div className="all-connections-map">{visibleLinks.map(link=><LinkNode key={link.id} link={link}/>)}</div>}
+<p className="connections-hint">Characters sharing the same parent junction are siblings; separate parent junctions show half-sibling branches naturally.</p></section></main>;
 }
 
 if (page === "profile" && selectedCharacter) {
@@ -2619,6 +2654,7 @@ return (
           <div className="profile-actions">
             {saved.is_complete && saved.user_id === session.user.id && <button type="button" className="primary-action" onClick={() => setCharacterPublication(saved, !saved.is_public)}>{saved.is_public ? "Unpublish Character" : "Publish to Library"}</button>}
             <button type="button" className="secondary-action" onClick={() => void openConnections(saved)}>View Connections</button>
+            <button type="button" className="secondary-action" onClick={() => downloadCharacterProfile(saved)}>Download Profile</button>
             {saved.user_id === session.user.id && <button type="button" className="secondary-action" onClick={() => loadCharacterIntoEditor(saved)}>Edit Character</button>}
             <button type="button" className="secondary-action" onClick={goBack}>← Back</button>
           </div>
@@ -3075,7 +3111,7 @@ const renderRelationshipsStep = () => (
     `}</style>
     <div className="connection-builder">
       <h4>Connected Characters</h4>
-      <p>Link this character directly to another character you created. Reciprocal family and relationship links are created automatically.</p>
+      <p>These direct links are the source of truth for the Family Tree. Reciprocal links are created automatically, but Written Relationship notes will never overwrite your manual corrections.</p>
       {relationshipError && <p className="login-error">{relationshipError}</p>}
       <div className="connection-controls">
         <select value={relationshipType} onChange={(e) => setRelationshipType(e.target.value)}>
@@ -3086,6 +3122,10 @@ const renderRelationshipsStep = () => (
           {relationshipOptions.map((item) => <option key={item.id} value={item.id}>{item.name || "Unnamed Character"}{item.identity?.alias ? ` — ${item.identity.alias}` : ""}</option>)}
         </select>
         <button type="button" className="primary-action" disabled={!relationshipTargetId || relationshipBusy} onClick={() => void addConnectedRelationship()}>{relationshipBusy ? "Saving..." : "Connect"}</button>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:12,flexWrap:"wrap"}}>
+        <button type="button" className="secondary-action" disabled={!studioCharacterId} onClick={downloadRelationshipBackup}>Download Relationship Backup</button>
+        <button type="button" className="secondary-action" disabled={relationshipBusy || !studioCharacterId} onClick={() => void clearCurrentCharacterFamilyLinks()}>Clear Family Links</button>
       </div>
       {connectedRelationships.length > 0 && <div className="connection-list">{connectedRelationships.map((link) => { const target=link.target; const image=target?.portrait_url || target?.media?.portraitUrl || ""; return <div className="connection-chip" key={link.id}>{image ? <img src={image} alt="" /> : <div className="connection-avatar">☾</div>}<div className="connection-chip-copy"><strong>{target?.name || "Character"}</strong><span>{link.relationship_type}</span></div><button type="button" className="connection-remove" title="Remove connection" onClick={() => void removeConnectedRelationship(link)}>×</button></div>})}</div>}
     </div>
@@ -3413,7 +3453,7 @@ if(page==="transfer"){
 }
 
 if(page==="settings"){
- return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label><label className="v10-toggle"><input type="checkbox" checked={showStudioGuidance} onChange={e=>setGuidancePreference(e.target.checked)}/> Show help descriptions on this computer</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
+ return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label><label className="v10-toggle"><input type="checkbox" checked={showStudioGuidance} onChange={e=>setGuidancePreference(e.target.checked)}/> Show help descriptions on this computer</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter mode="panel" /></section></main>;
 }
 
 if(page==="production"){
