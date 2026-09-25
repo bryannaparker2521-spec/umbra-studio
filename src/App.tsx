@@ -688,7 +688,7 @@ async function createStoryBeat(){if(!session||!beatForm.title.trim())return;cons
 async function createStoryEntityLink(){
  if(!session||!storyLinkForm.storyId||!storyLinkForm.linkedId)return;
  setProductionError("");
- const {error}=await supabase.from("studio_story_entity_links").insert({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null,created_by:session.user.id});
+ const {error}=await supabase.from("studio_story_entity_links").insert({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null});
  if(error)setProductionError(error.message);else{setStoryLinkForm(x=>({...x,linkedId:"",label:"",notes:""}));await loadV9Production();}
 }
 async function deleteStoryEntityLink(id:string){const {error}=await supabase.from("studio_story_entity_links").delete().eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
@@ -3412,133 +3412,25 @@ return ( <main className="dashboard-shell"> <header className="studio-header"> <
 
     <section className="v10-dashboard-pulse"><div className="v10-pulse-head"><div><span className="card-label">STUDIO 1.0 COMMAND CENTER</span><h2>{studioSettings?.studio_subtitle||"Production Pulse"}</h2></div><div className="v10-quick-actions"><button onClick={()=>void openProduction("projects")}>+ Story Project</button><button onClick={()=>void openWorldDatabase("records")}>+ Lore Record</button><button onClick={()=>void openProduction("inbox")}>Inbox</button></div></div><div className="v10-pulse-grid"><button onClick={()=>void openProduction("inbox")}><strong>{studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread Notifications</span></button><button onClick={()=>void openProduction("assignments")}><strong>{studioAssignments.filter(x=>!["done","cancelled"].includes(x.status)).length}</strong><span>Open Assignments</span></button><button onClick={()=>void openWorldDatabase("continuity")}><strong>{continuityIssues.filter(x=>["open","reviewing"].includes(x.status)).length}</strong><span>Continuity Alerts</span></button><button onClick={()=>void openProduction("overview")}><strong>{changesSinceVisit.length}</strong><span>Changes Since Visit</span></button></div>{studioSettings?.show_dashboard_activity!==false&&changesSinceVisit.length>0&&<div className="v10-recent-strip">{changesSinceVisit.slice(0,4).map(x=><span key={x.id}><strong>{x.actor_name}</strong> {x.action.replace(/_/g," ")} <em>{x.entity_label||x.entity_type}</em></span>)}</div>}</section>
 
-    <div className="dashboard-grid">
-      <button
-        type="button"
-        className="dashboard-card primary-card"
-        onClick={openCreateCharacter}
-      >
-        <div className="card-icon">
-          ✦
-        </div>
-
-        <div>
-          <span className="card-label">
-            CREATE
-          </span>
-
-          <h3>
-            Create Character
-          </h3>
-
-          <p>
-            Begin a new character and bring
-            another soul into the Umbral World.
-          </p>
-        </div>
-
-        <span className="card-arrow">
-          →
-        </span>
-      </button>
-
-      <button
-        type="button"
-        className="dashboard-card"
-        onClick={openMyCharacters}
-      >
-        <div className="card-icon">
-          ♙
-        </div>
-
-        <div>
-          <span className="card-label">
-            YOUR CREATIONS
-          </span>
-
-          <h3>
-            My Characters
-          </h3>
-
-          <p>
-            Continue working on your characters,
-            designs, lore, and profiles.
-          </p>
-        </div>
-
-        <span className="card-arrow">
-          →
-        </span>
-      </button>
-
-      <button
-        type="button"
-        className="dashboard-card"
-        onClick={openCharacterLibrary}
-      >
-        <div className="card-icon">
-          ◆
-        </div>
-
-        <div>
-          <span className="card-label">
-            EXPLORE
-          </span>
-
-          <h3>
-            Character Library
-          </h3>
-
-          <p>
-            Browse characters connected to the
-            Umbra Connect universe.
-          </p>
-        </div>
-
-        <span className="card-arrow">
-          →
-        </span>
-      </button>
-
-      <button
-        type="button"
-        className="dashboard-card"
-        onClick={() => void openWorldOrganization()}
-      >
-        <div className="card-icon">⌘</div>
-        <div>
-          <span className="card-label">WORLDBUILDING</span>
-          <h3>World Organization</h3>
-          <p>Manage realms, races, factions, clans, houses, families, and bloodlines.</p>
-        </div>
-        <span className="card-arrow">→</span>
-      </button>
-
-      <button type="button" className="dashboard-card" onClick={() => void openWorldExplorer("map")}>
-        <div className="card-icon">✧</div><div><span className="card-label">EXPLORE & CHRONICLE</span><h3>World Explorer</h3><p>Open the interactive map, nested locations, historical timeline, tags, and favorites.</p></div><span className="card-arrow">→</span>
-      </button>
-
-
-      <button type="button" className="dashboard-card database-dashboard-card" onClick={() => void openWorldDatabase()}><div className="card-icon">▦</div><div><span className="card-label">CANON • DATABASE • PUBLISHING</span><h3>World Database</h3><p>Control canon, continuity, public encyclopedia records, expanded lore, collections, links, media, imports, exports, and backups.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card production-dashboard-card" onClick={() => void openProduction()}>
-        <div className="card-icon">✦</div>
-        <div>
-          <span className="card-label">STORY • PLANNING • COLLABORATION</span>
-          <h3>Story Production Center</h3>
-          <p>Build projects, story arcs, scenes, plot beats, character journeys, assignments, reviews, notifications, and story-world connections.</p>
-        </div>
-        <span className="card-arrow">→</span>
-      </button>
-
-      <button type="button" className="dashboard-card v101-messages-card" onClick={() => void openMessages()}><div className="card-icon">✉</div><div><span className="card-label">COLLABORATOR • DIRECT MESSAGES</span><h3>Studio Messages</h3><p>Private conversations with your authorized Studio collaborators, with unread and read status.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card v101-transfer-card" onClick={() => void openTransferCenter()}><div className="card-icon">⇩</div><div><span className="card-label">BACKUP • TRANSFER • SETUP</span><h3>Backup & Transfer Center</h3><p>Download complete Studio backups, create cloud snapshots, validate backup files, and set up another admin computer.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card v10-settings-card" onClick={() => void openStudioSettings()}><div className="card-icon">⚙</div><div><span className="card-label">STUDIO 1.0 • PREFERENCES</span><h3>Studio Settings</h3><p>Control autosave, canon and spoiler defaults, collaborator presence, dashboard preferences, and Studio identity.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card admin-dashboard-card" onClick={() => void openAdminCenter()}><div className="card-icon">⚙</div><div><span className="card-label">COLLABORATE & MANAGE</span><h3>Admin Center</h3><p>Manage collaborator names, login timestamps, presence history, editorial workflow, revisions, private notes, and the full change trail.</p></div><span className="card-arrow">→</span></button>
-    </div>
+    <section className="v104-workspace">
+      <div className="v104-workspace-head"><div><span className="card-label">CONNECTED WORKSPACE</span><h2>Build the Umbral World</h2><p>Four focused areas. The shared database, links, canon tools, and media system work underneath them.</p></div><button className="primary-action" onClick={openCreateCharacter}>+ Create Character</button></div>
+      <div className="v104-main-grid">
+        <button className="v104-main-card" onClick={openMyCharacters}><span>✦</span><div><small>CHARACTERS</small><h3>Characters</h3><p>Create, import, edit, connect, and publish character profiles.</p><strong>{studioCharacters.length} character{studioCharacters.length===1?"":"s"}</strong></div></button>
+        <button className="v104-main-card" onClick={()=>void openWorldOrganization()}><span>⌘</span><div><small>WORLD</small><h3>World & Codex</h3><p>Build peoples, bloodlines, factions, realms, lore, locations, maps, and history.</p><strong>{worldRecords.length} Codex • {worldLocations.filter(x=>!x.archived_at).length} locations</strong></div></button>
+        <button className="v104-main-card" onClick={()=>void openProduction()}><span>✧</span><div><small>STORY</small><h3>Story Production</h3><p>Plan projects, arcs, scenes, plot beats, journeys, and linked world records.</p><strong>{storyProjects.length} projects • {storyScenes.length} scenes</strong></div></button>
+        <button className="v104-main-card" onClick={()=>void openWorldDatabase("media")}><span>▣</span><div><small>MEDIA</small><h3>Media & References</h3><p>Manage shared artwork and production references without digging through the database.</p><strong>{mediaAssets.length} shared assets</strong></div></button>
+      </div>
+      <div className="v104-shortcuts">
+        <button onClick={()=>void openWorldExplorer("map")}>Map & Locations</button>
+        <button onClick={()=>void openWorldDatabase("import")}>Import & Autofill</button>
+        <button onClick={openCharacterLibrary}>Character Library</button>
+        <button onClick={()=>void openWorldDatabase("records")}>Advanced Database</button>
+        <button onClick={()=>void openMessages()}>Messages</button>
+        <button onClick={()=>void openAdminCenter()}>Admin Center</button>
+        <button onClick={()=>void openTransferCenter()}>Backup</button>
+        <button onClick={()=>void openStudioSettings()}>Settings</button>
+      </div>
+    </section>
 
     <div className="studio-footer-card">
       <div>
