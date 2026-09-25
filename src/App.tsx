@@ -1748,6 +1748,28 @@ async function ensureCharacterCodexLinks(){
  return result as {realm:string;race:string;faction:string;family:string};
 }
 
+async function resolveWrittenCharacterRelationships(sourceId:string){
+ if(!session)return;
+ const {data,error}=await supabase.from("studio_characters").select("id,name").neq("id",sourceId);
+ if(error)throw error;
+ const candidates=(data??[]) as Array<{id:string;name:string}>;
+ const groups:{value:string;type:string}[]=[
+  {value:character.parents,type:"parent"},{value:character.siblings,type:"sibling"},{value:character.children,type:"child"},
+  {value:character.partner,type:"partner"},{value:character.allies,type:"ally"},{value:character.rivals,type:"rival"},
+  {value:character.enemies,type:"enemy"},{value:character.mentors,type:"mentor"}
+ ];
+ for(const group of groups){
+  for(const name of importedNameList(group.value)){
+   const target=candidates.find(x=>normalizeImportName(x.name)===normalizeImportName(name));
+   if(!target)continue;
+   const reverseType=reciprocalRelationship[group.type]||group.type;
+   const {error:first}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:sourceId,target_character_id:target.id,relationship_type:group.type},{onConflict:"source_character_id,target_character_id,relationship_type"});
+   if(first)throw first;
+   const {error:reverse}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:target.id,target_character_id:sourceId,relationship_type:reverseType},{onConflict:"source_character_id,target_character_id,relationship_type"});
+   if(reverse)throw reverse;
+  }
+ }
+}
 async function saveCharacter(nextStep: number, complete = false) {
 if (!session || savingCharacter) return;
 
@@ -1758,23 +1780,16 @@ try {
   const codexLinks = complete ? await ensureCharacterCodexLinks() : {realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
   const record = {...buildStudioCharacterRecord(nextStep, complete),realm_record_id:codexLinks.realm||null,race_record_id:codexLinks.race||null,faction_record_id:codexLinks.faction||null,family_record_id:codexLinks.family||null};
 
+  let savedCharacterId=studioCharacterId;
   if (studioCharacterId) {
-    const { error: updateError } = await supabase
-      .from("studio_characters")
-      .update(record)
-      .eq("id", studioCharacterId);
-
+    const { error: updateError } = await supabase.from("studio_characters").update(record).eq("id", studioCharacterId);
     if (updateError) throw updateError;
   } else {
-    const { data, error: insertError } = await supabase
-      .from("studio_characters")
-      .insert(record)
-      .select("id")
-      .single();
-
+    const { data, error: insertError } = await supabase.from("studio_characters").insert(record).select("id").single();
     if (insertError) throw insertError;
-    setStudioCharacterId(data.id);
+    savedCharacterId=data.id; setStudioCharacterId(data.id);
   }
+  if(complete&&savedCharacterId)await resolveWrittenCharacterRelationships(savedCharacterId);
 
   if (complete) {
     setPage("dashboard");
