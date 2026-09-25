@@ -1608,13 +1608,28 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 
 const StudioTopNav = () => (
   <>
-    <nav className="global-studio-nav" aria-label="Umbra Studio navigation">
-      <button className="global-brand" onClick={()=>setPage("dashboard")}><span>☾</span><div><small>UMBRA CONNECT</small><strong>Umbra Studio</strong></div></button>
-      <div className="global-main-links"><button onClick={openMyCharacters}>Characters</button><button onClick={()=>void openWorldOrganization()}>World</button><button onClick={()=>void openProduction()}>Story</button><button onClick={()=>void openWorldDatabase("media")}>Media</button></div>
-      <div className="global-utility-links"><button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button><button onClick={()=>void openAdminCenter()}>Admin</button><button onClick={()=>void openStudioSettings()}>Settings</button></div>
-    </nav>
-    <nav className="global-quick-nav" aria-label="Quick access">
-      <span>QUICK ACCESS</span><button className="quick-create" onClick={openCreateCharacter}>+ Create Character</button><button onClick={()=>void openWorldExplorer("map")}>World Map</button><button onClick={()=>void openWorldDatabase("import")}>Import & Autofill</button><button onClick={openMyCharacters}>My Characters</button><button onClick={()=>void openWorldOrganization()}>Codex</button><button onClick={()=>void openProduction("scenes")}>Scenes</button>
+    <header className="practical-topbar">
+      <button className="practical-brand" onClick={()=>setPage("dashboard")}><span>☾</span><div><small>UMBRA CONNECT</small><strong>Umbra Studio</strong></div></button>
+      <div className="practical-utilities">
+        <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
+        <button onClick={()=>void openAdminCenter()}>Admin</button>
+        <button onClick={()=>void openStudioSettings()}>Settings</button>
+      </div>
+    </header>
+    <aside className="practical-sidebar">
+      <nav>
+        <button className={page==="dashboard"?"active":""} onClick={()=>setPage("dashboard")}><span>⌂</span>Dashboard</button>
+        <button className={["characters","create","profile","connections","library"].includes(page)?"active":""} onClick={openMyCharacters}><span>♙</span>Characters</button>
+        <button className={["world","explorer","database","canon"].includes(page)?"active":""} onClick={()=>void openWorldOrganization()}><span>◉</span>World</button>
+        <button className={page==="production"?"active":""} onClick={()=>void openProduction()}><span>✎</span>Story</button>
+        <button className={page==="database"&&databaseTab==="media"?"active":""} onClick={()=>void openWorldDatabase("media")}><span>▣</span>Media</button>
+      </nav>
+      <div className="practical-sidebar-bottom"><button onClick={()=>void openTransferCenter()}>Backup</button></div>
+    </aside>
+    <nav className="practical-actions">
+      <button className="primary" onClick={openCreateCharacter}>+ Character</button>
+      <button onClick={()=>void openWorldDatabase("import")}>Import</button>
+      <button onClick={()=>void openWorldExplorer("map")}>World Map</button>
     </nav>
   </>
 );
