@@ -2110,3 +2110,6 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
 .friendly-import-options{display:flex;align-items:center;gap:12px;margin:14px 0 10px}.friendly-import-options>span{color:#8f7a94;font-size:13px}.friendly-import-options .umbra-file-button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 14px;border:1px solid rgba(232,201,111,.35);border-radius:8px;background:#1a101d;color:#efd37d;font-weight:800;cursor:pointer}.friendly-import-options .umbra-file-button input{display:none}.import-editor{min-height:300px!important;line-height:1.65!important;white-space:pre-wrap!important}
 .creator-field textarea{line-height:1.75;tab-size:4;white-space:pre-wrap}
 @media(max-width:800px){.character-workspace-head{align-items:flex-start;flex-direction:column}}
+
+/* 1.0.4 connected ingest/readability */
+.character-card-summary{white-space:pre-wrap!important;line-height:1.7!important}.v104-home-counts button,.v10-pulse-grid button,.studio-search-results button{cursor:pointer}.v104-home-counts button:hover,.v10-pulse-grid button:hover{transform:translateY(-1px);border-color:rgba(232,201,111,.48)!important}.practical-actions button{cursor:pointer}.v9-story-card .danger-action{margin-top:10px;width:100%;min-height:36px;border:1px solid rgba(205,88,110,.35);border-radius:8px;background:rgba(91,24,39,.14)}
