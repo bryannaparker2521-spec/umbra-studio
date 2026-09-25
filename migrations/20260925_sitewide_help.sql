@@ -1,0 +1,1 @@
+-- Compatibility migration for Studio settings.\n-- Help visibility is user-controlled in the client; this column remains for existing databases/settings rows.\nALTER TABLE public.studio_settings\n  ADD COLUMN IF NOT EXISTS show_help_descriptions boolean NOT NULL DEFAULT true;\n
