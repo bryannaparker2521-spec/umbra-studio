@@ -2647,15 +2647,7 @@ const renderAppearanceStep = () => (
 
       <RepeatableList label="Eye Color" value={character.eyeColor} field="eyeColor" placeholder="Add eye color, e.g. Left — Amber Brown" />
 
-      <label className="creator-field">
-        <span>Hair Color</span>
-        <input
-          type="text"
-          placeholder="Black, silver, crimson..."
-          value={character.hairColor}
-          onChange={(e) => updateCharacter("hairColor", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Hair Color" value={character.hairColor} field="hairColor" placeholder="Add hair color, streak, gradient, or tip color..." />
 
       <RepeatableList label="Hair Texture" value={character.hairTexture} field="hairTexture" placeholder="Add texture, e.g. 4C coils" />
 
