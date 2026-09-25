@@ -132,9 +132,9 @@ const [saveError, setSaveError] = useState("");
 const [studioCharacters, setStudioCharacters] = useState<StudioCharacterRow[]>([]);
 const [loadingCharacters, setLoadingCharacters] = useState(false);
 const [charactersError, setCharactersError] = useState("");
-const [libraryCharacters] = useState<StudioCharacterRow[]>([]);
-const [loadingLibrary] = useState(false);
-const [libraryError] = useState("");
+const [libraryCharacters, setLibraryCharacters] = useState<StudioCharacterRow[]>([]);
+const [loadingLibrary, setLoadingLibrary] = useState(false);
+const [libraryError, setLibraryError] = useState("");
 const [selectedCharacter, setSelectedCharacter] = useState<StudioCharacterRow | null>(null);
 const [profileReturnPage, setProfileReturnPage] = useState<"characters" | "library">("library");
 const [librarySearch, setLibrarySearch] = useState("");
@@ -594,7 +594,14 @@ function parseLabelledCharacterText(raw:string){
  }
  return out;
 }
-function previewImport(){setImportError("");setCharacterImportPreview(null);try{let parsed:any;try{parsed=JSON.parse(importText);}catch{parsed=parseLabelledCharacterText(importText);if(!parsed.name)throw new Error("Paste character JSON or labeled character information with at least a Name field.");}
+async function loadImportFile(file:File){
+ setImportError("");
+ const ext=file.name.split(".").pop()?.toLowerCase();
+ if(!["txt","md","json","csv"].includes(ext||"")){setImportError("Choose a TXT, Markdown, JSON, or CSV file.");return;}
+ try{const text=await file.text();setImportText(text);setCharacterImportPreview(null);setImportPreview([]);}
+ catch{setImportError("That file could not be read.");}
+}
+function previewImport(){setImportError("");setCharacterImportPreview(null);try{let parsed:any;try{parsed=JSON.parse(importText);}catch{parsed=parseLabelledCharacterText(importText);if(!parsed.name)throw new Error("Add a character name and labeled profile information, or choose a supported profile file.");}
 const looksLikeCharacter = !Array.isArray(parsed) && parsed && typeof parsed==="object" && (
   parsed.identity || parsed.appearance || parsed.abilities || parsed.relationships || parsed.media ||
   parsed.character || parsed.fullName || parsed.name
@@ -792,6 +799,22 @@ async function openMyCharacters() {
 setPage("characters");
 window.scrollTo({ top: 0, behavior: "smooth" });
 await loadMyCharacters();
+}
+
+async function openPublishedCharacters() {
+setPage("library");
+setLibraryError("");
+setLoadingLibrary(true);
+window.scrollTo({ top: 0, behavior: "smooth" });
+try {
+  const { data, error } = await supabase.from("studio_characters")
+    .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
+    .eq("is_complete", true).eq("is_public", true).order("updated_at", { ascending:false });
+  if(error) throw error;
+  setLibraryCharacters((data ?? []) as StudioCharacterRow[]);
+} catch(error) {
+  setLibraryError(error instanceof Error ? error.message : "Published characters could not be loaded.");
+} finally { setLoadingLibrary(false); }
 }
 
 function openCharacterProfile(saved: StudioCharacterRow, from: "characters" | "library") {
@@ -2055,10 +2078,9 @@ return (
     <StudioTopNav />
 
     <section className="dashboard-content">
-      <div className="welcome-section">
-        <p className="eyebrow">YOUR CREATIONS</p>
-        <h1>My Characters</h1>
-        <p>Continue developing your saved souls or return to a completed character.</p>
+      <div className="character-workspace-head">
+        <div><p className="eyebrow">CHARACTERS</p><h1>Character Workspace</h1></div>
+        <div className="character-workspace-tabs"><button className="active">My Characters</button><button onClick={()=>void openPublishedCharacters()}>Published Characters</button><button onClick={openCreateCharacter}>+ Create Character</button></div>
       </div>
 
       {charactersError && (
@@ -2202,15 +2224,11 @@ return (
       @media(max-width:900px){.library-controls{grid-template-columns:1fr 1fr}}
       @media(max-width:700px){.library-grid{grid-template-columns:1fr}.library-controls{grid-template-columns:1fr}}
     `}</style>
-    <header className="studio-header">
-      <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
-      <div className="account-area"><button type="button" className="sign-out-button" onClick={returnToDashboard}>← Back to Studio</button></div>
-    </header>
+    <StudioTopNav />
     <section className="dashboard-content">
-      <div className="welcome-section">
-        <p className="eyebrow">EXPLORE THE UMBRAL WORLD</p>
-        <h1>Character Library</h1>
-        <p>Discover characters their creators have chosen to publish to the Umbral World.</p>
+      <div className="character-workspace-head">
+        <div><p className="eyebrow">CHARACTERS</p><h1>Published Characters</h1><p>Characters that have been completed and published to the Umbral World.</p></div>
+        <div className="character-workspace-tabs"><button onClick={openMyCharacters}>My Characters</button><button className="active">Published Characters</button><button onClick={openCreateCharacter}>+ Create Character</button></div>
       </div>
       <div className="library-controls">
         <input type="search" placeholder="Search name, alias, lore..." value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
@@ -2454,7 +2472,7 @@ const ProfileSection = ({ title, symbol, items }: { title:string; symbol:string;
   <section className="profile-section">
     <div className="profile-section-title"><span>{symbol}</span><h2>{title}</h2></div>
     <div className="profile-detail-grid">
-      {items.map((item) => <div className="profile-detail" key={`${title}-${item.label}`}><span>{item.label}</span><p>{item.value}</p></div>)}
+      {items.map((item) => <div className="profile-detail" key={`${title}-${item.label}`}><span>{item.label}</span><div className="profile-rich-text">{String(item.value).split(/\n{2,}/).map((paragraph,index)=><p key={index}>{paragraph}</p>)}</div></div>)}
     </div>
   </section>
 ) : null;
@@ -3338,7 +3356,7 @@ if(page==="database"){
  {databaseTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Database Record Revisions</h2><p className="admin-help">Every record update is captured automatically. Restore an older version without losing the current one.</p><div className="revision-list">{databaseRevisions.map(r=><article key={r.id}><div><strong>{r.record_code||"Record"} • {r.record_name||"Untitled"}</strong><span>{r.changed_by_email||"Studio admin"} • {new Date(r.created_at).toLocaleString()}</span></div><button onClick={()=>void restoreDatabaseRevision(r)}>Restore</button></article>)}</div></section>}
 {databaseTab==="duplicates"&&<section className="admin-panel"><span className="card-label">DATA QUALITY</span><h2>Duplicate Detection</h2><p className="admin-help">Potential duplicates are grouped by record type and normalized name. Nothing is merged automatically.</p><div className="duplicate-grid">{duplicateGroups().length===0?<p className="admin-empty">No likely duplicate expanded records found.</p>:duplicateGroups().map((group,i)=><article key={i}><strong>{group[0].name}</strong><span>{recordTypes.find(t=>t.id===group[0].record_type_id)?.name||"Record"}</span>{group.map(r=><button key={r.id} onClick={()=>{setDatabaseTab("records");void openDatabaseRecord(r)}}>{r.record_code} • {r.workflow_status.replace(/_/g," ")}</button>)}</article>)}</div></section>}
 {databaseTab==="templates"&&<section className="admin-panel"><span className="card-label">REUSABLE STRUCTURE</span><h2>Field Templates</h2><p className="admin-help">Templates suggest structured fields without locking your lore into a rigid schema.</p><div className="database-form-grid"><select value={templateForm.recordTypeId} onChange={e=>setTemplateForm({...templateForm,recordTypeId:e.target.value})}><option value="">Record type</option>{recordTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><input placeholder="Template name" value={templateForm.name} onChange={e=>setTemplateForm({...templateForm,name:e.target.value})}/><textarea className="json-editor" value={templateForm.fieldsText} onChange={e=>setTemplateForm({...templateForm,fieldsText:e.target.value})}/><button className="primary-action" onClick={()=>void createFieldTemplate()}>Create Template</button></div><div className="database-simple-grid">{fieldTemplates.map(t=><article key={t.id}><strong>{t.name}</strong><p>{recordTypes.find(x=>x.id===t.record_type_id)?.name||"Record"}</p><small>{t.fields?.length||0} suggested fields</small></article>)}</div></section>}
-{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">Paste character JSON, labeled character information, a database-record array, or an Umbra Studio export. Studio analyzes character data and sends it into Create Character for review before anything is saved.</p><textarea className="import-editor" placeholder='Paste a character object or [{"record_type_slug":"artifact","name":"Example"}]' value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze & Preview</button>{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
+{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">No coding required. Paste a normal labeled character profile, upload a TXT, Markdown, JSON, or CSV file, or use JSON only when you need the advanced format. Studio analyzes it and opens the result in Character Creator for review before anything is saved.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Profile</button>{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
 {databaseTab==="backup"&&<section className="admin-panel"><span className="card-label">PORTABILITY & RECOVERY</span><h2>Export & Backup Center</h2><p className="admin-help">Export the current operational database locally or create a named server snapshot before a major editing session.</p><div className="database-backup-actions"><button className="secondary-action" onClick={exportStudioData}>Export Full JSON</button>{adminRole==="primary_admin"&&<><input placeholder="Backup label — e.g. Before Moonwood Import" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Named Snapshot</button></>}</div><div className="admin-feed">{backups.map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section>}
  </section></main>;
 }
