@@ -19,7 +19,7 @@ type CharacterRelationship = {
 type WorldRecord = {
   id: string;
   user_id: string;
-  record_type: "realm" | "race" | "faction" | "family";
+  record_type: "realm" | "race" | "faction" | "clan" | "house" | "family" | "bloodline" | "culture" | "organization" | "religion";
   name: string;
   subtype: string | null;
   description: string | null;
@@ -156,9 +156,9 @@ const [loadingConnections, setLoadingConnections] = useState(false);
 const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
 const [loadingWorld, setLoadingWorld] = useState(false);
 const [worldError, setWorldError] = useState("");
-const [worldTypeFilter, setWorldTypeFilter] = useState<"all" | "realm" | "race" | "faction" | "family">("all");
+const [worldTypeFilter, setWorldTypeFilter] = useState<"all" | "realm" | "race" | "faction" | "clan" | "house" | "family" | "bloodline" | "culture" | "organization" | "religion">("all");
 const [worldSearch, setWorldSearch] = useState("");
-const [worldFormType, setWorldFormType] = useState<"realm" | "race" | "faction" | "family">("realm");
+const [worldFormType, setWorldFormType] = useState<"realm" | "race" | "faction" | "clan" | "house" | "family" | "bloodline" | "culture" | "organization" | "religion">("realm");
 const [worldFormName, setWorldFormName] = useState("");
 const [worldFormSubtype, setWorldFormSubtype] = useState("");
 const [worldFormDescription, setWorldFormDescription] = useState("");
@@ -237,6 +237,9 @@ const [linkForm,setLinkForm]=useState({sourceId:"",targetType:"database",targetI
 const [assignmentCollectionId,setAssignmentCollectionId]=useState("");
 const [assignmentTagId,setAssignmentTagId]=useState("");
 const [mediaForm,setMediaForm]=useState({title:"",assetUrl:"",mediaType:"image",caption:"",credit:"",altText:"",tags:""});
+const [mediaFile,setMediaFile]=useState<File|null>(null);
+const [mediaUploading,setMediaUploading]=useState(false);
+const [showStudioGuidance,setShowStudioGuidance]=useState(()=>{try{return localStorage.getItem("umbra-studio-guidance")!=="off";}catch{return true;}});
 const [backupLabel,setBackupLabel]=useState("");
 const [databaseHealth,setDatabaseHealth]=useState<DatabaseHealth|null>(null);
 const [databaseRevisions,setDatabaseRevisions]=useState<DatabaseRevision[]>([]);
@@ -247,6 +250,8 @@ const [templateForm,setTemplateForm]=useState({recordTypeId:"",name:"",fieldsTex
 const [importText,setImportText]=useState("");
 const [importPreview,setImportPreview]=useState<any[]>([]);
 const [importError,setImportError]=useState("");
+const [characterImportPreview,setCharacterImportPreview]=useState<any|null>(null);
+
 const [recordMediaId,setRecordMediaId]=useState("");
 const [recordReferences,setRecordReferences]=useState<RecordReference[]>([]);
 const [referenceForm,setReferenceForm]=useState({label:"",referenceType:"source",url:"",citation:"",notes:""});
@@ -305,6 +310,7 @@ const [beatForm,setBeatForm]=useState({projectId:"",arcId:"",sceneId:"",title:""
 const [commentForm,setCommentForm]=useState({entityType:"story_project",entityId:"",body:"",notifyUserId:""});
 const [assignmentForm,setAssignmentForm]=useState({title:"",description:"",entityType:"story_project",entityId:"",assignedTo:"",priority:"normal",dueAt:""});
 const [journeyForm,setJourneyForm]=useState({characterId:"",projectId:"",arcId:"",sceneId:"",journeyType:"development",title:"",description:"",beforeValue:"",afterValue:""});
+const [storyLinkForm,setStoryLinkForm]=useState({storyType:"story_scene",storyId:"",linkedType:"character",linkedId:"",label:"",notes:""});
 
 const [character, setCharacter] = useState({
   name: "",
@@ -559,7 +565,26 @@ async function assignTag(recordId:string){if(!assignmentTagId)return;const {erro
 async function removeTagAssignment(id:string){const {error}=await supabase.from("studio_tag_assignments").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 async function createUniversalLink(){if(!session||!linkForm.sourceId||!linkForm.targetId||!linkForm.label.trim())return;const {error}=await supabase.from("studio_universal_links").insert({source_type:"database",source_id:linkForm.sourceId,target_type:linkForm.targetType,target_id:linkForm.targetId,relation_label:linkForm.label.trim(),notes:linkForm.notes.trim()||null,created_by:session.user.id});if(error)setDatabaseError(error.message);else{setLinkForm({sourceId:"",targetType:"database",targetId:"",label:"",notes:""});await loadWorldDatabase();}}
 async function deleteUniversalLink(id:string){const {error}=await supabase.from("studio_universal_links").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
-async function createMediaAsset(){if(!session||!mediaForm.title.trim()||!mediaForm.assetUrl.trim())return;const {error}=await supabase.from("studio_media_assets").insert({uploaded_by:session.user.id,title:mediaForm.title.trim(),asset_url:mediaForm.assetUrl.trim(),media_type:mediaForm.mediaType,caption:mediaForm.caption.trim()||null,credit:mediaForm.credit.trim()||null,alt_text:mediaForm.altText.trim()||null,tags:mediaForm.tags.split(",").map(x=>x.trim()).filter(Boolean)});if(error)setDatabaseError(error.message);else{setMediaForm({title:"",assetUrl:"",mediaType:"image",caption:"",credit:"",altText:"",tags:""});await loadWorldDatabase();}}
+function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);try{localStorage.setItem("umbra-studio-guidance",enabled?"on":"off");}catch{}}
+function StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>${title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips</button></div>:null;}
+async function uploadCatalogFile(file:File){
+ if(!session)return "";
+ const imageKinds=["image","map","reference"]; if(imageKinds.includes(mediaForm.mediaType)&&!file.type.startsWith("image/"))throw new Error("Choose an image file for this media type.");
+ if(mediaForm.mediaType==="document"&&!(file.type.includes("pdf")||file.type.includes("document")||file.type.startsWith("text/")))throw new Error("Choose a document, PDF, or text file.");
+ if(file.size>20*1024*1024)throw new Error("Media files must be 20 MB or smaller.");
+ const path=`${session.user.id}/catalog/${mediaForm.mediaType}/${Date.now()}-${safeFileName(file.name)}`;
+ const {error}=await supabase.storage.from("studio-world-media").upload(path,file,{cacheControl:"3600",upsert:false});if(error)throw error;
+ return supabase.storage.from("studio-world-media").getPublicUrl(path).data.publicUrl;
+}
+async function createMediaAsset(){
+ if(!session||!mediaForm.title.trim()||(!mediaFile&&!mediaForm.assetUrl.trim()))return;
+ setMediaUploading(true);setDatabaseError("");
+ try{const url=mediaFile?await uploadCatalogFile(mediaFile):mediaForm.assetUrl.trim();
+ const {error}=await supabase.from("studio_media_assets").insert({uploaded_by:session.user.id,title:mediaForm.title.trim(),asset_url:url,media_type:mediaForm.mediaType,caption:mediaForm.caption.trim()||null,credit:mediaForm.credit.trim()||null,alt_text:mediaForm.altText.trim()||null,tags:mediaForm.tags.split(",").map(x=>x.trim()).filter(Boolean)});if(error)throw error;
+ setMediaForm({title:"",assetUrl:"",mediaType:"image",caption:"",credit:"",altText:"",tags:""});setMediaFile(null);await loadWorldDatabase();
+ }catch(e){setDatabaseError(e instanceof Error?e.message:"Media could not be uploaded.");}finally{setMediaUploading(false);}
+}
+async function deleteMediaAsset(id:string,title:string){if(!confirm(`Delete media asset "${title}" from the catalog? This cannot be undone.`))return;const {error}=await supabase.from("studio_media_assets").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 async function bulkWorkflow(status:string){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;const {error}=await supabase.from("studio_database_records").update({workflow_status:status}).in("id",ids);if(error)setDatabaseError(error.message);else{setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}}
 async function bulkArchive(){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;const {error}=await supabase.from("studio_database_records").update({archived_at:new Date().toISOString()}).in("id",ids);if(error)setDatabaseError(error.message);else{setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}}
 function toggleDatabaseSelection(id:string){setSelectedDatabaseRecordIds(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});}
@@ -574,7 +599,155 @@ async function createFieldTemplate(){if(!session||!templateForm.recordTypeId||!t
 function applyTemplate(t:FieldTemplate){const selectedRecord=databaseRecords.find(r=>r.id===selectedDatabaseRecordId);if(!selectedRecord)return;let details:Record<string,any>={};try{details=JSON.parse(recordEditor.detailsText||"{}");}catch{}for(const f of t.fields||[])if(!(f.key in details))details[f.key]="";setRecordEditor({...recordEditor,detailsText:JSON.stringify(details,null,2)});setRecordVisualDetails(Object.entries(details).map(([key,value])=>({key,value:typeof value==="string"?value:JSON.stringify(value,null,2)})));}
 async function attachMediaToRecord(recordId:string){if(!recordMediaId)return;const {error}=await supabase.from("studio_media_attachments").upsert({media_id:recordMediaId,entity_type:"database",entity_id:recordId},{onConflict:"media_id,entity_type,entity_id"});if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 async function detachMedia(id:string){const {error}=await supabase.from("studio_media_attachments").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
-function previewImport(){setImportError("");try{const parsed=JSON.parse(importText);const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
+function parseLabelledCharacterText(raw:string){
+ const clean=raw.replace(/\r/g,"").replace(/\u00a0/g," ");
+ const aliases:Record<string,string>={
+  "name":"name","character name":"name","full name":"name","alias":"alias","aliases":"alias","nicknames":"nicknames","titles":"titles","age":"age","apparent age":"apparentAge","pronouns":"pronouns","race":"race","species":"race","race / species":"race","subrace":"subrace","gender":"gender","homeland":"homeland","realm":"homeland","birthplace":"birthplace","place of origin":"birthplace","birthplace / place of origin":"birthplace","current residence":"currentResidence","occupation":"occupation","occupation / role":"occupation","affiliation":"affiliation","faction":"affiliation","family / bloodline":"lineage","family / lineage":"lineage","family":"lineage","bloodline":"lineage","lineage":"lineage","heritage":"heritage","culture":"culture","culture / heritage":"culture","summary":"summary","quick summary":"summary","quick character summary":"summary",
+  "skin tone / complexion":"skinTone","skin tone":"skinTone","skin hex / color reference":"skinHex","eye color":"eyeColor","eye hex / color reference":"eyeHex","hair color":"hairColor","hair hex / color reference":"hairHex","hair texture":"hairTexture","hair style":"hairStyle","height":"height","weight":"weight","dominant hand":"dominantHand","body type / build":"build","build":"build","distinguishing features":"distinguishingFeatures","posture / movement":"postureMovement","alternate / true form":"alternateForm",
+  "personality":"personality","voice / speech":"voiceSpeech","psychology / inner character":"psychology","childhood / early life":"childhood","full backstory":"backstory","backstory":"backstory","major life events":"majorLifeEvents","motivations":"motivations","goals / ambitions":"goals","fears / inner conflicts":"fears","beliefs / worldview":"beliefs","lifestyle / everyday life":"lifestyle","likes / dislikes / preferences":"likesDislikes","current story role":"storyRole","character arc / story information":"storyArc","character arc":"storyArc",
+  "power source / magic type":"powerSource","combat style":"combatStyle","primary abilities":"primaryAbilities","primary abilities / powers":"primaryAbilities","powers":"primaryAbilities","secondary abilities":"secondaryAbilities","signature techniques":"signatureTechniques","weapons / equipment":"weapons","weapon / equipment details":"weaponDetails","transformations / power states":"transformations","transformation details":"transformationDetails","strengths":"strengths","weaknesses":"weaknesses","limits / costs / conditions":"limitations","additional ability notes":"abilityNotes",
+  "parents / guardians":"parents","parents":"parents","siblings":"siblings","children / descendants":"children","children":"children","partner / love interest":"partner","friends / allies":"allies","allies":"allies","rivals":"rivals","enemies":"enemies","mentors / students":"mentors","world connections":"worldConnections","relationship notes":"relationshipNotes",
+  "locations":"importLocations","location":"importLocations","places":"importLocations","timeline events":"importTimeline","timeline event":"importTimeline","historical events":"importTimeline","story project":"importStoryProjects","story projects":"importStoryProjects","scenes":"importScenes","story scenes":"importScenes","visual production asset checklist":"visualAssets","canon locks":"canonLocks","editable / tbd fields":"tbdFields","media notes":"mediaNotes","additional text":"additionalImportNotes","additional notes":"additionalImportNotes","notes":"additionalImportNotes"
+ };
+ const out:any={additionalImportNotes:""}; let current=""; let unknownHeading="";
+ const append=(key:string,value:string)=>{if(!value)return;out[key]=out[key]?String(out[key])+"\n"+value:value;};
+ for(const original of clean.split("\n")){
+  const trimmed=original.trim();
+  if(!trimmed){if(current&&out[current]&&!String(out[current]).endsWith("\n"))out[current]+="\n";continue;}
+  const normalized=trimmed.replace(/^[-*#>\s]+/,"").replace(/\*\*/g,"").trim();
+  const colon=normalized.match(/^([^:]{1,90}):\s*(.*)$/);
+  const rawLabel=(colon?colon[1]:normalized.replace(/:$/,"")).trim();
+  const labelKey=rawLabel.toLowerCase().replace(/[✦🌑🌿⚡🔥💧🪨🐉•]+/g,"").trim();
+  const known=aliases[labelKey];
+  if(known){current=known;unknownHeading="";if(colon&&colon[2].trim())append(known,colon[2].trim());continue;}
+  const looksHeading=/^#{1,6}\s/.test(trimmed)||/^\*\*[^*]{2,90}\*\*:?$/.test(trimmed)||(!colon&&normalized.length<70&&/^[A-Z][A-Za-z0-9 &'\/()–—-]+:?$/.test(normalized));
+  if(colon&&!known){current="";unknownHeading=rawLabel;append("additionalImportNotes",rawLabel+": "+colon[2].trim());continue;}
+  if(looksHeading&&!known){current="";unknownHeading=normalized.replace(/:$/,"");append("additionalImportNotes","["+unknownHeading+"]");continue;}
+  if(current)append(current,normalized); else append("additionalImportNotes",(unknownHeading?"" : "")+normalized);
+ }
+ for(const key of Object.keys(out))if(typeof out[key]==="string")out[key]=out[key].replace(/\n{3,}/g,"\n\n").trim();
+ return out;
+}
+async function loadImportFile(file:File){
+ setImportError("");
+ const ext=file.name.split(".").pop()?.toLowerCase();
+ if(!["txt","md","json","csv"].includes(ext||"")){setImportError("Choose a TXT, Markdown, JSON, or CSV file.");return;}
+ try{const text=await file.text();setImportText(text);setCharacterImportPreview(null);setImportPreview([]);}
+ catch{setImportError("That file could not be read.");}
+}
+function previewImport(){setImportError("");setCharacterImportPreview(null);try{let parsed:any;try{parsed=JSON.parse(importText);}catch{parsed=parseLabelledCharacterText(importText);if(!parsed.name)throw new Error("Add a character name and labeled profile information, or choose a supported profile file.");}
+const looksLikeCharacter = !Array.isArray(parsed) && parsed && typeof parsed==="object" && (
+  parsed.identity || parsed.appearance || parsed.abilities || parsed.relationships || parsed.media ||
+  parsed.character || parsed.fullName || parsed.name
+);
+if(looksLikeCharacter){
+  const c:any = parsed.character && typeof parsed.character==="object" ? parsed.character : parsed;
+  const identity:any = c.identity||{};
+  const appearance:any = c.appearance||{};
+  const origin:any = c.origin_lore||c.originLore||c.origin||{};
+  const abilities:any = c.abilities||{};
+  const relationships:any = c.relationships||{};
+  const media:any = c.media||{};
+  const pick=(...values:any[])=>values.find(v=>v!==undefined&&v!==null&&String(v).trim()!=="")??"";
+  const lines=(value:any)=>Array.isArray(value)?value.join("\n"):String(value??"");
+  const preview={
+    name:pick(c.name,identity.name,c.fullName), alias:pick(c.alias,identity.alias), nicknames:lines(pick(c.nicknames,identity.nicknames)),
+    titles:lines(pick(c.titles,identity.titles,c.primaryTitle)), pronunciation:pick(c.pronunciation,identity.pronunciation),
+    nameMeaning:pick(c.nameMeaning,identity.nameMeaning), birthDate:pick(c.birthDate,identity.birthDate), elementalHeritage:pick(c.elementalHeritage,identity.elementalHeritage),
+    canonStatus:pick(c.canonStatus,identity.canonStatus), spoilerLevel:pick(c.spoilerLevel,identity.spoilerLevel), era:pick(c.era,identity.era),
+    age:pick(c.age,identity.age), apparentAge:pick(c.apparentAge,identity.apparentAge), pronouns:pick(c.pronouns,identity.pronouns),
+    subrace:pick(c.subrace,identity.subrace), heritage:pick(c.heritage,identity.heritage), nationality:pick(c.nationality,identity.nationality),
+    currentResidence:pick(c.currentResidence,identity.currentResidence), occupation:pick(c.occupation,identity.occupation), race:pick(c.race,identity.race,c.species),
+    gender:pick(c.gender,identity.gender), homeland:pick(c.homeland,identity.homeland), affiliation:pick(c.affiliation,identity.affiliation),
+    summary:pick(c.summary,identity.summary,c.quickSummary),
+    skinTone:pick(c.skinTone,appearance.skinTone), skinHex:pick(c.skinHex,appearance.skinHex), faceDetails:pick(c.faceDetails,appearance.faceDetails),
+    eyeColor:pick(c.eyeColor,appearance.eyeColor), eyeHex:pick(c.eyeHex,appearance.eyeHex), hairColor:pick(c.hairColor,appearance.hairColor),
+    hairHex:pick(c.hairHex,appearance.hairHex), hairTexture:pick(c.hairTexture,appearance.hairTexture), hairStyle:pick(c.hairStyle,appearance.hairStyle),
+    height:pick(c.height,appearance.height), weight:pick(c.weight,appearance.weight), dominantHand:pick(c.dominantHand,appearance.dominantHand),
+    build:pick(c.build,appearance.build), postureMovement:pick(c.postureMovement,appearance.postureMovement), distinguishingFeatures:pick(c.distinguishingFeatures,appearance.distinguishingFeatures),
+    makeup:pick(c.makeup,appearance.makeup), grooming:pick(c.grooming,appearance.grooming), nails:pick(c.nails,appearance.nails),
+    colorPalette:lines(pick(c.colorPalette,appearance.colorPalette)), signatureOutfit:pick(c.signatureOutfit,appearance.signatureOutfit),
+    outfitColors:lines(pick(c.outfitColors,appearance.outfitColors)), outfitMaterials:pick(c.outfitMaterials,appearance.outfitMaterials),
+    wardrobe:lines(pick(c.wardrobe,appearance.wardrobe)), clothingStyle:pick(c.clothingStyle,appearance.clothingStyle), accessories:lines(pick(c.accessories,appearance.accessories)),
+    alternateForm:pick(c.alternateForm,appearance.alternateForm), appearanceNotes:pick(c.appearanceNotes,appearance.appearanceNotes),
+    birthplace:pick(c.birthplace,origin.birthplace), lineage:pick(c.lineage,origin.lineage), culture:pick(c.culture,origin.culture), childhood:pick(c.childhood,origin.childhood),
+    backstory:pick(c.backstory,origin.backstory), majorLifeEvents:lines(pick(c.majorLifeEvents,origin.majorLifeEvents)), personality:pick(c.personality,origin.personality),
+    voiceSpeech:pick(c.voiceSpeech,origin.voiceSpeech), psychology:pick(c.psychology,origin.psychology), lifestyle:pick(c.lifestyle,origin.lifestyle),
+    likesDislikes:pick(c.likesDislikes,origin.likesDislikes), motivations:pick(c.motivations,origin.motivations), goals:pick(c.goals,origin.goals),
+    fears:pick(c.fears,origin.fears), beliefs:pick(c.beliefs,origin.beliefs), storyRole:pick(c.storyRole,origin.storyRole), storyArc:pick(c.storyArc,origin.storyArc),
+    powerSource:pick(c.powerSource,abilities.powerSource), primaryAbilities:lines(pick(c.primaryAbilities,abilities.primaryAbilities,c.powers)),
+    secondaryAbilities:lines(pick(c.secondaryAbilities,abilities.secondaryAbilities)), signatureTechniques:lines(pick(c.signatureTechniques,abilities.signatureTechniques)),
+    weapons:lines(pick(c.weapons,abilities.weapons)), weaponDetails:pick(c.weaponDetails,abilities.weaponDetails), transformations:lines(pick(c.transformations,abilities.transformations)),
+    transformationDetails:pick(c.transformationDetails,abilities.transformationDetails), strengths:lines(pick(c.strengths,abilities.strengths)), weaknesses:lines(pick(c.weaknesses,abilities.weaknesses)),
+    limitations:pick(c.limitations,abilities.limitations), combatStyle:pick(c.combatStyle,abilities.combatStyle), combatProfile:pick(c.combatProfile,abilities.combatProfile), abilityNotes:[pick(c.abilityNotes,abilities.abilityNotes),pick(c.additionalImportNotes,origin.additionalImportNotes)].filter(Boolean).join("\n\n"),
+    parents:lines(pick(c.parents,relationships.parents)), siblings:lines(pick(c.siblings,relationships.siblings)), children:lines(pick(c.children,relationships.children)),
+    partner:pick(c.partner,relationships.partner), allies:lines(pick(c.allies,relationships.allies)), rivals:lines(pick(c.rivals,relationships.rivals)), enemies:lines(pick(c.enemies,relationships.enemies)),
+    mentors:lines(pick(c.mentors,relationships.mentors)), relationshipNotes:pick(c.relationshipNotes,relationships.relationshipNotes), worldConnections:lines(pick(c.worldConnections,relationships.worldConnections)),
+    visualAssets:lines(pick(c.visualAssets,media.visualAssets)), productionNotes:pick(c.productionNotes,media.productionNotes), canonLocks:lines(pick(c.canonLocks,media.canonLocks)),
+    tbdFields:lines(pick(c.tbdFields,media.tbdFields)), portraitUrl:pick(c.portraitUrl,media.portraitUrl,c.portrait_url), referenceArtUrl:pick(c.referenceArtUrl,media.referenceArtUrl),
+    alternateFormUrl:pick(c.alternateFormUrl,media.alternateFormUrl), galleryUrl:pick(c.galleryUrl,media.galleryUrl), galleryUrls:Array.isArray(c.galleryUrls)?c.galleryUrls:Array.isArray(media.galleryUrls)?media.galleryUrls:[],
+    mediaNotes:pick(c.mediaNotes,media.mediaNotes), importLocations:lines(c.importLocations), importTimeline:lines(c.importTimeline), importStoryProjects:lines(c.importStoryProjects), importScenes:lines(c.importScenes)
+  };
+  if(!preview.name)throw new Error("Character import needs at least a name.");
+  setCharacterImportPreview(preview);setImportPreview([]);return;
+}
+const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
+function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
+function importedNameList(value:any){return String(value??"").split(/[\n,;|]+/).map(x=>x.trim()).filter(Boolean);}
+function matchImportedCharacter(options:StudioCharacterRow[],raw:string){
+ const normalized=normalizeImportName(raw);
+ return options.find(x=>{const name=normalizeImportName(x.name);return normalized===name||normalized.startsWith(name)||normalized.endsWith(name)||normalized.includes(name+"the")||normalized.includes(name+"father")||normalized.includes(name+"mother")||normalized.includes(name+"sibling")||normalized.includes(name+"brother")||normalized.includes(name+"sister");});
+}
+async function stageImportedConnectedDrafts(imported:any){
+ if(!session)return {locations:0,timeline:0,projects:0,scenes:0};
+ const names=(value:any)=>importedNameList(value).map(x=>x.replace(/^[-*•\d.\s]+/,"").trim()).filter(Boolean);
+ let locations=0,timeline=0,projects=0,scenes=0;
+ for(const name of names(imported.importLocations)){
+  if(worldLocations.some(x=>normalizeImportName(x.name)===normalizeImportName(name)))continue;
+  const {error}=await supabase.from("studio_world_locations").insert({user_id:session.user.id,name,location_type:"other",description:"Imported from a character profile. Review and classify this draft location.",map_x:50,map_y:50,tags:["imported-draft"],is_public:false}); if(!error)locations++;
+ }
+ for(const title of names(imported.importTimeline)){
+  if(timelineEvents.some(x=>normalizeImportName(x.title)===normalizeImportName(title)))continue;
+  const {error}=await supabase.from("studio_timeline_events").insert({user_id:session.user.id,title,sort_order:0,description:"Imported from a character profile. Review this draft timeline event.",tags:["imported-draft"],is_public:false}); if(!error)timeline++;
+ }
+ for(const title of names(imported.importStoryProjects)){
+  if(storyProjects.some(x=>normalizeImportName(x.title)===normalizeImportName(title)))continue;
+  const {error}=await supabase.from("studio_story_projects").insert({title,project_type:"story",summary:"Imported from a character profile. Review this draft story project.",status:"idea",canon_status:"draft",spoiler_level:"none",is_public:false,created_by:session.user.id,updated_by:session.user.id}); if(!error)projects++;
+ }
+ for(const title of names(imported.importScenes)){
+  if(storyScenes.some(x=>normalizeImportName(x.title)===normalizeImportName(title)))continue;
+  const {error}=await supabase.from("studio_story_scenes").insert({title,summary:"Imported from a character profile. Review this draft scene.",status:"idea",created_by:session.user.id,updated_by:session.user.id}); if(!error)scenes++;
+ }
+ if(locations||timeline)await loadWorldExplorer(); if(projects||scenes)await loadV9Production();
+ return {locations,timeline,projects,scenes};
+}
+async function applyCharacterImport(){
+ if(!characterImportPreview)return;
+ const imported={...characterImportPreview};
+ openCreateCharacter();
+ setCharacter(current=>({...current,...imported,galleryUrls:Array.isArray(imported.galleryUrls)?imported.galleryUrls:current.galleryUrls}));
+ const availableWorld=worldRecords.length?worldRecords:(await supabase.from("studio_world_records").select("id, user_id, record_type, name, subtype, description, emblem_url, cover_url, lore_details, is_public, created_at, updated_at").order("name")).data as WorldRecord[]||[];
+ const findWorld=(type:"realm"|"race"|"faction"|"family",value:any)=>availableWorld.find(x=>x.record_type===type&&normalizeImportName(x.name)===normalizeImportName(value));
+ const realm=findWorld("realm",imported.homeland)||findWorld("realm",imported.currentResidence);
+ const race=findWorld("race",imported.race);
+ const faction=findWorld("faction",imported.affiliation);
+ const family=findWorld("family",imported.lineage);
+ if(realm)setLinkedRealmId(realm.id); if(race)setLinkedRaceId(race.id); if(faction)setLinkedFactionId(faction.id); if(family)setLinkedFamilyId(family.id);
+ if(!worldRecords.length)setWorldRecords(availableWorld);
+ const {data:characterRows}=await supabase.from("studio_characters").select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at").order("name");
+ const options=(characterRows??[]) as StudioCharacterRow[]; setRelationshipOptions(options);
+ const relationGroups:[string,string][]=[["parents","parent"],["siblings","sibling"],["children","child"],["partner","partner"],["allies","ally"],["rivals","rival"],["enemies","enemy"],["mentors","mentor"]];
+ const matched:string[]=[];
+ for(const [field,type] of relationGroups){for(const name of importedNameList(imported[field])){const target=matchImportedCharacter(options,name);if(target)matched.push(`${type}: ${target.name}`);}}
+ const staged=await stageImportedConnectedDrafts(imported);
+ const notices:string[]=[];
+ if(matched.length)notices.push(`Recognized relationships: ${matched.join(" • ")}. They will connect when this draft is saved.`);
+ const stagedCount=staged.locations+staged.timeline+staged.projects+staged.scenes;
+ if(stagedCount)notices.push(`Staged private drafts: ${staged.locations} location(s), ${staged.timeline} timeline event(s), ${staged.projects} story project(s), ${staged.scenes} scene(s).`);
+ if(imported.additionalImportNotes)notices.push("Unclassified text was kept in Additional Ability Notes for review.");
+ if(notices.length)setRelationshipError(notices.join(" "));
+ setImportText("");setCharacterImportPreview(null);setCreatorStep(1);setPage("create");window.scrollTo({top:0,behavior:"smooth"});
+}
 async function commitImport(){if(!session||!importPreview.length)return;setDatabaseBusy(true);setImportError("");try{for(const row of importPreview){const type=recordTypes.find(t=>t.slug===row.record_type_slug||t.name.toLowerCase()===String(row.record_type_slug).toLowerCase());if(!type)throw new Error(`Unknown record type: ${row.record_type_slug}`);const {error}=await supabase.from("studio_database_records").insert({created_by:session.user.id,updated_by:session.user.id,record_type_id:type.id,name:row.name,subtitle:row.subtitle,summary:row.summary,details:row.details,workflow_status:row.workflow_status});if(error)throw error;}setImportText("");setImportPreview([]);await loadWorldDatabase();}catch(e){setImportError(e instanceof Error?e.message:"Import failed.");}finally{setDatabaseBusy(false);}}
 function duplicateGroups(){const active=databaseRecords.filter(r=>!r.archived_at);const groups=new Map<string,StudioDatabaseRecord[]>();for(const r of active){const key=`${r.record_type_id}|${r.name.trim().toLowerCase().replace(/[^a-z0-9]/g,"")}`;groups.set(key,[...(groups.get(key)||[]),r]);}return [...groups.values()].filter(g=>g.length>1);}
 async function loadV9Production(){
@@ -603,6 +776,17 @@ async function createStoryProject(){if(!session||!projectForm.title.trim())retur
 async function createStoryArc(){if(!session||!arcForm.title.trim())return;const {error}=await supabase.from("studio_story_arcs").insert({project_id:arcForm.projectId||null,title:arcForm.title.trim(),summary:arcForm.summary.trim()||null,status:arcForm.status,created_by:session.user.id,updated_by:session.user.id});if(error)setProductionError(error.message);else{setArcForm({projectId:"",title:"",summary:"",status:"planned"});await loadV9Production();}}
 async function createStoryScene(){if(!session||!sceneForm.title.trim())return;const {error}=await supabase.from("studio_story_scenes").insert({project_id:sceneForm.projectId||null,arc_id:sceneForm.arcId||null,title:sceneForm.title.trim(),summary:sceneForm.summary.trim()||null,pov_character_id:sceneForm.povId||null,location_id:sceneForm.locationId||null,era:sceneForm.era.trim()||null,story_date:sceneForm.storyDate.trim()||null,status:sceneForm.status,created_by:session.user.id,updated_by:session.user.id});if(error)setProductionError(error.message);else{setSceneForm({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});await loadV9Production();}}
 async function createStoryBeat(){if(!session||!beatForm.title.trim())return;const {error}=await supabase.from("studio_story_beats").insert({project_id:beatForm.projectId||null,arc_id:beatForm.arcId||null,scene_id:beatForm.sceneId||null,title:beatForm.title.trim(),description:beatForm.description.trim()||null,beat_type:beatForm.beatType,status:beatForm.status,created_by:session.user.id});if(error)setProductionError(error.message);else{setBeatForm({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});await loadV9Production();}}
+async function createStoryEntityLink(){
+ if(!session||!storyLinkForm.storyId||!storyLinkForm.linkedId)return;
+ setProductionError("");
+ const {error}=await supabase.from("studio_story_entity_links").insert({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null});
+ if(error)setProductionError(error.message);else{setStoryLinkForm(x=>({...x,linkedId:"",label:"",notes:""}));await loadV9Production();}
+}
+async function deleteStoryEntityLink(id:string){const {error}=await supabase.from("studio_story_entity_links").delete().eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
+async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){
+ if(!confirm(`Delete "${label}"? This cannot be undone.`))return;
+ const {error}=await supabase.from(table).delete().eq("id",id); if(error)setProductionError(error.message); else await loadV9Production();
+}
 async function updateProductionStatus(table:string,id:string,status:string){const {error}=await supabase.from(table).update({status,updated_at:new Date().toISOString()}).eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
 async function addReviewCommentV9(){if(!commentForm.entityId||!commentForm.body.trim())return;const {error}=await supabase.rpc("studio_add_review_comment",{target_entity_type:commentForm.entityType,target_entity_id:commentForm.entityId,comment_body:commentForm.body.trim(),notify_user_id:commentForm.notifyUserId||null});if(error)setProductionError(error.message);else{setCommentForm(x=>({...x,body:"",notifyUserId:""}));await loadV9Production();}}
 async function resolveReviewComment(id:string){const {error}=await supabase.from("studio_review_comments").update({status:"resolved",resolved_by:session?.user.id,resolved_at:new Date().toISOString()}).eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
@@ -688,31 +872,20 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 await loadMyCharacters();
 }
 
-async function openCharacterLibrary() {
+async function openPublishedCharacters() {
 setPage("library");
 setLibraryError("");
 setLoadingLibrary(true);
 window.scrollTo({ top: 0, behavior: "smooth" });
-
 try {
-  const { data, error: loadError } = await supabase
-    .from("studio_characters")
+  const { data, error } = await supabase.from("studio_characters")
     .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
-    .eq("is_complete", true)
-    .eq("is_public", true)
-    .order("updated_at", { ascending: false });
-
-  if (loadError) throw loadError;
+    .eq("is_complete", true).eq("is_public", true).order("updated_at", { ascending:false });
+  if(error) throw error;
   setLibraryCharacters((data ?? []) as StudioCharacterRow[]);
-} catch (loadFailure) {
-  setLibraryError(
-    loadFailure instanceof Error
-      ? loadFailure.message
-      : "The Character Library could not be loaded."
-  );
-} finally {
-  setLoadingLibrary(false);
-}
+} catch(error) {
+  setLibraryError(error instanceof Error ? error.message : "Published characters could not be loaded.");
+} finally { setLoadingLibrary(false); }
 }
 
 function openCharacterProfile(saved: StudioCharacterRow, from: "characters" | "library") {
@@ -1500,6 +1673,34 @@ setPage("create");
 window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+const StudioTopNav = () => (
+  <>
+    <header className="practical-topbar">
+      <button className="practical-brand" onClick={()=>setPage("dashboard")}><span>☾</span><div><small>UMBRA CONNECT</small><strong>Umbra Studio</strong></div></button>
+      <div className="practical-utilities">
+        <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
+        <button onClick={()=>void openAdminCenter()}>Admin</button>
+        <button onClick={()=>void openStudioSettings()}>Settings</button>
+      </div>
+    </header>
+    <aside className="practical-sidebar">
+      <nav>
+        <button className={page==="dashboard"?"active":""} onClick={()=>setPage("dashboard")}><span>⌂</span>Dashboard</button>
+        <button className={["characters","create","profile","connections","library"].includes(page)?"active":""} onClick={openMyCharacters}><span>♙</span>Characters</button>
+        <button className={["world","explorer","database","canon"].includes(page)?"active":""} onClick={()=>void openWorldOrganization()}><span>◉</span>World</button>
+        <button className={page==="production"?"active":""} onClick={()=>void openProduction()}><span>✎</span>Story</button>
+        <button className={page==="database"&&databaseTab==="media"?"active":""} onClick={()=>void openWorldDatabase("media")}><span>▣</span>Media</button>
+      </nav>
+      <div className="practical-sidebar-bottom"><button onClick={()=>void openTransferCenter()}>Backup</button></div>
+    </aside>
+    <nav className="practical-actions">
+      <button className="primary" onClick={openCreateCharacter}>+ Character</button>
+      <button onClick={()=>void openWorldDatabase("import")}>Import</button>
+      <button onClick={()=>void openWorldExplorer("map")}>World Map</button><button onClick={()=>{const target=studioCharacters.find(x=>x.is_complete)||studioCharacters[0];if(target)void openConnections(target);else openMyCharacters();}}>Family Tree</button>
+    </nav>
+  </>
+);
+
 function returnToDashboard() {
 setPage("dashboard");
 window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1641,6 +1842,54 @@ return {
 };
 }
 
+async function ensureCharacterCodexLinks(){
+ if(!session)return {realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
+ const values:{kind:"realm"|"race"|"faction"|"family";name:string;current:string}[]=[
+  {kind:"realm",name:character.homeland.trim(),current:linkedRealmId},
+  {kind:"race",name:character.race.trim(),current:linkedRaceId},
+  {kind:"faction",name:character.affiliation.trim(),current:linkedFactionId},
+  {kind:"family",name:character.lineage.trim(),current:linkedFamilyId},
+ ];
+ const result:any={realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
+ let available=[...worldRecords];
+ for(const item of values){
+  if(!item.name||item.current)continue;
+  const normalized=normalizeImportName(item.name);
+  let match=available.find(x=>x.record_type===item.kind&&normalizeImportName(x.name)===normalized);
+  if(!match){
+   const {data,error}=await supabase.from("studio_world_records").insert({user_id:session.user.id,record_type:item.kind,name:item.name,subtype:null,description:null,is_public:false}).select("id,user_id,record_type,name,subtype,description,emblem_url,cover_url,lore_details,is_public,created_at,updated_at").single();
+   if(error)throw error;
+   match=data as WorldRecord; available.push(match);
+  }
+  result[item.kind]=match.id;
+ }
+ setWorldRecords(available);
+ setLinkedRealmId(result.realm||"");setLinkedRaceId(result.race||"");setLinkedFactionId(result.faction||"");setLinkedFamilyId(result.family||"");
+ return result as {realm:string;race:string;faction:string;family:string};
+}
+
+async function resolveWrittenCharacterRelationships(sourceId:string){
+ if(!session)return;
+ const {data,error}=await supabase.from("studio_characters").select("id,name").neq("id",sourceId);
+ if(error)throw error;
+ const candidates=(data??[]) as Array<{id:string;name:string}>;
+ const groups:{value:string;type:string}[]=[
+  {value:character.parents,type:"parent"},{value:character.siblings,type:"sibling"},{value:character.children,type:"child"},
+  {value:character.partner,type:"partner"},{value:character.allies,type:"ally"},{value:character.rivals,type:"rival"},
+  {value:character.enemies,type:"enemy"},{value:character.mentors,type:"mentor"}
+ ];
+ for(const group of groups){
+  for(const name of importedNameList(group.value)){
+   const target=matchImportedCharacter(candidates as StudioCharacterRow[],name);
+   if(!target)continue;
+   const reverseType=reciprocalRelationship[group.type]||group.type;
+   const {error:first}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:sourceId,target_character_id:target.id,relationship_type:group.type},{onConflict:"source_character_id,target_character_id,relationship_type"});
+   if(first)throw first;
+   const {error:reverse}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:target.id,target_character_id:sourceId,relationship_type:reverseType},{onConflict:"source_character_id,target_character_id,relationship_type"});
+   if(reverse)throw reverse;
+  }
+ }
+}
 async function saveCharacter(nextStep: number, complete = false) {
 if (!session || savingCharacter) return;
 
@@ -1648,25 +1897,19 @@ setSaveError("");
 setSavingCharacter(true);
 
 try {
-  const record = buildStudioCharacterRecord(nextStep, complete);
+  const codexLinks = complete ? await ensureCharacterCodexLinks() : {realm:linkedRealmId,race:linkedRaceId,faction:linkedFactionId,family:linkedFamilyId};
+  const record = {...buildStudioCharacterRecord(nextStep, complete),realm_record_id:codexLinks.realm||null,race_record_id:codexLinks.race||null,faction_record_id:codexLinks.faction||null,family_record_id:codexLinks.family||null};
 
+  let savedCharacterId=studioCharacterId;
   if (studioCharacterId) {
-    const { error: updateError } = await supabase
-      .from("studio_characters")
-      .update(record)
-      .eq("id", studioCharacterId);
-
+    const { error: updateError } = await supabase.from("studio_characters").update(record).eq("id", studioCharacterId);
     if (updateError) throw updateError;
   } else {
-    const { data, error: insertError } = await supabase
-      .from("studio_characters")
-      .insert(record)
-      .select("id")
-      .single();
-
+    const { data, error: insertError } = await supabase.from("studio_characters").insert(record).select("id").single();
     if (insertError) throw insertError;
-    setStudioCharacterId(data.id);
+    savedCharacterId=data.id; setStudioCharacterId(data.id);
   }
+  if(savedCharacterId)await resolveWrittenCharacterRelationships(savedCharacterId);
 
   if (complete) {
     setPage("dashboard");
@@ -1903,27 +2146,12 @@ return (
         .saved-character-actions { grid-template-columns: 1fr; }
       }
     `}</style>
-    <header className="studio-header">
-      <div className="brand">
-        <div className="brand-moon">☾</div>
-        <div>
-          <p className="header-eyebrow">UMBRA CONNECT</p>
-          <h2>Umbra Studio</h2>
-        </div>
-      </div>
-
-      <div className="account-area">
-        <button type="button" className="sign-out-button" onClick={returnToDashboard}>
-          ← Back to Studio
-        </button>
-      </div>
-    </header>
+    <StudioTopNav />
 
     <section className="dashboard-content">
-      <div className="welcome-section">
-        <p className="eyebrow">YOUR CREATIONS</p>
-        <h1>My Characters</h1>
-        <p>Continue developing your saved souls or return to a completed character.</p>
+      <div className="character-workspace-head">
+        <div><p className="eyebrow">CHARACTERS</p><h1>Character Workspace</h1></div>
+        <div className="character-workspace-tabs"><button className="active">My Characters</button><button onClick={()=>void openPublishedCharacters()}>Published Characters</button><button onClick={openCreateCharacter}>+ Create Character</button></div>
       </div>
 
       {charactersError && (
@@ -1955,7 +2183,7 @@ return (
             const progress = saved.is_complete ? 100 : Math.round((step / 6) * 100);
 
             return (
-              <article className="saved-character-card" key={saved.id}>
+              <article className="saved-character-card compact-character-card" key={saved.id}>
                 <div className="saved-character-image">
                   {portrait ? (
                     <img src={portrait} alt={`${saved.name} portrait`} />
@@ -1973,7 +2201,7 @@ return (
                   </span>
                   <h3>{saved.name || "Unnamed Character"}</h3>
                   {identity.alias && <strong>{identity.alias}</strong>}
-                  <p>
+                  <p className="character-card-summary">
                     {identity.summary ||
                       [identity.homeland, identity.affiliation].filter(Boolean).join(" • ") ||
                       "This character is waiting for their story to unfold."}
@@ -2067,15 +2295,11 @@ return (
       @media(max-width:900px){.library-controls{grid-template-columns:1fr 1fr}}
       @media(max-width:700px){.library-grid{grid-template-columns:1fr}.library-controls{grid-template-columns:1fr}}
     `}</style>
-    <header className="studio-header">
-      <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
-      <div className="account-area"><button type="button" className="sign-out-button" onClick={returnToDashboard}>← Back to Studio</button></div>
-    </header>
+    <StudioTopNav />
     <section className="dashboard-content">
-      <div className="welcome-section">
-        <p className="eyebrow">EXPLORE THE UMBRAL WORLD</p>
-        <h1>Character Library</h1>
-        <p>Discover characters their creators have chosen to publish to the Umbral World.</p>
+      <div className="character-workspace-head">
+        <div><p className="eyebrow">CHARACTERS</p><h1>Published Characters</h1><p>Characters that have been completed and published to the Umbral World.</p></div>
+        <div className="character-workspace-tabs"><button onClick={openMyCharacters}>My Characters</button><button className="active">Published Characters</button><button onClick={openCreateCharacter}>+ Create Character</button></div>
       </div>
       <div className="library-controls">
         <input type="search" placeholder="Search name, alias, lore..." value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
@@ -2143,14 +2367,14 @@ const visibleLocations=activeLocations.filter(x=>!q||[x.name,x.location_type,x.d
 const visibleEvents=activeEvents.filter(x=>!q||[x.title,x.era,x.display_date,x.description,...(x.tags||[])].filter(Boolean).join(" ").toLowerCase().includes(q));
 const locationById=new Map<string, WorldLocation>(worldLocations.map(x=>[x.id,x])); const codexById=new Map<string, WorldRecord>(worldRecords.map(x=>[x.id,x])); const charById=new Map<string, StudioCharacterRow>(studioCharacters.map(x=>[x.id,x]));
 return <main className="dashboard-shell explorer-page">
-<header className="studio-header"><button className="brand-button" onClick={returnToDashboard}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>World Explorer</strong></div></button><button className="sign-out-button" onClick={returnToDashboard}>← Back to Studio</button></header>
+<StudioTopNav />
 <section className="explorer-shell">
 <div className="explorer-heading"><div><p className="eyebrow">MAP • HISTORY • LORE</p><h1>World Explorer</h1><p>Navigate, edit, archive, restore, and chronicle the Umbral World from one workspace.</p></div><input className="explorer-search" type="search" value={explorerSearch} onChange={e=>setExplorerSearch(e.target.value)} placeholder="Search locations, eras, tags, lore..."/></div>
 <div className="explorer-stats"><div><strong>{activeLocations.length}</strong><span>Active Locations</span></div><div><strong>{activeEvents.length}</strong><span>Timeline Events</span></div><div><strong>{worldRecords.length}</strong><span>Codex Entries</span></div><div><strong>{favoriteKeys.size}</strong><span>Favorites</span></div></div>
 <nav className="explorer-tabs">{([['map','World Map'],['locations','Locations'],['timeline','Timeline'],['favorites','Favorites'],['archive',`Archive (${archivedLocations.length+archivedEvents.length})`]] as const).map(([id,label])=><button key={id} className={explorerTab===id?'active':''} onClick={()=>setExplorerTab(id)}>{label}</button>)}</nav>
 {explorerError&&<p className="login-error">{explorerError}</p>}
 {explorerTab==='map'&&<><section className="map-manager"><div><span className="creator-kicker">INTERACTIVE ATLAS</span><h2>{atlas?.title||'The Umbral World'}</h2><p>Drag any marker directly across the map. Its coordinates save when you release it.</p></div><label className="map-upload-button">{uploadingMap?'Uploading Map...':'Upload / Replace World Map'}<input hidden type="file" accept="image/*" disabled={uploadingMap} onChange={e=>{const f=e.target.files?.[0];if(f)void uploadWorldMap(f);e.currentTarget.value='';}}/></label></section><div className={`atlas-stage ${draggingLocationId?'dragging':''}`}>{atlas?.map_url?<img className="atlas-image" src={atlas.map_url} alt={atlas.title}/>:<div className="atlas-empty"><span>☾</span><h3>Your Umbral World map goes here</h3><p>Upload the map artwork above. Location markers will appear over it.</p></div>}{atlas?.map_url&&visibleLocations.filter(x=>x.map_x!==null&&x.map_y!==null).map(loc=><button key={loc.id} className={`map-marker ${selectedLocationId===loc.id?'active':''}`} style={{left:`${loc.map_x}%`,top:`${loc.map_y}%`}} onPointerDown={(e:any)=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setSelectedLocationId(loc.id);setDraggingLocationId(loc.id)}} onPointerMove={(e:any)=>dragMapMarker(e,loc)} onPointerUp={(e:any)=>void finishMapMarkerDrag(e,loc)} title={`Drag ${loc.name}`}><span>✦</span><b>{loc.name}</b></button>)}</div>{selectedLocationId&&locationById.get(selectedLocationId)&&!locationById.get(selectedLocationId)!.archived_at&&(()=>{const loc=locationById.get(selectedLocationId)!;const codex=loc.codex_record_id?codexById.get(loc.codex_record_id):null;return <section className="selected-location-card"><div><span className="world-type">{loc.location_type}</span><h3>{loc.name}</h3><p>{loc.description||'No location lore yet.'}</p>{loc.parent_location_id&&<small>Inside: {(loc.parent_location_id ? locationById.get(loc.parent_location_id)?.name : null)||'Parent location'}</small>}</div><div className="world-actions">{codex&&<button className="primary-action" onClick={()=>void openWorldOrganization(codex)}>Open Codex</button>}<button className="secondary-action" onClick={()=>editLocation(loc)}>Edit</button><button className="secondary-action" onClick={()=>void toggleFavorite('location',loc.id)}>{favoriteKeys.has(`location:${loc.id}`)?'★ Favorited':'☆ Favorite'}</button></div></section>})()}</>}
-{explorerTab==='locations'&&<><section className={`explorer-form ${editingLocationId?'editing-form':''}`}><span className="creator-kicker">{editingLocationId?'EDIT LOCATION':'BUILD THE WORLD HIERARCHY'}</span><h2>{editingLocationId?'Update Location':'Add Location'}</h2>{editingLocationId&&<p className="edit-notice">You are editing an existing location. Save changes or cancel to return to creation mode.</p>}<div className="explorer-form-grid"><input value={locationForm.name} onChange={e=>setLocationForm(v=>({...v,name:e.target.value}))} placeholder="Location name"/><select value={locationForm.locationType} onChange={e=>setLocationForm(v=>({...v,locationType:e.target.value}))}><option value="continent">Continent</option><option value="realm">Realm</option><option value="region">Region / Territory</option><option value="city">City / Settlement</option><option value="landmark">Landmark</option><option value="ocean">Ocean / Sea</option><option value="island">Island</option><option value="sanctuary">Sanctuary</option></select><select value={locationForm.parentId} onChange={e=>setLocationForm(v=>({...v,parentId:e.target.value}))}><option value="">No parent — top level</option>{activeLocations.filter(x=>x.id!==editingLocationId).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={locationForm.codexId} onChange={e=>setLocationForm(v=>({...v,codexId:e.target.value}))}><option value="">No Codex link</option>{worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input type="number" min="0" max="100" value={locationForm.mapX} onChange={e=>setLocationForm(v=>({...v,mapX:e.target.value}))} placeholder="Map X %"/><input type="number" min="0" max="100" value={locationForm.mapY} onChange={e=>setLocationForm(v=>({...v,mapY:e.target.value}))} placeholder="Map Y %"/><input className="full-width" value={locationForm.tags} onChange={e=>setLocationForm(v=>({...v,tags:e.target.value}))} placeholder="Tags, comma separated"/><textarea className="full-width" rows={4} value={locationForm.description} onChange={e=>setLocationForm(v=>({...v,description:e.target.value}))} placeholder="Geography, atmosphere, inhabitants, travel notes..."/></div><div className="form-management-actions"><button className="primary-action" disabled={explorerBusy||!locationForm.name.trim()} onClick={saveLocation}>{editingLocationId?'Save Location Changes':'Add Location'}</button>{editingLocationId&&<button className="secondary-action" onClick={cancelLocationEdit}>Cancel Edit</button>}</div></section><div className="location-grid">{visibleLocations.map(loc=><article className="location-card" key={loc.id}><div className="location-card-top"><span className="world-type">{loc.location_type}</span><button className="favorite-star" onClick={()=>void toggleFavorite('location',loc.id)}>{favoriteKeys.has(`location:${loc.id}`)?'★':'☆'}</button></div><h3>{loc.name}</h3>{loc.parent_location_id&&<small>Inside {(loc.parent_location_id ? locationById.get(loc.parent_location_id)?.name : null)||'another location'}</small>}<p>{loc.description||'Ready for location lore.'}</p><div className="tag-row">{(loc.tags||[]).map(t=><span key={t}>{t}</span>)}</div><div className="world-actions">{loc.codex_record_id&&codexById.get(loc.codex_record_id)&&<button className="secondary-action" onClick={()=>void openWorldOrganization(codexById.get(loc.codex_record_id as string)!)}>Codex</button>}<button className="secondary-action" onClick={()=>{setSelectedLocationId(loc.id);setExplorerTab('map')}}>Show on Map</button><button className="secondary-action" onClick={()=>editLocation(loc)}>Edit</button><button className="secondary-action archive-action" onClick={()=>void archiveExplorerItem('studio_world_locations',loc.id)}>Archive</button></div></article>)}</div></>}
+{explorerTab==='locations'&&<><section className={`explorer-form ${editingLocationId?'editing-form':''}`}><span className="creator-kicker">{editingLocationId?'EDIT LOCATION':'BUILD THE WORLD HIERARCHY'}</span><h2>{editingLocationId?'Update Location':'Add Location'}</h2>{editingLocationId&&<p className="edit-notice">You are editing an existing location. Save changes or cancel to return to creation mode.</p>}<div className="explorer-form-grid"><input value={locationForm.name} onChange={e=>setLocationForm(v=>({...v,name:e.target.value}))} placeholder="Location name"/><select value={locationForm.locationType} onChange={e=>setLocationForm(v=>({...v,locationType:e.target.value}))}><option value="continent">Continent</option><option value="realm">Realm / Kingdom</option><option value="region">Region / Territory</option><option value="city">City / Settlement</option><option value="village">Village / Community</option><option value="landmark">Landmark</option><option value="mountain">Mountain / Range</option><option value="forest">Forest / Grove</option><option value="desert">Desert / Wasteland</option><option value="river">River / Waterway</option><option value="lake">Lake</option><option value="ocean">Ocean / Sea</option><option value="island">Island / Archipelago</option><option value="cave">Cave / Cavern</option><option value="ruin">Ruin / Fallen Site</option><option value="sanctuary">Sanctuary</option><option value="temple">Temple / Sacred Site</option><option value="academy">Academy / School</option><option value="fortress">Castle / Fortress</option><option value="port">Port / Harbor</option><option value="other">Other Place</option></select><select value={locationForm.parentId} onChange={e=>setLocationForm(v=>({...v,parentId:e.target.value}))}><option value="">No parent — top level</option>{activeLocations.filter(x=>x.id!==editingLocationId).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={locationForm.codexId} onChange={e=>setLocationForm(v=>({...v,codexId:e.target.value}))}><option value="">No Codex link</option>{worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input type="number" min="0" max="100" value={locationForm.mapX} onChange={e=>setLocationForm(v=>({...v,mapX:e.target.value}))} placeholder="Map X %"/><input type="number" min="0" max="100" value={locationForm.mapY} onChange={e=>setLocationForm(v=>({...v,mapY:e.target.value}))} placeholder="Map Y %"/><input className="full-width" value={locationForm.tags} onChange={e=>setLocationForm(v=>({...v,tags:e.target.value}))} placeholder="Tags, comma separated"/><textarea className="full-width" rows={4} value={locationForm.description} onChange={e=>setLocationForm(v=>({...v,description:e.target.value}))} placeholder="Geography, atmosphere, inhabitants, travel notes..."/></div><div className="form-management-actions"><button className="primary-action" disabled={explorerBusy||!locationForm.name.trim()} onClick={saveLocation}>{editingLocationId?'Save Location Changes':'Add Location'}</button>{editingLocationId&&<button className="secondary-action" onClick={cancelLocationEdit}>Cancel Edit</button>}</div></section><div className="location-grid">{visibleLocations.map(loc=><article className="location-card" key={loc.id}><div className="location-card-top"><span className="world-type">{loc.location_type}</span><button className="favorite-star" onClick={()=>void toggleFavorite('location',loc.id)}>{favoriteKeys.has(`location:${loc.id}`)?'★':'☆'}</button></div><h3>{loc.name}</h3>{loc.parent_location_id&&<small>Inside {(loc.parent_location_id ? locationById.get(loc.parent_location_id)?.name : null)||'another location'}</small>}<p>{loc.description||'Ready for location lore.'}</p><div className="tag-row">{(loc.tags||[]).map(t=><span key={t}>{t}</span>)}</div><div className="world-actions">{loc.codex_record_id&&codexById.get(loc.codex_record_id)&&<button className="secondary-action" onClick={()=>void openWorldOrganization(codexById.get(loc.codex_record_id as string)!)}>Codex</button>}<button className="secondary-action" onClick={()=>{setSelectedLocationId(loc.id);setExplorerTab('map')}}>Show on Map</button><button className="secondary-action" onClick={()=>editLocation(loc)}>Edit</button><button className="secondary-action archive-action" onClick={()=>void archiveExplorerItem('studio_world_locations',loc.id)}>Archive</button></div></article>)}</div></>}
 {explorerTab==='timeline'&&<><section className={`explorer-form ${editingEventId?'editing-form':''}`}><span className="creator-kicker">{editingEventId?'EDIT HISTORY':'CHRONICLE HISTORY'}</span><h2>{editingEventId?'Update Timeline Event':'Add Timeline Event'}</h2>{editingEventId&&<p className="edit-notice">Changes update this event without creating a duplicate.</p>}<div className="explorer-form-grid"><input value={eventForm.title} onChange={e=>setEventForm(v=>({...v,title:e.target.value}))} placeholder="Event title"/><input value={eventForm.era} onChange={e=>setEventForm(v=>({...v,era:e.target.value}))} placeholder="Era / age"/><input value={eventForm.displayDate} onChange={e=>setEventForm(v=>({...v,displayDate:e.target.value}))} placeholder="Date label — e.g. 742 AD"/><input type="number" value={eventForm.sortOrder} onChange={e=>setEventForm(v=>({...v,sortOrder:e.target.value}))} placeholder="Chronology order"/><select value={eventForm.locationId} onChange={e=>setEventForm(v=>({...v,locationId:e.target.value}))}><option value="">No linked location</option>{activeLocations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={eventForm.codexId} onChange={e=>setEventForm(v=>({...v,codexId:e.target.value}))}><option value="">No linked Codex entry</option>{worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={eventForm.characterId} onChange={e=>setEventForm(v=>({...v,characterId:e.target.value}))}><option value="">No linked character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input value={eventForm.tags} onChange={e=>setEventForm(v=>({...v,tags:e.target.value}))} placeholder="Tags, comma separated"/><textarea className="full-width" rows={4} value={eventForm.description} onChange={e=>setEventForm(v=>({...v,description:e.target.value}))} placeholder="What happened, why it mattered, and what changed?"/></div><div className="form-management-actions"><button className="primary-action" disabled={explorerBusy||!eventForm.title.trim()} onClick={saveTimelineEvent}>{editingEventId?'Save Event Changes':'Add Event'}</button>{editingEventId&&<button className="secondary-action" onClick={cancelEventEdit}>Cancel Edit</button>}</div></section><div className="timeline-list">{visibleEvents.map(ev=><article className="timeline-event" key={ev.id}><div className="timeline-rail"><span/></div><div className="timeline-copy"><div className="timeline-meta"><span>{ev.era||'Unknown Era'}</span><b>{ev.display_date||`Order ${ev.sort_order}`}</b><button className="favorite-star" onClick={()=>void toggleFavorite('event',ev.id)}>{favoriteKeys.has(`event:${ev.id}`)?'★':'☆'}</button></div><h3>{ev.title}</h3><p>{ev.description||'No event details yet.'}</p><div className="tag-row">{ev.location_id&&<span>{locationById.get(ev.location_id)?.name}</span>}{ev.codex_record_id&&<span>{codexById.get(ev.codex_record_id)?.name}</span>}{ev.character_id&&<span>{charById.get(ev.character_id)?.name}</span>}{(ev.tags||[]).map(t=><span key={t}>{t}</span>)}</div><div className="world-actions"><button className="secondary-action" onClick={()=>editTimelineEvent(ev)}>Edit Event</button><button className="secondary-action archive-action" onClick={()=>void archiveExplorerItem('studio_timeline_events',ev.id)}>Archive</button></div></div></article>)}</div></>}
 {explorerTab==='favorites'&&<div className="favorites-grid">{activeLocations.filter(x=>favoriteKeys.has(`location:${x.id}`)).map(loc=><button key={loc.id} className="favorite-card" onClick={()=>{setSelectedLocationId(loc.id);setExplorerTab('map')}}><span className="world-type">LOCATION</span><h3>{loc.name}</h3><p>{loc.description||loc.location_type}</p></button>)}{activeEvents.filter(x=>favoriteKeys.has(`event:${x.id}`)).map(ev=><button key={ev.id} className="favorite-card" onClick={()=>setExplorerTab('timeline')}><span className="world-type">TIMELINE</span><h3>{ev.title}</h3><p>{ev.display_date||ev.era||'Historical event'}</p></button>)}{!activeLocations.some(x=>favoriteKeys.has(`location:${x.id}`))&&!activeEvents.some(x=>favoriteKeys.has(`event:${x.id}`))&&<div className="studio-footer-card"><strong>No active favorites yet.</strong><p>Use ☆ on locations and timeline events to keep important lore close.</p></div>}</div>}
 {explorerTab==='archive'&&<section className="archive-section"><div className="archive-heading"><div><span className="creator-kicker">RECOVERY VAULT</span><h2>Archived World Lore</h2><p>Restore anything you still need. Permanent deletion is only available here.</p></div></div><div className="archive-grid">{archivedLocations.map(loc=><article className="archive-card" key={loc.id}><span className="world-type">LOCATION • {loc.location_type}</span><h3>{loc.name}</h3><p>{loc.description||'Archived location'}</p><div className="world-actions"><button className="primary-action" onClick={()=>void restoreExplorerItem('studio_world_locations',loc.id)}>Restore</button><button className="secondary-action danger-action" onClick={()=>void permanentlyDeleteExplorerItem('studio_world_locations',loc.id,loc.name)}>Delete Forever</button></div></article>)}{archivedEvents.map(ev=><article className="archive-card" key={ev.id}><span className="world-type">TIMELINE EVENT</span><h3>{ev.title}</h3><p>{ev.display_date||ev.era||'Archived historical event'}</p><div className="world-actions"><button className="primary-action" onClick={()=>void restoreExplorerItem('studio_timeline_events',ev.id)}>Restore</button><button className="secondary-action danger-action" onClick={()=>void permanentlyDeleteExplorerItem('studio_timeline_events',ev.id,ev.title)}>Delete Forever</button></div></article>)}{!archivedLocations.length&&!archivedEvents.length&&<div className="studio-footer-card"><strong>Archive is empty.</strong><p>Archived locations and events will appear here instead of being destroyed immediately.</p></div>}</div></section>}
@@ -2158,7 +2382,7 @@ return <main className="dashboard-shell explorer-page">
 }
 
 if (page === "world") {
-const labels: Record<string,string> = { realm:"Realm / Homeland", race:"Race / Species", faction:"Faction / Clan / House", family:"Family / Bloodline" };
+const labels: Record<string,string> = { realm:"Realm / Kingdom", race:"Race / Species", faction:"Faction", clan:"Clan", house:"House", family:"Family", bloodline:"Bloodline", culture:"Culture / People", organization:"Organization", religion:"Religion / Belief" };
 const filteredWorld = worldRecords.filter((record) => {
   const q = worldSearch.trim().toLowerCase();
   return (worldTypeFilter === "all" || record.record_type === worldTypeFilter)
@@ -2176,14 +2400,14 @@ return (
     <style>{`
       .world-layout{width:min(1240px,calc(100% - 48px));margin:0 auto;padding:52px 0 100px}.world-toolbar{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin:28px 0}.world-toolbar input,.world-toolbar select,.world-form input,.world-form select,.world-form textarea,.codex-editor input,.codex-editor textarea,.codex-editor select{width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.24);background:#110914;color:#e8dfea}.world-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}.world-card{padding:0;overflow:hidden;text-align:left;border:1px solid rgba(185,92,209,.22);border-radius:20px;background:linear-gradient(180deg,rgba(30,13,33,.96),rgba(10,6,14,.98));color:#ddd}.world-card-cover{height:130px;background:radial-gradient(circle,rgba(105,35,119,.3),#09060c);position:relative;overflow:hidden}.world-card-cover img{width:100%;height:100%;object-fit:cover}.world-card-emblem{position:absolute;left:16px;bottom:12px;width:54px;height:54px;border-radius:14px;object-fit:cover;border:1px solid rgba(232,201,111,.45);background:#0d0811}.world-card-body{padding:20px}.world-card h3{font-family:Georgia,serif;color:#f0d481;font-size:25px;margin:8px 0}.world-card p{color:#a991ad;line-height:1.6;min-height:50px}.world-type{color:#b96ac6;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.world-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.world-form{margin:34px 0;padding:24px;border:1px solid rgba(232,201,111,.2);border-radius:22px;background:rgba(18,8,21,.7)}.world-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.world-form textarea{grid-column:1/-1}.codex-hero{position:relative;min-height:360px;border-radius:28px;overflow:hidden;border:1px solid rgba(232,201,111,.25);margin-bottom:26px;background:radial-gradient(circle at 70% 20%,rgba(102,37,112,.4),#0a0710 70%)}.codex-hero-bg{position:absolute;inset:0}.codex-hero-bg img{width:100%;height:100%;object-fit:cover;opacity:.45}.codex-hero-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,5,10,.96),rgba(7,5,10,.5)),linear-gradient(0deg,rgba(7,5,10,.9),transparent 70%)}.codex-hero-content{position:relative;z-index:2;min-height:300px;padding:34px;display:flex;align-items:flex-end;gap:24px}.codex-emblem{width:120px;height:120px;border-radius:22px;border:1px solid rgba(232,201,111,.45);background:#0d0811;display:grid;place-items:center;overflow:hidden;color:#e5bd57;font-size:44px;flex:0 0 auto}.codex-emblem img{width:100%;height:100%;object-fit:cover}.codex-title h2{font-family:Georgia,serif;color:#f0d481;font-size:clamp(38px,6vw,64px);margin:5px 0}.codex-title p{max-width:760px;color:#c0afc2;line-height:1.7}.codex-editor{padding:26px;border:1px solid rgba(185,92,209,.18);border-radius:22px;background:rgba(16,9,20,.8);margin-bottom:26px}.codex-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.codex-editor-grid textarea{grid-column:1/-1}.codex-media-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}.codex-upload{padding:16px;border:1px dashed rgba(185,92,209,.3);border-radius:16px}.codex-upload strong{display:block;color:#e8c96f;margin-bottom:8px}.codex-section{padding:28px 0;border-top:1px solid rgba(185,92,209,.14)}.codex-section h3{font-family:Georgia,serif;color:#edd080;font-size:28px;margin:0 0 16px}.codex-lore-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.codex-lore-card{padding:20px;border:1px solid rgba(185,92,209,.16);border-radius:17px;background:rgba(20,9,23,.55)}.codex-lore-card strong{display:block;color:#b96ac6;font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}.codex-lore-card p{white-space:pre-wrap;color:#c5b5c7;line-height:1.75;margin:0}.world-character-strip,.related-codex-grid{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}.world-character-chip,.related-codex-card{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid rgba(185,92,209,.22);border-radius:14px;background:#0d0811;color:#ddd;cursor:pointer}.world-character-chip img,.related-codex-card img{width:46px;height:46px;border-radius:10px;object-fit:cover}.related-codex-card div{text-align:left}.related-codex-card small{display:block;color:#a978b0;text-transform:uppercase;font-size:9px;letter-spacing:.1em}.relation-builder{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-top:18px}.related-remove{margin-left:6px;color:#d79aa7}.codex-profile-links{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0 4px}.codex-profile-link{padding:7px 11px;border-radius:999px;border:1px solid rgba(232,201,111,.28);background:rgba(22,10,25,.72);color:#e7cc78;cursor:pointer}@media(max-width:700px){.world-layout{width:min(100% - 28px,1240px)}.world-toolbar,.world-form-grid,.codex-editor-grid,.codex-media-row,.codex-lore-grid,.relation-builder{grid-template-columns:1fr}.codex-hero-content{flex-direction:column;align-items:flex-start}.codex-emblem{width:90px;height:90px}}
     `}</style>
-    <header className="studio-header"><div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div><div className="account-area"><button type="button" className="sign-out-button" onClick={returnToDashboard}>← Back to Studio</button></div></header>
+    <StudioTopNav />
     <section className="world-layout">
-      <div className="welcome-section"><p className="eyebrow">THE UMBRAL CODEX</p><h1>World Encyclopedia</h1><p>Build the realms, peoples, factions, and bloodlines that shape your universe.</p></div>
+      <div className="welcome-section"><p className="eyebrow">CONNECTED WORLD WORKSPACE</p><h1>World & Codex</h1><p>Build the peoples, bloodlines, factions, realms, places, artifacts, creatures, magic, history, and lore that shape your universe.</p><div className="v104-world-switcher"><button type="button" onClick={()=>{setSelectedWorldRecord(null);void loadWorldRecords()}}>Codex</button><button type="button" onClick={()=>void openWorldExplorer("locations")}>Places & Map</button><button type="button" onClick={()=>void openWorldExplorer("timeline")}>Timeline</button><button type="button" onClick={()=>void openWorldDatabase("records")}>Artifacts & Lore</button><button type="button" onClick={()=>void openWorldDatabase("canon")}>Canon</button></div></div>
       {worldError && <p className="login-error">{worldError}</p>}
       {selectedWorldRecord && <>
         <div className="codex-hero"><div className="codex-hero-bg">{worldEditCoverUrl && <img src={worldEditCoverUrl} alt="" />}</div><div className="codex-hero-content"><div className="codex-emblem">{worldEditEmblemUrl ? <img src={worldEditEmblemUrl} alt={`${worldEditName} emblem`} /> : "⌘"}</div><div className="codex-title"><span className="world-type">{labels[selectedWorldRecord.record_type]} • {selectedWorldRecord.is_public ? "PUBLISHED" : "PRIVATE"}</span><h2>{worldEditName || selectedWorldRecord.name}</h2>{worldEditSubtype && <strong>{worldEditSubtype}</strong>}<p>{worldEditDescription || "This Codex entry is waiting for its lore."}</p><div className="world-actions"><button type="button" className="secondary-action" onClick={() => { populateWorldEditor(null); setWorldRelated([]); }}>← All Codex Entries</button><button type="button" className="secondary-action" onClick={() => toggleWorldPublication(selectedWorldRecord)}>{selectedWorldRecord.is_public ? "Make Private" : "Publish Codex Entry"}</button></div></div></div></div>
         <div className="codex-editor"><span className="creator-kicker">EDIT CODEX PAGE</span><h3>Identity & Lore</h3><div className="codex-editor-grid"><input value={worldEditName} onChange={(e)=>setWorldEditName(e.target.value)} placeholder="Codex name"/><input value={worldEditSubtype} onChange={(e)=>setWorldEditSubtype(e.target.value)} placeholder="Subtype / title"/><textarea rows={4} value={worldEditDescription} onChange={(e)=>setWorldEditDescription(e.target.value)} placeholder="Overview / summary..."/>{(Object.keys(loreLabels) as (keyof typeof worldEditLore)[]).map((key)=><textarea key={key} rows={4} value={worldEditLore[key]} onChange={(e)=>setWorldEditLore((current)=>({...current,[key]:e.target.value}))} placeholder={`${loreLabels[key]}...`}/>)}</div>
-          <div className="codex-media-row"><div className="codex-upload"><strong>Cover / Banner Image</strong><input type="file" accept="image/*" disabled={uploadingWorldMedia!==null} onChange={(e)=>{const f=e.target.files?.[0];if(f) void uploadWorldImage(f,"cover");e.currentTarget.value="";}}/><small>{uploadingWorldMedia==="cover"?"Uploading...":"Landscape artwork works best."}</small></div><div className="codex-upload"><strong>Emblem / Symbol</strong><input type="file" accept="image/*" disabled={uploadingWorldMedia!==null} onChange={(e)=>{const f=e.target.files?.[0];if(f) void uploadWorldImage(f,"emblem");e.currentTarget.value="";}}/><small>{uploadingWorldMedia==="emblem"?"Uploading...":"Square crests, sigils, or icons work best."}</small></div></div>
+          <div className="codex-media-row"><div className="codex-upload"><strong>Cover / Banner Image</strong><label className="umbra-file-button">{uploadingWorldMedia==="cover"?"Uploading...":"Choose Cover Image"}<input hidden type="file" accept="image/*" disabled={uploadingWorldMedia!==null} onChange={(e)=>{const f=e.target.files?.[0];if(f) void uploadWorldImage(f,"cover");e.currentTarget.value="";}}/></label><small>Landscape artwork works best.</small></div><div className="codex-upload"><strong>Emblem / Symbol</strong><label className="umbra-file-button">{uploadingWorldMedia==="emblem"?"Uploading...":"Choose Emblem Image"}<input hidden type="file" accept="image/*" disabled={uploadingWorldMedia!==null} onChange={(e)=>{const f=e.target.files?.[0];if(f) void uploadWorldImage(f,"emblem");e.currentTarget.value="";}}/></label><small>Square crests, sigils, or icons work best.</small></div></div>
           <button type="button" className="primary-action" disabled={worldDetailBusy} onClick={saveWorldDetails}>{worldDetailBusy?"Saving...":"Save Codex Page"}</button>
         </div>
         <section className="codex-section"><h3>Lore Archive</h3><div className="codex-lore-grid">{(Object.keys(loreLabels) as (keyof typeof worldEditLore)[]).filter((key)=>worldEditLore[key].trim()).map((key)=><div className="codex-lore-card" key={key}><strong>{loreLabels[key]}</strong><p>{worldEditLore[key]}</p></div>)}</div></section>
@@ -2191,7 +2415,7 @@ return (
         <section className="codex-section"><h3>Related Codex Entries</h3><div className="related-codex-grid">{worldRelated.map((link)=>{const target=link.target;if(!target)return null;return <div className="related-codex-card" key={link.id}><button type="button" style={{all:"unset",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>void openWorldOrganization(target)}>{target.emblem_url&&<img src={target.emblem_url} alt=""/>}<div><strong>{target.name}</strong><small>{link.relation_label||labels[target.record_type]}</small></div></button><button type="button" className="related-remove" onClick={()=>void removeWorldRelation(link)}>×</button></div>})}</div><div className="relation-builder"><select value={worldRelatedTargetId} onChange={(e)=>setWorldRelatedTargetId(e.target.value)}><option value="">Choose another Codex entry...</option>{worldRecords.filter((item)=>item.id!==selectedWorldRecord.id).map((item)=><option key={item.id} value={item.id}>{item.name} — {labels[item.record_type]}</option>)}</select><input value={worldRelatedLabel} onChange={(e)=>setWorldRelatedLabel(e.target.value)} placeholder="Relationship label: homeland of, allied with..."/><button type="button" className="secondary-action" disabled={!worldRelatedTargetId||worldDetailBusy} onClick={addWorldRelation}>Connect</button></div></section>
       </>}
       {!selectedWorldRecord && <>
-        <div className="world-form"><span className="creator-kicker">NEW CODEX ENTRY</span><h3>Create World Record</h3><div className="world-form-grid"><select value={worldFormType} onChange={(e)=>setWorldFormType(e.target.value as typeof worldFormType)}><option value="realm">Realm / Homeland</option><option value="race">Race / Species</option><option value="faction">Faction / Clan / House</option><option value="family">Family / Bloodline</option></select><input value={worldFormName} onChange={(e)=>setWorldFormName(e.target.value)} placeholder="Name..."/><input value={worldFormSubtype} onChange={(e)=>setWorldFormSubtype(e.target.value)} placeholder="Subtype / title (optional)..."/><textarea rows={4} value={worldFormDescription} onChange={(e)=>setWorldFormDescription(e.target.value)} placeholder="Describe this part of the Umbral World..."/></div><button type="button" className="primary-action" disabled={worldSaving||!worldFormName.trim()} onClick={createWorldRecord}>{worldSaving?"Creating...":"Create Codex Entry"}</button></div>
+        <div className="world-form"><span className="creator-kicker">NEW CODEX ENTRY</span><h3>Create World Record</h3><div className="world-form-grid"><select value={worldFormType} onChange={(e)=>setWorldFormType(e.target.value as typeof worldFormType)}><option value="realm">Realm / Kingdom</option><option value="race">Race / Species</option><option value="culture">Culture / People</option><option value="faction">Faction</option><option value="clan">Clan</option><option value="house">House</option><option value="family">Family</option><option value="bloodline">Bloodline</option><option value="organization">Organization</option><option value="religion">Religion / Belief</option></select><input value={worldFormName} onChange={(e)=>setWorldFormName(e.target.value)} placeholder="Name..."/><input value={worldFormSubtype} onChange={(e)=>setWorldFormSubtype(e.target.value)} placeholder="Subtype / title (optional)..."/><textarea rows={4} value={worldFormDescription} onChange={(e)=>setWorldFormDescription(e.target.value)} placeholder="Describe this part of the Umbral World..."/></div><button type="button" className="primary-action" disabled={worldSaving||!worldFormName.trim()} onClick={createWorldRecord}>{worldSaving?"Creating...":"Create Codex Entry"}</button></div>
         <div className="world-toolbar"><input type="search" value={worldSearch} onChange={(e)=>setWorldSearch(e.target.value)} placeholder="Search the Codex..."/><select value={worldTypeFilter} onChange={(e)=>setWorldTypeFilter(e.target.value as typeof worldTypeFilter)}><option value="all">All types</option><option value="realm">Realms / Homelands</option><option value="race">Races / Species</option><option value="faction">Factions / Clans / Houses</option><option value="family">Families / Bloodlines</option></select></div>
         {loadingWorld?<div className="studio-footer-card"><strong>Opening the Codex...</strong></div>:<div className="world-grid">{filteredWorld.map((record)=><article className="world-card" key={record.id}><div className="world-card-cover">{record.cover_url&&<img src={record.cover_url} alt=""/>}{record.emblem_url&&<img className="world-card-emblem" src={record.emblem_url} alt=""/>}</div><div className="world-card-body"><span className="world-type">{labels[record.record_type]}</span><h3>{record.name}</h3>{record.subtype&&<strong>{record.subtype}</strong>}<p>{record.description||"Ready for worldbuilding details."}</p><div className="world-actions"><button type="button" className="primary-action" onClick={()=>void openWorldOrganization(record)}>Open Codex Page</button><button type="button" className="secondary-action" onClick={()=>toggleWorldPublication(record)}>{record.is_public?"Published":"Private"}</button><button type="button" className="secondary-action danger-action" onClick={()=>deleteWorldRecord(record)}>Delete</button></div></div></article>)}</div>}
       </>}
@@ -2319,7 +2543,7 @@ const ProfileSection = ({ title, symbol, items }: { title:string; symbol:string;
   <section className="profile-section">
     <div className="profile-section-title"><span>{symbol}</span><h2>{title}</h2></div>
     <div className="profile-detail-grid">
-      {items.map((item) => <div className="profile-detail" key={`${title}-${item.label}`}><span>{item.label}</span><p>{item.value}</p></div>)}
+      {items.map((item) => <div className="profile-detail" key={`${title}-${item.label}`}><span>{item.label}</span><div className="profile-rich-text">{String(item.value).split(/\n{2,}/).map((paragraph,index)=><p key={index}>{paragraph}</p>)}</div></div>)}
     </div>
   </section>
 ) : null;
@@ -2328,12 +2552,12 @@ return (
   <main className="dashboard-shell profile-page">
     <style>{`
       .profile-page{min-height:100vh;background:radial-gradient(circle at 50% 0%,rgba(80,26,89,.16),transparent 34%),#07050a;color:#eee;}
-      .profile-hero{position:relative;min-height:520px;display:flex;align-items:flex-end;overflow:hidden;border-bottom:1px solid rgba(185,92,209,.18);}
+      .profile-hero{position:relative;min-height:390px;display:flex;align-items:flex-end;overflow:hidden;border-bottom:1px solid rgba(185,92,209,.18);}
       .profile-hero-bg{position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,rgba(126,44,139,.32),transparent 34%),linear-gradient(110deg,#08050b 15%,#18091b 55%,#07050a);}
       .profile-hero-bg img{width:100%;height:100%;object-fit:cover;opacity:.28;filter:blur(3px);transform:scale(1.04);}
       .profile-hero-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,5,10,.96) 12%,rgba(7,5,10,.68) 52%,rgba(7,5,10,.9)),linear-gradient(0deg,#07050a 0%,transparent 55%);}
-      .profile-hero-content{position:relative;z-index:2;width:min(1180px,calc(100% - 48px));margin:0 auto;padding:72px 0 54px;display:grid;grid-template-columns:280px 1fr;gap:44px;align-items:end;}
-      .profile-portrait{height:360px;border-radius:26px;overflow:hidden;border:1px solid rgba(232,201,111,.3);background:radial-gradient(circle,rgba(105,35,119,.35),#0b0710 70%);box-shadow:0 30px 80px rgba(0,0,0,.45);display:grid;place-items:center;font-size:88px;color:#e5bd57;}
+      .profile-hero-content{position:relative;z-index:2;width:min(1180px,calc(100% - 48px));margin:0 auto;padding:48px 0 38px;display:grid;grid-template-columns:190px 1fr;gap:30px;align-items:center;}
+      .profile-portrait{height:240px;border-radius:26px;overflow:hidden;border:1px solid rgba(232,201,111,.3);background:radial-gradient(circle,rgba(105,35,119,.35),#0b0710 70%);box-shadow:0 30px 80px rgba(0,0,0,.45);display:grid;place-items:center;font-size:88px;color:#e5bd57;}
       .profile-portrait img{width:100%;height:100%;object-fit:cover;}
       .profile-copy .creator-kicker{display:block;margin-bottom:10px}.profile-copy h1{margin:0;font-family:Georgia,serif;font-size:clamp(46px,7vw,82px);line-height:.98;color:#f0d481;}
       .profile-alias{display:block;margin:14px 0;color:#d7bddb;font-size:20px}.profile-summary{max-width:760px;color:#bca9bf;font-size:17px;line-height:1.8;white-space:pre-wrap;}
@@ -2410,6 +2634,29 @@ const navItems = [
   "Relationships",
   "Media",
 ];
+
+const RepeatableList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
+  const items = value.split(/\n+/).map((item)=>item.trim()).filter(Boolean);
+  const [draft, setDraft] = useState("");
+  const saveItems = (next:string[]) => updateCharacter(field, next.join("\n") as never);
+  return <div className="creator-field full-width repeatable-field">
+    <span>{label}</span>
+    <div className="repeatable-add-row"><input value={draft} onChange={(e)=>setDraft(e.target.value)} placeholder={placeholder} onKeyDown={(e)=>{if(e.key==="Enter"){e.preventDefault();const next=draft.trim();if(next){saveItems([...items,next]);setDraft("");}}}}/><button type="button" className="secondary-action" onClick={()=>{const next=draft.trim();if(next){saveItems([...items,next]);setDraft("");}}}>+ Add</button></div>
+    {items.length>0 ? <div className="repeatable-chip-list">{items.map((item,index)=><div className="repeatable-chip" key={`${label}-${index}-${item}`}><span>{item}</span><button type="button" aria-label={`Remove ${item}`} onClick={()=>saveItems(items.filter((_,i)=>i!==index))}>×</button></div>)}</div> : <small className="repeatable-empty">Nothing added yet.</small>}
+  </div>;
+};
+
+const RepeatableColorList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
+  const items=value.split(/\n+/).map(item=>item.trim()).filter(Boolean);
+  const [name,setName]=useState(""); const [hex,setHex]=useState("");
+  const save=(next:string[])=>updateCharacter(field,next.join("\n") as never);
+  const add=()=>{const n=name.trim(),h=hex.trim();if(!n&&!h)return;save([...items,[n,h].filter(Boolean).join(" — ")]);setName("");setHex("");};
+  return <div className="creator-field full-width repeatable-field color-entry-field">
+    <span>{label}</span>
+    <div className="repeatable-color-row"><input value={name} onChange={e=>setName(e.target.value)} placeholder={placeholder}/><input value={hex} onChange={e=>setHex(e.target.value)} placeholder="#HEX" onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();}}}/><button type="button" className="secondary-action" onClick={add}>+ Add</button></div>
+    {items.length>0?<div className="repeatable-chip-list">{items.map((item,index)=>{const color=item.match(/#[0-9A-Fa-f]{6}/)?.[0];return <div className="repeatable-chip color-chip" key={`${label}-${index}-${item}`}>{color&&<i style={{background:color}}/>}<span>{item}</span><button type="button" aria-label={`Remove ${item}`} onClick={()=>save(items.filter((_,i)=>i!==index))}>×</button></div>})}</div>:<small className="repeatable-empty">Nothing added yet.</small>}
+  </div>;
+};
 
 const renderIdentityStep = () => (
   <section className="creator-form-card">
@@ -2539,45 +2786,13 @@ const renderAppearanceStep = () => (
     </div>
 
     <div className="creator-form-grid">
-      <label className="creator-field">
-        <span>Skin Tone / Complexion</span>
-        <input
-          type="text"
-          placeholder="Deep mahogany, light caramel..."
-          value={character.skinTone}
-          onChange={(e) => updateCharacter("skinTone", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Skin Tone / Complexion" value={character.skinTone} field="skinTone" placeholder="Add skin tone, undertone, complexion note..." />
 
-      <label className="creator-field">
-        <span>Eye Color</span>
-        <input
-          type="text"
-          placeholder="Galaxy pink, icy blue..."
-          value={character.eyeColor}
-          onChange={(e) => updateCharacter("eyeColor", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Eye Color" value={character.eyeColor} field="eyeColor" placeholder="Add eye color, e.g. Left — Amber Brown" />
 
-      <label className="creator-field">
-        <span>Hair Color</span>
-        <input
-          type="text"
-          placeholder="Black, silver, crimson..."
-          value={character.hairColor}
-          onChange={(e) => updateCharacter("hairColor", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Hair Color" value={character.hairColor} field="hairColor" placeholder="Add hair color, streak, gradient, or tip color..." />
 
-      <label className="creator-field">
-        <span>Hair Texture</span>
-        <input
-          type="text"
-          placeholder="4C coils, locs, straight..."
-          value={character.hairTexture}
-          onChange={(e) => updateCharacter("hairTexture", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Hair Texture" value={character.hairTexture} field="hairTexture" placeholder="Add texture, e.g. 4C coils" />
 
       <label className="creator-field">
         <span>Hair Style</span>
@@ -2589,38 +2804,14 @@ const renderAppearanceStep = () => (
         />
       </label>
 
-      <label className="creator-field">
-        <span>Height</span>
-        <input
-          type="text"
-          placeholder={'5′8″, 7′0″...'}
-          value={character.height}
-          onChange={(e) => updateCharacter("height", e.target.value)}
-        />
-      </label>
+      <label className="creator-field"><span>Height</span><input type="text" placeholder={'5′8″, 7′0″...'} value={character.height} onChange={(e)=>updateCharacter("height",e.target.value)}/></label>
 
       <label className="creator-field"><span>Weight</span><input type="text" placeholder="Exact, approximate, or TBD..." value={character.weight} onChange={(e)=>updateCharacter("weight",e.target.value)}/></label>
       <label className="creator-field"><span>Dominant Hand</span><input type="text" placeholder="Right, left, ambidextrous, TBD..." value={character.dominantHand} onChange={(e)=>updateCharacter("dominantHand",e.target.value)}/></label>
 
-      <label className="creator-field full-width">
-        <span>Body Type / Build</span>
-        <input
-          type="text"
-          placeholder="Lithe, athletic, muscular, broad, petite..."
-          value={character.build}
-          onChange={(e) => updateCharacter("build", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Body Type / Build" value={character.build} field="build" placeholder="Add build trait, e.g. Athletic" />
 
-      <label className="creator-field full-width">
-        <span>Distinguishing Features</span>
-        <textarea
-          rows={4}
-          placeholder="Scars, markings, horns, pointed ears, glowing runes, unusual eyes..."
-          value={character.distinguishingFeatures}
-          onChange={(e) => updateCharacter("distinguishingFeatures", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Distinguishing Features" value={character.distinguishingFeatures} field="distinguishingFeatures" placeholder="Add scar, marking, horn, ear, rune, unusual feature..." />
 
       <label className="creator-field">
         <span>Clothing / Fashion Style</span>
@@ -2632,39 +2823,23 @@ const renderAppearanceStep = () => (
         />
       </label>
 
-      <label className="creator-field">
-        <span>Accessories</span>
-        <textarea
-          rows={4}
-          placeholder="Jewelry, glasses, beads, crowns, belts, charms..."
-          value={character.accessories}
-          onChange={(e) => updateCharacter("accessories", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Accessories" value={character.accessories} field="accessories" placeholder="Add jewelry, glasses, beads, crowns, charms..." />
 
-      <label className="creator-field full-width">
-        <span>Alternate / True Form</span>
-        <textarea
-          rows={4}
-          placeholder="Dragon form, fairy form, werebeast form, transformation..."
-          value={character.alternateForm}
-          onChange={(e) => updateCharacter("alternateForm", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Alternate / True Form" value={character.alternateForm} field="alternateForm" placeholder="Add alternate form, e.g. Dragon Form" />
 
-      <label className="creator-field"><span>Skin HEX / Color Reference</span><input type="text" placeholder="#6B382B + undertone/highlight notes..." value={character.skinHex} onChange={(e)=>updateCharacter("skinHex",e.target.value)}/>{character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.skinHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
-      <label className="creator-field"><span>Eye HEX / Color Reference</span><input type="text" placeholder="#1769C2 + inner/outer ring..." value={character.eyeHex} onChange={(e)=>updateCharacter("eyeHex",e.target.value)}/>{character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.eyeHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
-      <label className="creator-field"><span>Hair HEX / Color Reference</span><input type="text" placeholder="#111111 + highlights/tips..." value={character.hairHex} onChange={(e)=>updateCharacter("hairHex",e.target.value)}/>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0] && <div className="master-color-preview"><i style={{background:character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}}/><small>{character.hairHex.match(/#[0-9A-Fa-f]{6}/)?.[0]}</small></div>}</label>
-      <label className="creator-field"><span>Posture / Movement</span><textarea rows={3} placeholder="How they stand, walk, move, dominant hand..." value={character.postureMovement} onChange={(e)=>updateCharacter("postureMovement",e.target.value)}/></label>
-      <label className="creator-field full-width"><span>Face Details</span><textarea rows={4} placeholder="Face shape, jawline, cheekbones, nose, lips, brows, eye shape, scars, markings..." value={character.faceDetails} onChange={(e)=>updateCharacter("faceDetails",e.target.value)}/></label>
-      <label className="creator-field"><span>Makeup / Face Paint</span><textarea rows={4} placeholder="Eyeshadow, liner, lips, nails, ceremonial or magical markings and colors..." value={character.makeup} onChange={(e)=>updateCharacter("makeup",e.target.value)}/></label>
+      <RepeatableColorList label="Skin HEX / Color Reference" value={character.skinHex} field="skinHex" placeholder="Add skin color, undertone, highlight..." />
+      <RepeatableColorList label="Eye HEX / Color Reference" value={character.eyeHex} field="eyeHex" placeholder="Add eye color, ring, glow, pupil detail..." />
+      <RepeatableColorList label="Hair HEX / Color Reference" value={character.hairHex} field="hairHex" placeholder="Add hair color, highlight, tip, streak..." />
+      <RepeatableList label="Posture / Movement" value={character.postureMovement} field="postureMovement" placeholder="Add posture, movement, gait, stance detail..." />
+      <RepeatableList label="Face Details" value={character.faceDetails} field="faceDetails" placeholder="Add face detail, e.g. High cheekbones" />
+      <RepeatableColorList label="Makeup / Face Paint" value={character.makeup} field="makeup" placeholder="Add makeup or face paint, e.g. Eyeshadow" />
       <label className="creator-field"><span>Grooming</span><textarea rows={4} placeholder="Facial hair, brows, ceremonial grooming..." value={character.grooming} onChange={(e)=>updateCharacter("grooming",e.target.value)}/></label>
-      <label className="creator-field"><span>Nails</span><textarea rows={4} placeholder="Shape, length, colors, gradient, gems, magical or metal accents..." value={character.nails} onChange={(e)=>updateCharacter("nails",e.target.value)}/></label>
-      <label className="creator-field full-width"><span>Official Character Color Palette</span><textarea rows={5} placeholder={"Primary — #HEX\nSecondary — #HEX\nAccent — #HEX\nMagic — #HEX\nMetal — #HEX"} value={character.colorPalette} onChange={(e)=>updateCharacter("colorPalette",e.target.value)}/></label>
+      <RepeatableColorList label="Nails" value={character.nails} field="nails" placeholder="Add nail color/style, e.g. Gold Accent" />
+      <RepeatableList label="Official Character Color Palette" value={character.colorPalette} field="colorPalette" placeholder="Add color, e.g. Steam Pink — #FF8FCB" />
       <label className="creator-field full-width"><span>Signature / Default Outfit</span><textarea rows={6} placeholder="Head, upper body, lower body, footwear, accessories, weapons carried, construction..." value={character.signatureOutfit} onChange={(e)=>updateCharacter("signatureOutfit",e.target.value)}/></label>
-      <label className="creator-field"><span>Outfit Color Breakdown</span><textarea rows={6} placeholder={"Outer robe — Smoky Black #17131A\nTrim — Gold #D9B65D..."} value={character.outfitColors} onChange={(e)=>updateCharacter("outfitColors",e.target.value)}/></label>
-      <label className="creator-field"><span>Outfit Materials / Construction</span><textarea rows={6} placeholder="Linen, silk, wool, leather, metal, enchanted fabric; layered, wrapped, buckled..." value={character.outfitMaterials} onChange={(e)=>updateCharacter("outfitMaterials",e.target.value)}/></label>
-      <label className="creator-field full-width"><span>Wardrobe / Alternate Outfits</span><textarea rows={7} placeholder={"Outfit 02 — Casual\nOutfit 03 — Combat\nOutfit 04 — Formal / Ceremonial\nOutfit 05 — Travel..."} value={character.wardrobe} onChange={(e)=>updateCharacter("wardrobe",e.target.value)}/></label>
+      <RepeatableList label="Outfit Color Breakdown" value={character.outfitColors} field="outfitColors" placeholder="Add garment/color, e.g. Trim — Gold #D9B65D" />
+      <RepeatableList label="Outfit Materials / Construction" value={character.outfitMaterials} field="outfitMaterials" placeholder="Add material or construction detail..." />
+      <RepeatableList label="Wardrobe / Alternate Outfits" value={character.wardrobe} field="wardrobe" placeholder="Add outfit, e.g. Outfit 02 — Casual" />
 
       <label className="creator-field full-width">
         <span>Additional Appearance Notes</span>
@@ -2727,15 +2902,7 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
-      <label className="creator-field full-width">
-        <span>Culture / Heritage</span>
-        <textarea
-          rows={4}
-          placeholder="Traditions, people, language, customs, beliefs, heritage..."
-          value={character.culture}
-          onChange={(e) => updateCharacter("culture", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Culture / Heritage" value={character.culture} field="culture" placeholder="Add culture, heritage, language, tradition..." />
 
       <label className="creator-field">
         <span>Childhood / Early Life</span>
@@ -2747,15 +2914,7 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
-      <label className="creator-field">
-        <span>Major Life Events</span>
-        <textarea
-          rows={5}
-          placeholder="Wars, losses, discoveries, betrayals, awakenings, turning points..."
-          value={character.majorLifeEvents}
-          onChange={(e) => updateCharacter("majorLifeEvents", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Major Life Events" value={character.majorLifeEvents} field="majorLifeEvents" placeholder="Add a major life event..." />
 
       <label className="creator-field full-width">
         <span>Full Backstory</span>
@@ -2767,60 +2926,20 @@ const renderOriginLoreStep = () => (
         />
       </label>
 
-      <label className="creator-field full-width">
-        <span>Personality</span>
-        <textarea
-          rows={4}
-          placeholder="Temperament, habits, humor, emotional traits, strengths, flaws..."
-          value={character.personality}
-          onChange={(e) => updateCharacter("personality", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Personality" value={character.personality} field="personality" placeholder="Add personality trait..." />
 
-      <label className="creator-field">
-        <span>Motivations</span>
-        <textarea
-          rows={4}
-          placeholder="What drives them? What keeps them moving forward?"
-          value={character.motivations}
-          onChange={(e) => updateCharacter("motivations", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Motivations" value={character.motivations} field="motivations" placeholder="Add a motivation..." />
 
-      <label className="creator-field">
-        <span>Goals / Ambitions</span>
-        <textarea
-          rows={4}
-          placeholder="What are they trying to accomplish?"
-          value={character.goals}
-          onChange={(e) => updateCharacter("goals", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Goals / Ambitions" value={character.goals} field="goals" placeholder="Add a goal or ambition..." />
 
-      <label className="creator-field">
-        <span>Fears / Inner Conflicts</span>
-        <textarea
-          rows={4}
-          placeholder="Fears, regrets, insecurities, internal struggles..."
-          value={character.fears}
-          onChange={(e) => updateCharacter("fears", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Fears / Inner Conflicts" value={character.fears} field="fears" placeholder="Add a fear or inner conflict..." />
 
-      <label className="creator-field">
-        <span>Beliefs / Worldview</span>
-        <textarea
-          rows={4}
-          placeholder="Values, philosophy, faith, loyalties, view of the world..."
-          value={character.beliefs}
-          onChange={(e) => updateCharacter("beliefs", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Beliefs / Worldview" value={character.beliefs} field="beliefs" placeholder="Add a belief, value, loyalty..." />
 
-      <label className="creator-field"><span>Voice / Speech</span><textarea rows={5} placeholder="Voice type, pitch, accent, dialect, languages, vocabulary, verbal habits, battle voice..." value={character.voiceSpeech} onChange={(e)=>updateCharacter("voiceSpeech",e.target.value)}/></label>
-      <label className="creator-field"><span>Psychology / Inner Character</span><textarea rows={5} placeholder="Core desire, emotional wound, fatal flaw, moral boundary, breaking point, secrets, internal conflict..." value={character.psychology} onChange={(e)=>updateCharacter("psychology",e.target.value)}/></label>
-      <label className="creator-field"><span>Lifestyle / Everyday Life</span><textarea rows={5} placeholder="Home, routine, food, hobbies, music, transportation, pets, sleep, possessions..." value={character.lifestyle} onChange={(e)=>updateCharacter("lifestyle",e.target.value)}/></label>
-      <label className="creator-field"><span>Likes / Dislikes / Preferences</span><textarea rows={5} placeholder="Favorites, dislikes, comforts, pet peeves, interests, obsessions, guilty pleasures..." value={character.likesDislikes} onChange={(e)=>updateCharacter("likesDislikes",e.target.value)}/></label>
+      <RepeatableList label="Voice / Speech" value={character.voiceSpeech} field="voiceSpeech" placeholder="Add voice, accent, language, speech trait..." />
+      <RepeatableList label="Psychology / Inner Character" value={character.psychology} field="psychology" placeholder="Add desire, wound, flaw, boundary, secret..." />
+      <RepeatableList label="Lifestyle / Everyday Life" value={character.lifestyle} field="lifestyle" placeholder="Add routine, hobby, home, food, pet, possession..." />
+      <RepeatableList label="Likes / Dislikes / Preferences" value={character.likesDislikes} field="likesDislikes" placeholder="Add a like, dislike, favorite, preference..." />
 
       <label className="creator-field full-width">
         <span>Current Story Role</span>
@@ -2856,111 +2975,31 @@ const renderAbilitiesStep = () => (
     </div>
 
     <div className="creator-form-grid">
-      <label className="creator-field">
-        <span>Power Source / Magic Type</span>
-        <input
-          type="text"
-          placeholder="Umbral Genesis, fire, runes, spiritual energy..."
-          value={character.powerSource}
-          onChange={(e) => updateCharacter("powerSource", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Power Source / Magic Type" value={character.powerSource} field="powerSource" placeholder="Add a power source or magic type..." />
 
-      <label className="creator-field">
-        <span>Combat Style</span>
-        <input
-          type="text"
-          placeholder="Martial arts, swordsmanship, ranged, magical..."
-          value={character.combatStyle}
-          onChange={(e) => updateCharacter("combatStyle", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Combat Style" value={character.combatStyle} field="combatStyle" placeholder="Add a combat style..." />
 
-      <label className="creator-field full-width">
-        <span>Primary Abilities</span>
-        <textarea
-          rows={5}
-          placeholder="Describe their core powers and what each one can do..."
-          value={character.primaryAbilities}
-          onChange={(e) => updateCharacter("primaryAbilities", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Primary Abilities / Powers" value={character.primaryAbilities} field="primaryAbilities" placeholder="Add a power, e.g. Steam Manipulation" />
 
-      <label className="creator-field full-width">
-        <span>Secondary Abilities</span>
-        <textarea
-          rows={4}
-          placeholder="Supporting powers, passive abilities, senses, resistances..."
-          value={character.secondaryAbilities}
-          onChange={(e) => updateCharacter("secondaryAbilities", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Secondary Abilities" value={character.secondaryAbilities} field="secondaryAbilities" placeholder="Add a passive, resistance, sense..." />
 
-      <label className="creator-field">
-        <span>Signature Techniques</span>
-        <textarea
-          rows={5}
-          placeholder="Named attacks, special moves, ultimate techniques..."
-          value={character.signatureTechniques}
-          onChange={(e) => updateCharacter("signatureTechniques", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Signature Techniques" value={character.signatureTechniques} field="signatureTechniques" placeholder="Add a named technique..." />
 
-      <label className="creator-field">
-        <span>Weapons / Equipment</span>
-        <textarea
-          rows={5}
-          placeholder="Swords, staffs, artifacts, armor, enchanted items..."
-          value={character.weapons}
-          onChange={(e) => updateCharacter("weapons", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Weapons / Equipment" value={character.weapons} field="weapons" placeholder="Add a weapon, artifact, armor..." />
 
       <label className="creator-field full-width"><span>Combat Profile</span><textarea rows={6} placeholder="Preferred range, unarmed style, defense, speed, strength, endurance, agility, tactical behavior, battlefield role, preferred tactics..." value={character.combatProfile} onChange={(e)=>updateCharacter("combatProfile",e.target.value)}/></label>
 
       <label className="creator-field full-width"><span>Weapon / Equipment Details</span><textarea rows={5} placeholder="Names, creators, materials, colors, dimensions, abilities, history, where carried..." value={character.weaponDetails} onChange={(e)=>updateCharacter("weaponDetails",e.target.value)}/></label>
 
-      <label className="creator-field full-width">
-        <span>Transformations / Power States</span>
-        <textarea
-          rows={5}
-          placeholder="Dragon forms, awakened states, transformations, modes..."
-          value={character.transformations}
-          onChange={(e) => updateCharacter("transformations", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Transformations / Power States" value={character.transformations} field="transformations" placeholder="Add a transformation or power state..." />
 
       <label className="creator-field full-width"><span>Transformation Details</span><textarea rows={6} placeholder="Trigger, sequence, size, anatomy, palette, aura, abilities gained/lost, mental/voice/clothing changes, limits..." value={character.transformationDetails} onChange={(e)=>updateCharacter("transformationDetails",e.target.value)}/></label>
 
-      <label className="creator-field">
-        <span>Strengths</span>
-        <textarea
-          rows={4}
-          placeholder="What are they especially powerful or skilled at?"
-          value={character.strengths}
-          onChange={(e) => updateCharacter("strengths", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Strengths" value={character.strengths} field="strengths" placeholder="Add a strength..." />
 
-      <label className="creator-field">
-        <span>Weaknesses</span>
-        <textarea
-          rows={4}
-          placeholder="Physical, magical, emotional, tactical weaknesses..."
-          value={character.weaknesses}
-          onChange={(e) => updateCharacter("weaknesses", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Weaknesses" value={character.weaknesses} field="weaknesses" placeholder="Add a weakness..." />
 
-      <label className="creator-field full-width">
-        <span>Limits / Costs / Conditions</span>
-        <textarea
-          rows={4}
-          placeholder="Cooldowns, energy costs, conditions, consequences, restrictions..."
-          value={character.limitations}
-          onChange={(e) => updateCharacter("limitations", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Limits / Costs / Conditions" value={character.limitations} field="limitations" placeholder="Add a limit, cost, or condition..." />
 
       <label className="creator-field full-width">
         <span>Additional Ability Notes</span>
@@ -3021,85 +3060,21 @@ const renderRelationshipsStep = () => (
 
     <div className="creator-form-grid">
       <h4 className="written-relations-title">Written Relationship Details</h4>
-      <label className="creator-field">
-        <span>Parents / Guardians</span>
-        <textarea
-          rows={4}
-          placeholder="Names, relationships, status, important history..."
-          value={character.parents}
-          onChange={(e) => updateCharacter("parents", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Parents / Guardians" value={character.parents} field="parents" placeholder="Add a parent or guardian..." />
 
-      <label className="creator-field">
-        <span>Siblings</span>
-        <textarea
-          rows={4}
-          placeholder="Brothers, sisters, half-siblings, adopted siblings..."
-          value={character.siblings}
-          onChange={(e) => updateCharacter("siblings", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Siblings" value={character.siblings} field="siblings" placeholder="Add a sibling..." />
 
-      <label className="creator-field">
-        <span>Children / Descendants</span>
-        <textarea
-          rows={4}
-          placeholder="Children, heirs, descendants..."
-          value={character.children}
-          onChange={(e) => updateCharacter("children", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Children / Descendants" value={character.children} field="children" placeholder="Add a child or descendant..." />
 
-      <label className="creator-field">
-        <span>Partner / Love Interest</span>
-        <textarea
-          rows={4}
-          placeholder="Spouse, partner, romance, former relationship..."
-          value={character.partner}
-          onChange={(e) => updateCharacter("partner", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Partner / Love Interest" value={character.partner} field="partner" placeholder="Add a partner or love interest..." />
 
-      <label className="creator-field">
-        <span>Friends / Allies</span>
-        <textarea
-          rows={5}
-          placeholder="Closest friends, crew members, trusted allies..."
-          value={character.allies}
-          onChange={(e) => updateCharacter("allies", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Friends / Allies" value={character.allies} field="allies" placeholder="Add a friend or ally..." />
 
-      <label className="creator-field">
-        <span>Rivals</span>
-        <textarea
-          rows={5}
-          placeholder="Competitive relationships, recurring challengers..."
-          value={character.rivals}
-          onChange={(e) => updateCharacter("rivals", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Rivals" value={character.rivals} field="rivals" placeholder="Add a rival..." />
 
-      <label className="creator-field">
-        <span>Enemies</span>
-        <textarea
-          rows={5}
-          placeholder="Major enemies, antagonists, hostile factions..."
-          value={character.enemies}
-          onChange={(e) => updateCharacter("enemies", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Enemies" value={character.enemies} field="enemies" placeholder="Add an enemy..." />
 
-      <label className="creator-field">
-        <span>Mentors / Students</span>
-        <textarea
-          rows={5}
-          placeholder="Teachers, masters, apprentices, protégés..."
-          value={character.mentors}
-          onChange={(e) => updateCharacter("mentors", e.target.value)}
-        />
-      </label>
+      <RepeatableList label="Mentors / Students" value={character.mentors} field="mentors" placeholder="Add a mentor or student..." />
 
       <label className="creator-field full-width"><span>World Connections</span><textarea rows={6} placeholder="Realm → region → homeland → birthplace; race/subrace; faction/clan/house; bloodline; religion; organizations; historical events; important locations..." value={character.worldConnections} onChange={(e)=>updateCharacter("worldConnections",e.target.value)}/></label>
 
@@ -3129,16 +3104,18 @@ const renderMediaStep = () => (
   <section className="creator-form-card">
     <style>{`
       .master-color-preview{display:flex;align-items:center;gap:9px;margin-top:8px;color:#bbaabd}.master-color-preview i{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(0,0,0,.22)}.master-color-preview small{font-family:monospace;font-size:12px}
-      .media-upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px}
-      .media-upload-card{border:1px solid rgba(185,92,209,.2);border-radius:16px;padding:16px;background:rgba(18,8,21,.55)}
-      .media-upload-card strong{display:block;color:#e8c96f;margin-bottom:10px}
-      .media-upload-card input[type=file]{width:100%;color:#bbaabd}
+      .repeatable-add-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.repeatable-add-row .secondary-action{min-width:92px}.repeatable-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.repeatable-chip{display:flex;align-items:center;gap:8px;max-width:100%;padding:8px 10px;border:1px solid rgba(185,92,209,.25);border-radius:999px;background:rgba(31,13,35,.72);color:#dfcfe1}.repeatable-chip span{overflow-wrap:anywhere}.repeatable-chip button{border:0;background:transparent;color:#d99be4;font-size:18px;cursor:pointer}.repeatable-empty{color:#806f83;margin-top:8px}
+      .media-upload-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0;width:100%;min-width:0}
+      .media-upload-card{min-width:0;overflow:hidden;border:1px solid rgba(185,92,209,.2);border-radius:16px;padding:16px;box-sizing:border-box;background:rgba(18,8,21,.55);display:flex;flex-direction:column;align-items:stretch}
+      .media-upload-card strong{display:block;min-height:38px;color:#e8c96f;margin-bottom:10px;line-height:1.35}
+      .media-upload-card input[type=file]{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;color:#bbaabd;font-size:12px;overflow:hidden}
+      .media-upload-card input[type=file]::file-selector-button{max-width:100%;margin:0 8px 8px 0;padding:8px 10px;border:1px solid rgba(232,201,111,.3);border-radius:9px;background:#170d1b;color:#ead080;cursor:pointer}
       .media-thumb{width:100%;height:190px;object-fit:cover;border-radius:12px;margin-bottom:12px;background:#09060c}
       .media-gallery-editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
       .media-gallery-item{position:relative}.media-gallery-item img{width:100%;height:180px;object-fit:cover;border-radius:12px}
       .media-gallery-item button{position:absolute;right:8px;top:8px;border:0;border-radius:999px;background:rgba(8,5,12,.88);color:#fff;width:30px;height:30px;cursor:pointer}
       .upload-help{color:#9f8ba2;font-size:12px;line-height:1.6;margin-top:8px}
-      @media(max-width:800px){.media-upload-grid{grid-template-columns:1fr}}
+      @media(max-width:1050px){.media-upload-grid{grid-template-columns:1fr}.media-thumb{height:min(320px,42vw)}}
     `}</style>
     <div className="form-section-heading">
       <span className="form-section-icon">✦</span>
@@ -3159,11 +3136,11 @@ const renderMediaStep = () => (
         <div className="media-upload-card" key={item.kind}>
           <strong>{item.label}</strong>
           {item.url && <img className="media-thumb" src={item.url} alt={item.label} />}
-          <input type="file" accept="image/*" disabled={uploadingMedia !== null} onChange={(e) => {
+          <label className="umbra-file-button">{uploadingMedia === item.kind ? "Uploading..." : item.url ? "Replace Image" : "Choose Image"}<input hidden type="file" accept="image/*" disabled={uploadingMedia !== null} onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void uploadCharacterImage(file, item.kind);
             e.currentTarget.value = "";
-          }} />
+          }} /></label>
           <p className="upload-help">{uploadingMedia === item.kind ? "Uploading..." : "PNG, JPG, WEBP or GIF • max 10 MB"}</p>
         </div>
       ))}
@@ -3185,11 +3162,11 @@ const renderMediaStep = () => (
 
       <div className="creator-field full-width">
         <span>Gallery Images</span>
-        <input type="file" accept="image/*" multiple disabled={uploadingMedia !== null} onChange={async (e) => {
+        <label className="umbra-file-button">+ Add Multiple Images<input hidden type="file" accept="image/*" multiple disabled={uploadingMedia !== null} onChange={async (e) => {
           const files = Array.from(e.target.files ?? []);
           for (const file of files) await uploadCharacterImage(file, "gallery");
           e.currentTarget.value = "";
-        }} />
+        }} /></label>
         <p className="upload-help">Choose multiple images. They will appear on the finished character profile.</p>
         {character.galleryUrls.length > 0 && <div className="media-gallery-editor">{character.galleryUrls.map((url, index) => <div className="media-gallery-item" key={url}><img src={url} alt={`Gallery ${index + 1}`} /><button type="button" title="Remove from profile" onClick={() => removeGalleryImage(url)}>×</button></div>)}</div>}
       </div>
@@ -3266,7 +3243,7 @@ return (
         </span>
       </button>
 
-      <div className="creator-topbar-actions">
+      <div className="creator-topbar-actions"><button type="button" className="back-button" onClick={()=>void openMessages()}>Messages</button><button type="button" className="back-button" onClick={()=>void openAdminCenter()}>Admin</button><button type="button" className="back-button" onClick={()=>void openStudioSettings()}>Settings</button>
         <span className="draft-status">
           {character.name.trim() || "New Character"}
         </span>
@@ -3396,7 +3373,7 @@ if(page==="messages"){
  const activeMember=others.find(m=>m.user_id===activeId);
  const thread=directMessages.filter(m=>activeId&&(m.sender_user_id===activeId||m.recipient_user_id===activeId));
  const unreadFrom=(id:string)=>directMessages.filter(m=>m.sender_user_id===id&&m.recipient_user_id===session?.user.id&&!m.read_at).length;
- return <main className="dashboard-shell studio-messages-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">MESSAGES</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">PRIVATE STUDIO COMMUNICATION</p><h1>Studio Messages</h1><p>Direct conversations between authorized Umbra Studio collaborators. Notifications and review comments remain separate.</p></div><button className="secondary-action" onClick={()=>void loadDirectMessages()}>{messagesBusy?"Refreshing...":"Refresh"}</button></div>{messagesError&&<p className="login-error">{messagesError}</p>}<div className="v101-message-layout"><aside className="v101-conversations"><h3>Collaborators</h3>{others.map(m=><button key={m.user_id} className={activeId===m.user_id?"active":""} onClick={()=>{setMessageRecipientId(m.user_id);void markConversationRead(m.user_id)}}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><small>{m.role.replace(/_/g," ")}</small></div>{unreadFrom(m.user_id)>0&&<span>{unreadFrom(m.user_id)}</span>}</button>)}{others.length===0&&<p className="admin-empty">Add another Studio collaborator to begin messaging.</p>}</aside><section className="v101-thread"><div className="v101-thread-head"><div><span>CONVERSATION</span><h2>{activeMember?.display_name||activeMember?.email||"Choose a collaborator"}</h2></div></div><div className="v101-message-scroll">{thread.map(m=>{const mine=m.sender_user_id===session?.user.id;return <article key={m.id} className={mine?"mine":"theirs"}><p>{m.body}</p><small>{new Date(m.created_at).toLocaleString()}{mine?m.read_at?" • Read":" • Sent":""}</small></article>})}{activeId&&thread.length===0&&<p className="admin-empty">No messages yet. Start the conversation below.</p>}</div>{activeId&&<div className="v101-compose"><textarea placeholder={`Message ${activeMember?.display_name||activeMember?.email||"collaborator"}...`} value={messageBody} onChange={e=>setMessageBody(e.target.value)} maxLength={10000}/><button className="primary-action" disabled={!messageBody.trim()||messagesBusy} onClick={()=>void sendDirectMessage()}>Send Message</button></div>}</section></div></section></main>;
+ return <main className="dashboard-shell studio-messages-page"><StudioTopNav /><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">PRIVATE STUDIO COMMUNICATION</p><h1>Studio Messages</h1><p>Direct conversations between authorized Umbra Studio collaborators. Notifications and review comments remain separate.</p></div><button className="secondary-action" onClick={()=>void loadDirectMessages()}>{messagesBusy?"Refreshing...":"Refresh"}</button></div>{messagesError&&<p className="login-error">{messagesError}</p>}<div className="v101-message-layout"><aside className="v101-conversations"><h3>Collaborators</h3>{others.map(m=><button key={m.user_id} className={activeId===m.user_id?"active":""} onClick={()=>{setMessageRecipientId(m.user_id);void markConversationRead(m.user_id)}}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><small>{m.role.replace(/_/g," ")}</small></div>{unreadFrom(m.user_id)>0&&<span>{unreadFrom(m.user_id)}</span>}</button>)}{others.length===0&&<p className="admin-empty">Add another Studio collaborator to begin messaging.</p>}</aside><section className="v101-thread"><div className="v101-thread-head"><div><span>CONVERSATION</span><h2>{activeMember?.display_name||activeMember?.email||"Choose a collaborator"}</h2></div></div><div className="v101-message-scroll">{thread.map(m=>{const mine=m.sender_user_id===session?.user.id;return <article key={m.id} className={mine?"mine":"theirs"}><p>{m.body}</p><small>{new Date(m.created_at).toLocaleString()}{mine?m.read_at?" • Read":" • Sent":""}</small></article>})}{activeId&&thread.length===0&&<p className="admin-empty">No messages yet. Start the conversation below.</p>}</div>{activeId&&<div className="v101-compose"><textarea placeholder={`Message ${activeMember?.display_name||activeMember?.email||"collaborator"}...`} value={messageBody} onChange={e=>setMessageBody(e.target.value)} maxLength={10000}/><button className="primary-action" disabled={!messageBody.trim()||messagesBusy} onClick={()=>void sendDirectMessage()}>Send Message</button></div>}</section></div></section></main>;
 }
 
 if(page==="transfer"){
@@ -3404,7 +3381,7 @@ if(page==="transfer"){
 }
 
 if(page==="settings"){
- return <main className="dashboard-shell v10-settings-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>{studioSettings?.studio_name||"Umbra Studio"}</strong></div></button><div className="account-area"><span className="admin-role-pill">{`STUDIO ${appVersion}`}</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
+ return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
 }
 
 if(page==="production"){
@@ -3413,19 +3390,19 @@ if(page==="production"){
  const personName=(id:string|null)=>adminMembers.find(x=>x.user_id===id)?.display_name||adminMembers.find(x=>x.user_id===id)?.email||"Studio Member";
  const filteredScenes=storyScenes.filter(x=>[x.title,x.summary,x.era,x.story_date,projectName(x.project_id),arcName(x.arc_id)].filter(Boolean).join(" ").toLowerCase().includes(productionSearch.toLowerCase()));
  const graphNodes=[...storyProjects.map(x=>({id:x.id,label:x.title,type:"Project"})),...storyArcs.map(x=>({id:x.id,label:x.title,type:"Arc"})),...storyScenes.map(x=>({id:x.id,label:x.title,type:"Scene"})),...databaseRecords.slice(0,80).map(x=>({id:x.id,label:x.name,type:"Lore"}))];
- return <main className="dashboard-shell production-v9-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">V9 MEGA</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="production-v9-shell"><div className="production-v9-hero"><div><p className="eyebrow">STORY • COLLABORATION • WORLD INTELLIGENCE</p><h1>Story Production Center</h1><p>Plan stories without duplicating your lore. Connect projects, arcs, scenes, plot beats, characters, locations, canon records, reviews, assignments, and collaborator activity.</p></div><button className="secondary-action" onClick={()=>void loadV9Production()}>{productionBusy?"Refreshing...":"Refresh Production"}</button></div>{productionError&&<p className="login-error">{productionError}</p>}
+ return <main className="dashboard-shell production-v9-page"><StudioTopNav /><section className="production-v9-shell"><div className="production-v9-hero"><div><p className="eyebrow">STORY • COLLABORATION • WORLD INTELLIGENCE</p><h1>Story Production Center</h1><p>Plan stories without duplicating your lore. Connect projects, arcs, scenes, plot beats, characters, locations, canon records, reviews, assignments, and collaborator activity.</p></div><button className="secondary-action" onClick={()=>void loadV9Production()}>{productionBusy?"Refreshing...":"Refresh Production"}</button></div>{productionError&&<p className="login-error">{productionError}</p>}
  <div className="v9-metrics"><div><strong>{v9Health?.projects??storyProjects.length}</strong><span>Projects</span></div><div><strong>{v9Health?.scenes??storyScenes.length}</strong><span>Scenes</span></div><div><strong>{v9Health?.open_assignments??0}</strong><span>Open Assignments</span></div><div><strong>{v9Health?.my_unread_notifications??studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread</span></div><div><strong>{v9Health?.continuity_open??continuityIssues.filter(x=>['open','reviewing'].includes(x.status)).length}</strong><span>Continuity Alerts</span></div></div>
  <nav className="admin-tabs v9-tabs">{(["overview","projects","arcs","scenes","plot","journeys","review","assignments","inbox","graph"] as const).map(t=><button key={t} className={productionTab===t?"active":""} onClick={()=>setProductionTab(t)}>{t}</button>)}</nav>
  {productionTab==="overview"&&<><div className="v9-overview-grid"><section className="admin-panel"><span className="card-label">WHAT CHANGED?</span><h2>Since Your Last Visit</h2><p className="admin-help">Changes are timestamped and attributed to each collaborator's Studio name.</p><div className="admin-feed">{changesSinceVisit.slice(0,12).map(x=><div className="admin-feed-row" key={x.id}><div><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")}</span></div><small>{x.actor_name} • {new Date(x.created_at).toLocaleString()}</small></div>)}{changesSinceVisit.length===0&&<p className="admin-empty">No collaborator changes since your previous Studio visit.</p>}</div></section><section className="admin-panel"><span className="card-label">PRODUCTION PULSE</span><h2>Work Waiting on the Team</h2><div className="v9-pulse"><p><strong>{reviewComments.filter(x=>x.status==='open').length}</strong> open review comments</p><p><strong>{studioAssignments.filter(x=>!['done','cancelled'].includes(x.status)).length}</strong> active assignments</p><p><strong>{storyBeats.filter(x=>x.status!=='complete').length}</strong> unfinished plot beats</p><p><strong>{storyScenes.filter(x=>x.status==='review').length}</strong> scenes in review</p></div></section></div><section className="admin-panel"><span className="card-label">RECENT STORY WORK</span><h2>Production Activity</h2><div className="v9-card-grid">{storyProjects.slice(0,6).map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><small>{p.status.replace(/_/g,' ')} • {p.canon_status.replace(/_/g,' ')}</small></article>)}</div></section></>}
- {productionTab==="projects"&&<><section className="admin-panel"><span className="card-label">SAGAS • BOOKS • SEASONS • STORIES</span><h2>Create Story Project</h2><div className="v9-form-grid"><input placeholder="Project title" value={projectForm.title} onChange={e=>setProjectForm({...projectForm,title:e.target.value})}/><select value={projectForm.projectType} onChange={e=>setProjectForm({...projectForm,projectType:e.target.value})}><option value="story">Story</option><option value="saga">Saga</option><option value="book">Book</option><option value="season">Season</option><option value="volume">Volume</option><option value="campaign">Campaign</option></select><select value={projectForm.status} onChange={e=>setProjectForm({...projectForm,status:e.target.value})}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><textarea placeholder="Project summary" value={projectForm.summary} onChange={e=>setProjectForm({...projectForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryProject()}>Create Project</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyProjects.map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><select value={p.status} onChange={e=>void updateProductionStatus("studio_story_projects",p.id,e.target.value)}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option><option value="archived">Archived</option></select></article>)}</div></section></>}
- {productionTab==="arcs"&&<><section className="admin-panel"><span className="card-label">STORY STRUCTURE</span><h2>Create Arc</h2><div className="v9-form-grid"><select value={arcForm.projectId} onChange={e=>setArcForm({...arcForm,projectId:e.target.value})}><option value="">No project yet</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Arc title" value={arcForm.title} onChange={e=>setArcForm({...arcForm,title:e.target.value})}/><textarea placeholder="Arc summary" value={arcForm.summary} onChange={e=>setArcForm({...arcForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryArc()}>Create Arc</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyArcs.map(a=><article className="v9-story-card" key={a.id}><span>{projectName(a.project_id)}</span><h3>{a.title}</h3><p>{a.summary||"No summary yet."}</p><select value={a.status} onChange={e=>void updateProductionStatus("studio_story_arcs",a.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select></article>)}</div></section></>}
+ {productionTab==="projects"&&<><section className="admin-panel"><span className="card-label">SAGAS • BOOKS • SEASONS • STORIES</span><h2>Create Story Project</h2><div className="v9-form-grid"><input placeholder="Project title" value={projectForm.title} onChange={e=>setProjectForm({...projectForm,title:e.target.value})}/><select value={projectForm.projectType} onChange={e=>setProjectForm({...projectForm,projectType:e.target.value})}><option value="story">Story</option><option value="saga">Saga</option><option value="book">Book</option><option value="season">Season</option><option value="volume">Volume</option><option value="campaign">Campaign</option></select><select value={projectForm.status} onChange={e=>setProjectForm({...projectForm,status:e.target.value})}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><textarea placeholder="Project summary" value={projectForm.summary} onChange={e=>setProjectForm({...projectForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryProject()}>Create Project</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyProjects.map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><select value={p.status} onChange={e=>void updateProductionStatus("studio_story_projects",p.id,e.target.value)}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option><option value="archived">Archived</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_projects",p.id,p.title)}>Delete</button></article>)}</div></section></>}
+ {productionTab==="arcs"&&<><section className="admin-panel"><span className="card-label">STORY STRUCTURE</span><h2>Create Arc</h2><div className="v9-form-grid"><select value={arcForm.projectId} onChange={e=>setArcForm({...arcForm,projectId:e.target.value})}><option value="">No project yet</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Arc title" value={arcForm.title} onChange={e=>setArcForm({...arcForm,title:e.target.value})}/><textarea placeholder="Arc summary" value={arcForm.summary} onChange={e=>setArcForm({...arcForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryArc()}>Create Arc</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyArcs.map(a=><article className="v9-story-card" key={a.id}><span>{projectName(a.project_id)}</span><h3>{a.title}</h3><p>{a.summary||"No summary yet."}</p><select value={a.status} onChange={e=>void updateProductionStatus("studio_story_arcs",a.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_arcs",a.id,a.title)}>Delete</button></article>)}</div></section></>}
  {productionTab==="scenes"&&<><section className="admin-panel"><span className="card-label">SCENE MANAGER</span><h2>Create Scene</h2><div className="v9-form-grid"><select value={sceneForm.projectId} onChange={e=>setSceneForm({...sceneForm,projectId:e.target.value,arcId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.arcId} onChange={e=>setSceneForm({...sceneForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.filter(x=>!sceneForm.projectId||x.project_id===sceneForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Scene title" value={sceneForm.title} onChange={e=>setSceneForm({...sceneForm,title:e.target.value})}/><select value={sceneForm.povId} onChange={e=>setSceneForm({...sceneForm,povId:e.target.value})}><option value="">No POV character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={sceneForm.locationId} onChange={e=>setSceneForm({...sceneForm,locationId:e.target.value})}><option value="">No location</option>{worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input placeholder="Era" value={sceneForm.era} onChange={e=>setSceneForm({...sceneForm,era:e.target.value})}/><input placeholder="Story date / approximate date" value={sceneForm.storyDate} onChange={e=>setSceneForm({...sceneForm,storyDate:e.target.value})}/><textarea placeholder="Scene summary" value={sceneForm.summary} onChange={e=>setSceneForm({...sceneForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryScene()}>Create Scene</button></div></section><section className="admin-panel"><div className="database-toolbar"><input type="search" value={productionSearch} onChange={e=>setProductionSearch(e.target.value)} placeholder="Search scenes, projects, arcs, eras..."/></div><div className="v9-scene-list">{filteredScenes.map(s=><article key={s.id}><div><span>{projectName(s.project_id)} → {arcName(s.arc_id)}</span><h3>{s.title}</h3><p>{s.summary||"No summary yet."}</p><small>{s.era||"Era unset"}{s.story_date?` • ${s.story_date}`:""} • POV: {studioCharacters.find(x=>x.id===s.pov_character_id)?.name||"Unset"}</small></div><select value={s.status} onChange={e=>void updateProductionStatus("studio_story_scenes",s.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select></article>)}</div></section></>}
  {productionTab==="plot"&&<><section className="admin-panel"><span className="card-label">PLOT BOARD</span><h2>Add Story Beat</h2><div className="v9-form-grid"><select value={beatForm.projectId} onChange={e=>setBeatForm({...beatForm,projectId:e.target.value})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={beatForm.arcId} onChange={e=>setBeatForm({...beatForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={beatForm.sceneId} onChange={e=>setBeatForm({...beatForm,sceneId:e.target.value})}><option value="">No scene</option>{storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Beat title" value={beatForm.title} onChange={e=>setBeatForm({...beatForm,title:e.target.value})}/><select value={beatForm.beatType} onChange={e=>setBeatForm({...beatForm,beatType:e.target.value})}><option value="plot">Plot</option><option value="character">Character</option><option value="reveal">Reveal</option><option value="conflict">Conflict</option><option value="setup">Setup</option><option value="payoff">Payoff</option></select><textarea placeholder="What happens?" value={beatForm.description} onChange={e=>setBeatForm({...beatForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryBeat()}>Add Beat</button></div></section><section className="v9-kanban">{["idea","planned","writing","review","complete"].map(status=><div className="v9-kanban-column" key={status}><h3>{status.replace(/_/g,' ')}</h3>{storyBeats.filter(x=>x.status===status).map(b=><article key={b.id}><span>{b.beat_type}</span><strong>{b.title}</strong><p>{b.description||""}</p><select value={b.status} onChange={e=>void updateProductionStatus("studio_story_beats",b.id,e.target.value)}>{["idea","planned","writing","review","complete"].map(s=><option key={s} value={s}>{s}</option>)}</select></article>)}</div>)}</section></>}
  {productionTab==="journeys"&&<><section className="admin-panel"><span className="card-label">CHARACTER JOURNEY TRACKER</span><h2>Record Character Change</h2><div className="v9-form-grid"><select value={journeyForm.characterId} onChange={e=>setJourneyForm({...journeyForm,characterId:e.target.value})}><option value="">Choose character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={journeyForm.journeyType} onChange={e=>setJourneyForm({...journeyForm,journeyType:e.target.value})}><option value="development">Development</option><option value="goal">Goal</option><option value="injury">Injury</option><option value="transformation">Transformation</option><option value="title">Title / Rank</option><option value="allegiance">Allegiance</option><option value="relationship">Relationship</option><option value="power">Power</option></select><select value={journeyForm.projectId} onChange={e=>setJourneyForm({...journeyForm,projectId:e.target.value})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={journeyForm.sceneId} onChange={e=>setJourneyForm({...journeyForm,sceneId:e.target.value})}><option value="">No scene</option>{storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Change title" value={journeyForm.title} onChange={e=>setJourneyForm({...journeyForm,title:e.target.value})}/><input placeholder="Before" value={journeyForm.beforeValue} onChange={e=>setJourneyForm({...journeyForm,beforeValue:e.target.value})}/><input placeholder="After" value={journeyForm.afterValue} onChange={e=>setJourneyForm({...journeyForm,afterValue:e.target.value})}/><textarea placeholder="Notes" value={journeyForm.description} onChange={e=>setJourneyForm({...journeyForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createJourneyEvent()}>Add Journey Event</button></div></section><section className="admin-panel"><div className="v9-journey-list">{characterJourney.map(j=><article key={j.id}><span>{j.journey_type}</span><h3>{studioCharacters.find(x=>x.id===j.character_id)?.name||"Character"} — {j.title}</h3>{(j.before_value||j.after_value)&&<p><strong>{j.before_value||"—"}</strong> → <strong>{j.after_value||"—"}</strong></p>}<small>{j.description||""}</small></article>)}</div></section></>}
  {productionTab==="review"&&<><section className="admin-panel"><span className="card-label">COMMENTS & REVIEW THREADS</span><h2>Start Review Comment</h2><div className="v9-form-grid"><select value={commentForm.entityType} onChange={e=>setCommentForm({...commentForm,entityType:e.target.value,entityId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_scene">Scene</option><option value="database">World Database</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><select value={commentForm.entityId} onChange={e=>setCommentForm({...commentForm,entityId:e.target.value})}><option value="">Choose record</option>{productionEntityOptions(commentForm.entityType).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select><select value={commentForm.notifyUserId} onChange={e=>setCommentForm({...commentForm,notifyUserId:e.target.value})}><option value="">No notification</option>{adminMembers.filter(x=>x.user_id!==session.user.id).map(x=><option key={x.user_id} value={x.user_id}>Notify {x.display_name||x.email}</option>)}</select><textarea placeholder="Review comment..." value={commentForm.body} onChange={e=>setCommentForm({...commentForm,body:e.target.value})}/><button className="primary-action" onClick={()=>void addReviewCommentV9()}>Post Comment</button></div></section><section className="admin-panel"><div className="v9-review-list">{reviewComments.map(c=><article className={c.status==='resolved'?"resolved":""} key={c.id}><div><strong>{c.created_by_name||personName(c.created_by)}</strong><span>{c.entity_type} • {new Date(c.created_at).toLocaleString()}</span></div><p>{c.body}</p>{c.status==='open'?<button onClick={()=>void resolveReviewComment(c.id)}>Resolve</button>:<small>Resolved</small>}</article>)}</div></section></>}
  {productionTab==="assignments"&&<><section className="admin-panel"><span className="card-label">TEAM WORK QUEUE</span><h2>Create Assignment</h2><div className="v9-form-grid"><input placeholder="Assignment title" value={assignmentForm.title} onChange={e=>setAssignmentForm({...assignmentForm,title:e.target.value})}/><select value={assignmentForm.assignedTo} onChange={e=>setAssignmentForm({...assignmentForm,assignedTo:e.target.value})}><option value="">Assign to...</option>{adminMembers.map(x=><option key={x.user_id} value={x.user_id}>{x.display_name||x.email}</option>)}</select><select value={assignmentForm.priority} onChange={e=>setAssignmentForm({...assignmentForm,priority:e.target.value})}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select><input type="datetime-local" value={assignmentForm.dueAt} onChange={e=>setAssignmentForm({...assignmentForm,dueAt:e.target.value})}/><textarea placeholder="Instructions" value={assignmentForm.description} onChange={e=>setAssignmentForm({...assignmentForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createAssignmentV9()}>Assign Work</button></div></section><section className="admin-panel"><div className="v9-assignment-list">{studioAssignments.map(a=><article key={a.id}><div><span className={`v9-priority ${a.priority}`}>{a.priority}</span><h3>{a.title}</h3><p>{a.description||""}</p><small>{personName(a.assigned_to)}{a.due_at?` • Due ${new Date(a.due_at).toLocaleString()}`:""}</small></div><select value={a.status} onChange={e=>void updateProductionStatus("studio_assignments",a.id,e.target.value)}><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option><option value="cancelled">Cancelled</option></select></article>)}</div></section></>}
  {productionTab==="inbox"&&<section className="admin-panel"><span className="card-label">STUDIO NOTIFICATIONS</span><h2>Inbox</h2><div className="v9-inbox">{studioNotifications.map(n=><article className={n.is_read?"read":"unread"} key={n.id}><div><strong>{n.title}</strong><span>{n.actor_name||"Umbra Studio"} • {new Date(n.created_at).toLocaleString()}</span></div><p>{n.message||""}</p>{!n.is_read&&<button onClick={()=>void markNotificationRead(n.id)}>Mark Read</button>}</article>)}{studioNotifications.length===0&&<p className="admin-empty">Your Studio inbox is clear.</p>}</div></section>}
- {productionTab==="graph"&&<section className="admin-panel"><span className="card-label">WORLD INTELLIGENCE</span><h2>Relationship & Dependency Graph</h2><p className="admin-help">A lightweight graph index of story structure and existing lore. Universal links and story links remain the source of truth; this view never changes canon automatically.</p><div className="v9-graph"><div className="v9-graph-nodes">{graphNodes.slice(0,160).map(n=><article key={`${n.type}:${n.id}`}><span>{n.type}</span><strong>{n.label}</strong><small>{universalLinks.filter(l=>l.source_id===n.id||l.target_id===n.id).length+storyLinks.filter(l=>l.story_entity_id===n.id||l.linked_entity_id===n.id).length} connections</small></article>)}</div></div></section>}
+ {productionTab==="graph"&&<><section className="admin-panel"><span className="card-label">CONNECTED STORY RECORDS</span><h2>Link Story to the World</h2><p className="admin-help">Reference existing characters, locations, Codex pages, artifacts, weapons, creatures, magic systems, and other lore without retyping them.</p><div className="v9-form-grid"><select value={storyLinkForm.storyType} onChange={e=>setStoryLinkForm({...storyLinkForm,storyType:e.target.value,storyId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_scene">Scene</option></select><select value={storyLinkForm.storyId} onChange={e=>setStoryLinkForm({...storyLinkForm,storyId:e.target.value})}><option value="">Choose story record</option>{storyLinkForm.storyType==="story_project"?storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_arc"?storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={storyLinkForm.linkedType} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedType:e.target.value,linkedId:""})}><option value="character">Character</option><option value="location">Location</option><option value="codex">World / Codex</option><option value="database">Artifact / Lore Record</option></select><select value={storyLinkForm.linkedId} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedId:e.target.value})}><option value="">Choose existing record</option>{storyLinkForm.linkedType==="character"?studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="location"?worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="codex"?worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>):databaseRecords.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input value={storyLinkForm.label} onChange={e=>setStoryLinkForm({...storyLinkForm,label:e.target.value})} placeholder="Connection: appears in, carries, discovers..."/><textarea value={storyLinkForm.notes} onChange={e=>setStoryLinkForm({...storyLinkForm,notes:e.target.value})} placeholder="Optional production notes..."/><button className="primary-action" disabled={!storyLinkForm.storyId||!storyLinkForm.linkedId} onClick={()=>void createStoryEntityLink()}>Connect Existing Record</button></div><div className="admin-feed">{storyLinks.slice(0,60).map(l=><div className="admin-feed-row" key={l.id}><div><strong>{l.relation_label||"Connected record"}</strong><span>{l.story_entity_type.replace(/_/g," ")} → {l.linked_entity_type.replace(/_/g," ")}</span></div><button className="secondary-action" onClick={()=>void deleteStoryEntityLink(l.id)}>Remove</button></div>)}{storyLinks.length===0&&<p className="admin-empty">No story-world links yet.</p>}</div></section><section className="admin-panel"><span className="card-label">WORLD INTELLIGENCE</span><h2>Relationship & Dependency Graph</h2><p className="admin-help">A lightweight graph index of story structure and existing lore. Universal links and story links remain the source of truth; this view never changes canon automatically.</p><div className="v9-graph"><div className="v9-graph-nodes">{graphNodes.slice(0,160).map(n=><article key={`${n.type}:${n.id}`}><span>{n.type}</span><strong>{n.label}</strong><small>{universalLinks.filter(l=>l.source_id===n.id||l.target_id===n.id).length+storyLinks.filter(l=>l.story_entity_id===n.id||l.linked_entity_id===n.id).length} connections</small></article>)}</div></div></section></>}
  </section></main>;
 }
 
@@ -3435,7 +3412,7 @@ if(page==="database"){
  const recordCollections=selectedRecord?collectionItems.filter(x=>x.entity_type==="database"&&x.entity_id===selectedRecord.id):[];
  const recordTags=selectedRecord?tagAssignments.filter(x=>x.entity_type==="database"&&x.entity_id===selectedRecord.id):[];
  const entityOptions=(kind:string)=>kind==="database"?databaseRecords.map(x=>({id:x.id,label:`${x.record_code} • ${x.name}`})):kind==="character"?studioCharacters.map(x=>({id:x.id,label:x.name})):kind==="codex"?worldRecords.map(x=>({id:x.id,label:x.name})):kind==="location"?worldLocations.map(x=>({id:x.id,label:x.name})):timelineEvents.map(x=>({id:x.id,label:x.title}));
- return <main className="dashboard-shell database-v4-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">{studioAccessRole}</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="database-v4-shell"><div className="database-v4-hero"><div><p className="eyebrow">CANON • CONTINUITY • ENCYCLOPEDIA • V8 MEGA</p><h1>World Database</h1><p>Control canon, continuity, publishing, dependencies, lore, revisions, collaboration, imports, references, media, and recovery from one worldbuilding operations system.</p></div><button className="secondary-action" onClick={()=>void loadWorldDatabase()}>{databaseBusy?"Refreshing...":"Refresh"}</button></div>{databaseError&&<p className="login-error">{databaseError}</p>}<div className="database-v4-metrics"><div><strong>{activeRecords.length}</strong><span>Active Records</span></div><div><strong>{selectedDatabaseRecordIds.size}</strong><span>Selected</span></div><div><strong>{universalLinks.length}</strong><span>Links</span></div><div><strong>{mediaAssets.length}</strong><span>Media</span></div><div><strong>{archivedRecords.length}</strong><span>Archived</span></div></div><nav className="admin-tabs database-tabs">{(["records","canon","continuity","encyclopedia","collections","tags","links","media","bulk","health","revisions","duplicates","templates","import","backup"] as const).map(t=><button key={t} className={databaseTab===t?"active":""} onClick={()=>setDatabaseTab(t)}>{t}</button>)}</nav>
+ return <main className="dashboard-shell database-v4-page"><StudioTopNav /><section className="database-v4-shell"><div className="database-v4-hero"><div><p className="eyebrow">CANON • CONTINUITY • ENCYCLOPEDIA • V8 MEGA</p><h1>World Database</h1><p>Control canon, continuity, publishing, dependencies, lore, revisions, collaboration, imports, references, media, and recovery from one worldbuilding operations system.</p></div><button className="secondary-action" onClick={()=>void loadWorldDatabase()}>{databaseBusy?"Refreshing...":"Refresh"}</button></div>{databaseError&&<p className="login-error">{databaseError}</p>}<div className="database-v4-metrics"><div><strong>{activeRecords.length}</strong><span>Active Records</span></div><div><strong>{selectedDatabaseRecordIds.size}</strong><span>Selected</span></div><div><strong>{universalLinks.length}</strong><span>Links</span></div><div><strong>{mediaAssets.length}</strong><span>Media</span></div><div><strong>{archivedRecords.length}</strong><span>Archived</span></div></div><div className="database-nav-shell"><nav className="admin-tabs database-tabs database-primary-tabs">{(["records","canon","continuity","encyclopedia","media","import"] as const).map(t=><button key={t} className={databaseTab===t?"active":""} onClick={()=>setDatabaseTab(t)}>{t==="records"?"Records":t==="canon"?"Canon":t==="continuity"?"Continuity":t==="encyclopedia"?"Public Encyclopedia":t==="media"?"Media":"Import"}</button>)}<button type="button" onClick={()=>{setPage("world");window.scrollTo({top:0,behavior:"smooth"});void loadWorldRecords();}}>World Codex</button></nav><select className="database-more-tools" value={(["collections","tags","links","bulk","health","revisions","duplicates","templates","backup"] as string[]).includes(databaseTab)?databaseTab:""} onChange={(e)=>{if(e.target.value)setDatabaseTab(e.target.value as typeof databaseTab)}}><option value="">More Tools…</option><option value="collections">Collections</option><option value="tags">Tags</option><option value="links">Links</option><option value="bulk">Bulk Actions</option><option value="health">Database Health</option><option value="revisions">Revisions</option><option value="duplicates">Duplicates</option><option value="templates">Templates</option><option value="backup">Backup & Recovery</option></select></div>{showStudioGuidance&&<StudioGuide title={databaseTab==="records"?"Records":databaseTab==="canon"?"Canon":databaseTab==="continuity"?"Continuity":databaseTab==="encyclopedia"?"Public Encyclopedia":databaseTab==="import"?"Import & Autofill":databaseTab==="collections"?"Collections":databaseTab==="tags"?"Tags":databaseTab==="links"?"Links":databaseTab==="bulk"?"Bulk Actions":databaseTab==="health"?"Database Health":databaseTab==="revisions"?"Revisions":databaseTab==="duplicates"?"Duplicates":databaseTab==="templates"?"Templates":databaseTab==="backup"?"Backup & Recovery":"World Database"}>{databaseTab==="records"?"Create and edit detailed lore records that need more structure than a basic Codex entry.":databaseTab==="canon"?"Review canon status and control which records are considered established lore.":databaseTab==="continuity"?"Find conflicts or missing connections before they become story continuity problems.":databaseTab==="encyclopedia"?"Control what approved lore readers can see in the public encyclopedia.":databaseTab==="import"?"Paste structured character or world information here. Review the preview before saving; uncertain text is preserved instead of guessed.":databaseTab==="collections"?"Group related records into reusable sets without changing their underlying type.":databaseTab==="tags"?"Create searchable labels that can be shared across records.":databaseTab==="links"?"Connect records to one another so the Studio can understand ownership, membership, location, and other relationships.":databaseTab==="bulk"?"Apply the same workflow action to several selected records at once.":databaseTab==="health"?"Check for incomplete records and structural gaps in the database.":databaseTab==="revisions"?"Review saved record history and restore an earlier version when needed.":databaseTab==="duplicates"?"Review likely duplicates. Studio never merges them automatically.":databaseTab==="templates"?"Create reusable field structures for recurring lore record types.":databaseTab==="backup"?"Create, export, validate, and recover Studio data.":"Use this workspace for connected worldbuilding data."}</StudioGuide>}
  {databaseTab==="records"&&<><section className="admin-panel"><div className="admin-panel-heading"><div><span className="card-label">NEW DATABASE ENTRY</span><h2>Create Expanded Record</h2></div><small>Permanent ID assigned automatically</small></div><div className="database-form-grid"><select value={recordForm.typeId} onChange={e=>setRecordForm({...recordForm,typeId:e.target.value})}>{recordTypes.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select><input placeholder="Record name" value={recordForm.name} onChange={e=>setRecordForm({...recordForm,name:e.target.value})}/><input placeholder="Subtitle / classification" value={recordForm.subtitle} onChange={e=>setRecordForm({...recordForm,subtitle:e.target.value})}/><textarea placeholder="Short summary" value={recordForm.summary} onChange={e=>setRecordForm({...recordForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createDatabaseRecord()}>Create Record</button></div></section><section className="admin-panel"><div className="database-toolbar"><input type="search" placeholder="Search ID, name, classification, summary..." value={databaseSearch} onChange={e=>setDatabaseSearch(e.target.value)}/><select value={databaseTypeFilter} onChange={e=>setDatabaseTypeFilter(e.target.value)}><option value="all">All record types</option>{recordTypes.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select></div><div className="database-record-grid">{filtered.map(r=>{const type=recordTypes.find(t=>t.id===r.record_type_id);const complete=recordCompleteness(r);return <article className={`database-record-card ${selectedDatabaseRecordIds.has(r.id)?"selected":""}`} key={r.id}><div className="database-record-top"><label className="record-check"><input type="checkbox" checked={selectedDatabaseRecordIds.has(r.id)} onChange={()=>toggleDatabaseSelection(r.id)}/><span>{r.record_code}</span></label><small>{type?.name||"Record"}</small></div><h3>{r.name}</h3>{r.subtitle&&<strong>{r.subtitle}</strong>}<p>{r.summary||"No summary yet."}</p><div className="completeness-line"><span style={{width:`${complete}%`}}/></div><small>{complete}% complete • {r.workflow_status.replace(/_/g," ")} • {(r.canon_status||"concept").replace(/_/g," ")}</small><div className="record-card-actions"><button onClick={()=>void openDatabaseRecord(r)}>Open Record</button><button onClick={()=>void archiveDatabaseRecord(r.id)}>Archive</button></div></article>})}</div></section>{adminRole==="primary_admin"&&<section className="admin-panel"><span className="card-label">PRIMARY ADMIN</span><h2>Custom Record Types</h2><p className="admin-help">Create future categories without another database migration.</p><div className="database-form-grid"><input placeholder="Type name — e.g. Festivals" value={customTypeForm.name} onChange={e=>setCustomTypeForm({...customTypeForm,name:e.target.value,slug:e.target.value})}/><input placeholder="Slug" value={customTypeForm.slug} onChange={e=>setCustomTypeForm({...customTypeForm,slug:e.target.value})}/><input placeholder="Description" value={customTypeForm.description} onChange={e=>setCustomTypeForm({...customTypeForm,description:e.target.value})}/><button className="secondary-action" onClick={()=>void createCustomType()}>Add Record Type</button></div></section>}</>}
  {selectedRecord&&databaseTab==="records"&&<div className="record-editor-overlay" onClick={()=>void closeDatabaseRecord()}><section className="record-editor-panel record-editor-v7" onClick={e=>e.stopPropagation()}><div className="record-editor-head"><div><span className="card-label">{selectedRecord.record_code} • LORE WORKSPACE V7</span><h2>{selectedRecord.name}</h2><small>{autosaveStatus||"Local recovery draft available on demand"}</small></div><button onClick={()=>void closeDatabaseRecord()}>×</button></div><div className="record-editor-grid"><label>Name<input value={recordEditor.name} onChange={e=>setRecordEditor({...recordEditor,name:e.target.value})}/></label><label>Subtitle / Classification<input value={recordEditor.subtitle} onChange={e=>setRecordEditor({...recordEditor,subtitle:e.target.value})}/></label><label className="wide">Summary<textarea value={recordEditor.summary} onChange={e=>setRecordEditor({...recordEditor,summary:e.target.value})}/></label><label>Hero Image URL<input value={recordEditor.imageUrl} onChange={e=>setRecordEditor({...recordEditor,imageUrl:e.target.value})}/></label><label>Workflow<select value={recordEditor.workflowStatus} onChange={e=>setRecordEditor({...recordEditor,workflowStatus:e.target.value})}><option value="draft">Draft</option><option value="in_review">In Review</option><option value="approved">Approved</option><option value="published">Published</option></select></label><label>Canon Status<select value={selectedRecord.canon_status||"concept"} onChange={e=>void changeCanonStatus(selectedRecord.id,e.target.value)}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option><option value="retconned">Retconned</option><option value="deprecated">Deprecated</option></select></label><label className="wide">Canon Change Reason<input value={canonReason} onChange={e=>setCanonReason(e.target.value)} placeholder="Why is canon status changing? Saved to retcon history."/></label><label className="v8-public-toggle"><input type="checkbox" checked={!!selectedRecord.is_public} onChange={e=>void toggleRecordPublic(selectedRecord.id,e.target.checked)}/> Include in public encyclopedia</label></div><div className="v7-editor-switch"><button className={recordEditorMode==="visual"?"active":""} onClick={()=>{try{const d=JSON.parse(recordEditor.detailsText||"{}");setRecordVisualDetails(Object.entries(d).map(([key,value])=>({key,value:typeof value==="string"?value:JSON.stringify(value,null,2)})));}catch{}setRecordEditorMode("visual")}}>Visual Lore Fields</button><button className={recordEditorMode==="json"?"active":""} onClick={()=>setRecordEditorMode("json")}>Advanced JSON</button><button onClick={saveLocalRecoveryDraft}>Save Recovery Draft</button></div>{recordEditorMode==="visual"?<section className="v7-lore-builder"><div className="v7-section-heading"><div><span className="card-label">STRUCTURED LORE</span><h3>Record Details</h3></div><small>Add any fields this record needs. Templates can create a starting structure.</small></div>{recordVisualDetails.length===0&&<p className="admin-empty">No structured lore fields yet. Apply a template below or add your first field.</p>}<div className="v7-field-list">{recordVisualDetails.map((field,index)=><article key={`${field.key}-${index}`}><div><input value={field.key} onChange={e=>{const next=[...recordVisualDetails];next[index]={...next[index],key:e.target.value};syncVisualDetails(next)}} placeholder="Field name"/><button onClick={()=>removeVisualDetail(index)}>Remove</button></div><textarea value={field.value} onChange={e=>{const next=[...recordVisualDetails];next[index]={...next[index],value:e.target.value};syncVisualDetails(next)}} placeholder={`Write ${field.key||"lore"} here...`}/></article>)}</div><div className="v7-add-field"><input placeholder="New field — e.g. History" value={newDetailField.key} onChange={e=>setNewDetailField({...newDetailField,key:e.target.value})}/><input placeholder="Optional starting text" value={newDetailField.value} onChange={e=>setNewDetailField({...newDetailField,value:e.target.value})}/><button onClick={addVisualDetail}>Add Lore Field</button></div></section>:<label className="v7-json-block">Structured Details (JSON)<textarea className="json-editor" value={recordEditor.detailsText} onChange={e=>setRecordEditor({...recordEditor,detailsText:e.target.value})}/></label>}<div className="record-editor-grid v7-notes"><label className="wide">Private Working Notes<textarea value={recordEditor.notes} onChange={e=>setRecordEditor({...recordEditor,notes:e.target.value})}/></label></div><div className="record-assignment-grid"><div><h3>Collections</h3><div className="assignment-form"><select value={assignmentCollectionId} onChange={e=>setAssignmentCollectionId(e.target.value)}><option value="">Choose collection</option>{collections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><button onClick={()=>void assignCollection(selectedRecord.id)}>Add</button></div><div className="assignment-chips">{recordCollections.map(a=><button key={a.id} onClick={()=>void removeCollectionAssignment(a.id)}>{collections.find(c=>c.id===a.collection_id)?.name||"Collection"} ×</button>)}</div></div><div><h3>Tags</h3><div className="assignment-form"><select value={assignmentTagId} onChange={e=>setAssignmentTagId(e.target.value)}><option value="">Choose tag</option>{studioTags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><button onClick={()=>void assignTag(selectedRecord.id)}>Add</button></div><div className="assignment-chips">{recordTags.map(a=><button key={a.id} onClick={()=>void removeTagAssignment(a.id)}>{studioTags.find(t=>t.id===a.tag_id)?.name||"Tag"} ×</button>)}</div></div></div><div className="record-v6-tools"><div><h3>Field Templates</h3><div className="assignment-chips">{fieldTemplates.filter(t=>t.record_type_id===selectedRecord.record_type_id).map(t=><button key={t.id} onClick={()=>applyTemplate(t)}>{t.name}</button>)}</div></div><div><h3>Attached Media</h3><div className="assignment-form"><select value={recordMediaId} onChange={e=>setRecordMediaId(e.target.value)}><option value="">Choose media asset</option>{mediaAssets.map(m=><option key={m.id} value={m.id}>{m.title}</option>)}</select><button onClick={()=>void attachMediaToRecord(selectedRecord.id)}>Attach</button></div><div className="assignment-chips">{mediaAttachments.filter(a=>a.entity_type==="database"&&a.entity_id===selectedRecord.id).map(a=><button key={a.id} onClick={()=>void detachMedia(a.id)}>{mediaAssets.find(m=>m.id===a.media_id)?.title||"Media"} ×</button>)}</div></div></div><section className="v7-reference-panel"><div className="v7-section-heading"><div><span className="card-label">SOURCES & REFERENCES</span><h3>Reference Shelf</h3></div><small>Keep research, inspiration, internal notes, and source links separate from canon lore.</small></div><div className="v7-reference-form"><input placeholder="Reference label" value={referenceForm.label} onChange={e=>setReferenceForm({...referenceForm,label:e.target.value})}/><select value={referenceForm.referenceType} onChange={e=>setReferenceForm({...referenceForm,referenceType:e.target.value})}><option value="source">Source</option><option value="art_reference">Art Reference</option><option value="research">Research</option><option value="internal">Internal Note</option><option value="inspiration">Inspiration</option></select><input placeholder="URL (optional)" value={referenceForm.url} onChange={e=>setReferenceForm({...referenceForm,url:e.target.value})}/><input placeholder="Citation / creator / book (optional)" value={referenceForm.citation} onChange={e=>setReferenceForm({...referenceForm,citation:e.target.value})}/><textarea placeholder="Reference notes" value={referenceForm.notes} onChange={e=>setReferenceForm({...referenceForm,notes:e.target.value})}/><button onClick={()=>void addRecordReference(selectedRecord.id)}>Add Reference</button></div><div className="v7-reference-list">{recordReferences.filter(r=>r.record_id===selectedRecord.id).map(ref=><article key={ref.id}><div><strong>{ref.label}</strong><span>{ref.reference_type.replace(/_/g," ")}{ref.citation?` • ${ref.citation}`:""}</span>{ref.notes&&<p>{ref.notes}</p>}{ref.url&&<small>{ref.url}</small>}</div><button onClick={()=>void deleteRecordReference(ref.id)}>Remove</button></article>)}</div></section><div className="record-editor-actions"><button className="secondary-action" onClick={saveLocalRecoveryDraft}>Save Recovery Draft</button><button className="secondary-action" onClick={()=>void closeDatabaseRecord()}>Close Without Saving</button><button className="primary-action" onClick={()=>void saveDatabaseRecord()}>Save Record</button></div></section></div>}
  {databaseTab==="canon"&&<><section className="admin-panel"><div className="admin-panel-heading"><div><span className="card-label">CANON CONTROL</span><h2>Canon Registry</h2></div><small>Editorial workflow and canon are intentionally separate.</small></div><div className="database-toolbar"><input type="search" placeholder="Search canon registry..." value={canonSearch} onChange={e=>setCanonSearch(e.target.value)}/><select value={canonFilter} onChange={e=>setCanonFilter(e.target.value)}><option value="all">All canon states</option><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option><option value="retconned">Retconned</option><option value="deprecated">Deprecated</option></select></div><div className="v8-canon-grid">{databaseRecords.filter(r=>!r.archived_at&&(canonFilter==="all"||(r.canon_status||"concept")===canonFilter)&&[r.record_code,r.name,r.summary].filter(Boolean).join(" ").toLowerCase().includes(canonSearch.toLowerCase())).map(r=><article key={r.id}><div><span className={`canon-badge canon-${r.canon_status||"concept"}`}>{(r.canon_status||"concept").replace(/_/g," ")}</span><small>{r.record_code}</small></div><h3>{r.name}</h3><p>{r.summary||"No summary yet."}</p><div className="record-card-actions"><button onClick={()=>void openDatabaseRecord(r)}>Open</button><button onClick={()=>{setCanonReason(prompt("Reason for canon change (optional)")||"");void changeCanonStatus(r.id,"canon")}}>Mark Canon</button></div></article>)}</div></section><section className="admin-panel"><span className="card-label">RETCON LEDGER</span><h2>Canon Decision History</h2><div className="admin-feed">{canonHistory.map(h=><div className="admin-feed-row" key={h.id}><div><strong>{h.entity_label||h.entity_type}</strong><span>{h.previous_status||"new"} → {h.new_status}{h.reason?` • ${h.reason}`:""}</span></div><small>{h.changed_by_name||"Studio Member"} • {new Date(h.created_at).toLocaleString()}</small></div>)}</div></section></>}
@@ -3444,20 +3421,20 @@ if(page==="database"){
 {databaseTab==="collections"&&<section className="admin-panel"><span className="card-label">DATABASE COLLECTIONS</span><h2>Collection Manager</h2><div className="database-form-grid"><input placeholder="Collection name" value={collectionForm.name} onChange={e=>setCollectionForm({...collectionForm,name:e.target.value})}/><input placeholder="Description" value={collectionForm.description} onChange={e=>setCollectionForm({...collectionForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createCollection()}>Create Collection</button></div><div className="database-simple-grid">{collections.map(c=>{const count=collectionItems.filter(x=>x.collection_id===c.id).length;return <article key={c.id}><strong>{c.name}</strong><p>{c.description||"No description yet."}</p><small>{count} assigned record{count===1?"":"s"}</small></article>})}</div></section>}
  {databaseTab==="tags"&&<section className="admin-panel"><span className="card-label">CONTROLLED VOCABULARY</span><h2>Tag Manager</h2><div className="database-inline-form"><input placeholder="New reusable tag" value={tagName} onChange={e=>setTagName(e.target.value)}/><button className="primary-action" onClick={()=>void createTag()}>Add Tag</button></div><div className="database-tag-cloud">{studioTags.map(t=><span key={t.id}>{t.name} <small>{tagAssignments.filter(x=>x.tag_id===t.id).length}</small></span>)}</div></section>}
  {databaseTab==="links"&&<section className="admin-panel"><span className="card-label">UNIVERSAL RELATIONSHIP ENGINE</span><h2>Cross-Record Link Manager</h2><p className="admin-help">Connect expanded records to other records, characters, Codex entries, locations, and timeline events.</p><div className="link-builder"><select value={linkForm.sourceId} onChange={e=>setLinkForm({...linkForm,sourceId:e.target.value})}><option value="">Source database record</option>{databaseRecords.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.record_code} • {x.name}</option>)}</select><select value={linkForm.targetType} onChange={e=>setLinkForm({...linkForm,targetType:e.target.value,targetId:""})}><option value="database">Database Record</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline Event</option></select><select value={linkForm.targetId} onChange={e=>setLinkForm({...linkForm,targetId:e.target.value})}><option value="">Target</option>{entityOptions(linkForm.targetType).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select><input placeholder="Relationship — e.g. Owned By" value={linkForm.label} onChange={e=>setLinkForm({...linkForm,label:e.target.value})}/><input placeholder="Optional notes" value={linkForm.notes} onChange={e=>setLinkForm({...linkForm,notes:e.target.value})}/><button className="primary-action" onClick={()=>void createUniversalLink()}>Create Link</button></div><div className="admin-feed">{universalLinks.map(l=><div className="admin-feed-row" key={l.id}><div><strong>{l.relation_label}</strong><span>{l.source_type}:{l.source_id.slice(0,8)} → {l.target_type}:{l.target_id.slice(0,8)}</span></div><button onClick={()=>void deleteUniversalLink(l.id)}>Remove</button></div>)}</div></section>}
- {databaseTab==="media"&&<section className="admin-panel"><span className="card-label">MEDIA CATALOG</span><h2>Studio Media Manager</h2><div className="database-form-grid"><input placeholder="Asset title" value={mediaForm.title} onChange={e=>setMediaForm({...mediaForm,title:e.target.value})}/><input placeholder="Image / asset URL" value={mediaForm.assetUrl} onChange={e=>setMediaForm({...mediaForm,assetUrl:e.target.value})}/><select value={mediaForm.mediaType} onChange={e=>setMediaForm({...mediaForm,mediaType:e.target.value})}><option value="image">Image</option><option value="map">Map</option><option value="reference">Reference</option><option value="document">Document</option><option value="other">Other</option></select><input placeholder="Caption" value={mediaForm.caption} onChange={e=>setMediaForm({...mediaForm,caption:e.target.value})}/><input placeholder="Credit" value={mediaForm.credit} onChange={e=>setMediaForm({...mediaForm,credit:e.target.value})}/><input placeholder="Alt text" value={mediaForm.altText} onChange={e=>setMediaForm({...mediaForm,altText:e.target.value})}/><input placeholder="Tags, comma separated" value={mediaForm.tags} onChange={e=>setMediaForm({...mediaForm,tags:e.target.value})}/><button className="primary-action" onClick={()=>void createMediaAsset()}>Catalog Asset</button></div><div className="database-simple-grid media-manager-grid">{mediaAssets.filter(m=>!(m as any).archived_at).map(m=><article key={m.id}>{m.asset_url&&m.media_type!=="document"&&<img src={m.asset_url} alt={m.alt_text||m.title}/>}<strong>{m.title}</strong><p>{m.caption||m.credit||m.media_type}</p>{m.tags?.length>0&&<small>{m.tags.join(" • ")}</small>}</article>)}</div></section>}
+ {databaseTab==="media"&&<section className="admin-panel"><span className="card-label">MEDIA CATALOG</span><h2>Studio Media Manager</h2><StudioGuide title="Media">Upload and organize reusable images, maps, reference art, documents, and other production files. Character-specific portraits can still be uploaded directly inside Character Creator.</StudioGuide><div className="database-form-grid"><input placeholder="Asset title" value={mediaForm.title} onChange={e=>setMediaForm({...mediaForm,title:e.target.value})}/><select value={mediaForm.mediaType} onChange={e=>{setMediaForm({...mediaForm,mediaType:e.target.value});setMediaFile(null)}}><option value="image">Image</option><option value="map">Map</option><option value="reference">Reference</option><option value="document">Document</option><option value="other">Other File</option></select><label className="umbra-file-button media-file-picker"><input hidden type="file" accept={mediaForm.mediaType==="document"?".pdf,.doc,.docx,.txt,.md":(["image","map","reference"].includes(mediaForm.mediaType)?"image/*":"*/*")} onChange={e=>setMediaFile(e.target.files?.[0]||null)}/>{mediaFile?`Selected: ${mediaFile.name}`:`Choose ${mediaForm.mediaType==="document"?"Document":(["image","map","reference"].includes(mediaForm.mediaType)?"Image":"File")}`}</label><input placeholder="Optional external asset URL" value={mediaForm.assetUrl} onChange={e=>setMediaForm({...mediaForm,assetUrl:e.target.value})}/><input placeholder="Caption" value={mediaForm.caption} onChange={e=>setMediaForm({...mediaForm,caption:e.target.value})}/><input placeholder="Credit / creator" value={mediaForm.credit} onChange={e=>setMediaForm({...mediaForm,credit:e.target.value})}/><input placeholder="Alt text / accessibility description" value={mediaForm.altText} onChange={e=>setMediaForm({...mediaForm,altText:e.target.value})}/><input placeholder="Tags, comma separated" value={mediaForm.tags} onChange={e=>setMediaForm({...mediaForm,tags:e.target.value})}/><button className="primary-action" disabled={mediaUploading} onClick={()=>void createMediaAsset()}>{mediaUploading?"Uploading...":"Upload & Catalog Asset"}</button></div><div className="database-simple-grid media-manager-grid">{mediaAssets.filter(m=>!(m as any).archived_at).map(m=><article key={m.id}>{m.asset_url&&m.media_type!=="document"&&<img src={m.asset_url} alt={m.alt_text||m.title}/>}<strong>{m.title}</strong><p>{m.caption||m.credit||m.media_type}</p>{m.tags?.length>0&&<small>{m.tags.join(" • ")}</small>}<div className="media-card-actions"><a href={m.asset_url} target="_blank" rel="noreferrer">Open</a><button className="danger-action" onClick={()=>void deleteMediaAsset(m.id,m.title)}>Delete</button></div></article>)}</div></section>}
  {databaseTab==="bulk"&&<section className="admin-panel"><span className="card-label">BULK DATABASE MANAGER</span><h2>{selectedDatabaseRecordIds.size} Records Selected</h2><p className="admin-help">Select records from the Records tab, then manage them together here.</p><div className="bulk-actions"><button onClick={()=>void bulkWorkflow("draft")}>Mark Draft</button><button onClick={()=>void bulkWorkflow("in_review")}>Send to Review</button><button onClick={()=>void bulkWorkflow("approved")}>Approve</button><button onClick={()=>void bulkWorkflow("published")}>Mark Published</button><button onClick={exportSelectedCsv}>Export Selected CSV</button><button className="danger-action" onClick={()=>void bulkArchive()}>Archive Selected</button></div></section>}
  {databaseTab==="health"&&<section className="admin-panel"><span className="card-label">DATABASE HEALTH CENTER</span><h2>Structure & Completeness</h2><div className="health-grid"><div><strong>{databaseHealth?.active_records??activeRecords.length}</strong><span>Active</span></div><div><strong>{databaseHealth?.draft_records??0}</strong><span>Drafts</span></div><div><strong>{databaseHealth?.review_records??0}</strong><span>In Review</span></div><div><strong>{databaseHealth?.records_without_summary??0}</strong><span>Missing Summary</span></div><div><strong>{databaseHealth?.records_without_image??0}</strong><span>Missing Image</span></div><div><strong>{databaseHealth?.links??universalLinks.length}</strong><span>Universal Links</span></div></div><div className="health-list">{activeRecords.filter(r=>recordCompleteness(r)<100).sort((a,b)=>recordCompleteness(a)-recordCompleteness(b)).map(r=><button key={r.id} onClick={()=>{setDatabaseTab("records");openDatabaseRecord(r)}}><span>{r.record_code} • {r.name}</span><strong>{recordCompleteness(r)}%</strong></button>)}</div></section>}
  {databaseTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Database Record Revisions</h2><p className="admin-help">Every record update is captured automatically. Restore an older version without losing the current one.</p><div className="revision-list">{databaseRevisions.map(r=><article key={r.id}><div><strong>{r.record_code||"Record"} • {r.record_name||"Untitled"}</strong><span>{r.changed_by_email||"Studio admin"} • {new Date(r.created_at).toLocaleString()}</span></div><button onClick={()=>void restoreDatabaseRevision(r)}>Restore</button></article>)}</div></section>}
 {databaseTab==="duplicates"&&<section className="admin-panel"><span className="card-label">DATA QUALITY</span><h2>Duplicate Detection</h2><p className="admin-help">Potential duplicates are grouped by record type and normalized name. Nothing is merged automatically.</p><div className="duplicate-grid">{duplicateGroups().length===0?<p className="admin-empty">No likely duplicate expanded records found.</p>:duplicateGroups().map((group,i)=><article key={i}><strong>{group[0].name}</strong><span>{recordTypes.find(t=>t.id===group[0].record_type_id)?.name||"Record"}</span>{group.map(r=><button key={r.id} onClick={()=>{setDatabaseTab("records");void openDatabaseRecord(r)}}>{r.record_code} • {r.workflow_status.replace(/_/g," ")}</button>)}</article>)}</div></section>}
 {databaseTab==="templates"&&<section className="admin-panel"><span className="card-label">REUSABLE STRUCTURE</span><h2>Field Templates</h2><p className="admin-help">Templates suggest structured fields without locking your lore into a rigid schema.</p><div className="database-form-grid"><select value={templateForm.recordTypeId} onChange={e=>setTemplateForm({...templateForm,recordTypeId:e.target.value})}><option value="">Record type</option>{recordTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><input placeholder="Template name" value={templateForm.name} onChange={e=>setTemplateForm({...templateForm,name:e.target.value})}/><textarea className="json-editor" value={templateForm.fieldsText} onChange={e=>setTemplateForm({...templateForm,fieldsText:e.target.value})}/><button className="primary-action" onClick={()=>void createFieldTemplate()}>Create Template</button></div><div className="database-simple-grid">{fieldTemplates.map(t=><article key={t.id}><strong>{t.name}</strong><p>{recordTypes.find(x=>x.id===t.record_type_id)?.name||"Record"}</p><small>{t.fields?.length||0} suggested fields</small></article>)}</div></section>}
-{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">VALIDATED INGEST</span><h2>JSON Import Center</h2><p className="admin-help">Paste a JSON array or a Studio export. V6 validates the rows before inserting anything.</p><textarea className="import-editor" placeholder='[{"record_type_slug":"artifact","name":"Example"}]' value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Validate & Preview</button>{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
+{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">No coding required. Paste a normal labeled character profile, upload a TXT, Markdown, JSON, or CSV file, or use JSON only when you need the advanced format. Studio analyzes it and opens the result in Character Creator for review before anything is saved.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Profile</button>{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
 {databaseTab==="backup"&&<section className="admin-panel"><span className="card-label">PORTABILITY & RECOVERY</span><h2>Export & Backup Center</h2><p className="admin-help">Export the current operational database locally or create a named server snapshot before a major editing session.</p><div className="database-backup-actions"><button className="secondary-action" onClick={exportStudioData}>Export Full JSON</button>{adminRole==="primary_admin"&&<><input placeholder="Backup label — e.g. Before Moonwood Import" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Named Snapshot</button></>}</div><div className="admin-feed">{backups.map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section>}
  </section></main>;
 }
 
 if(page==="admin"){
 const pending=adminContent.filter(x=>x.workflow_status==="in_review").length;
-return <main className="dashboard-shell admin-center-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">{adminRole||"member"}</span><button className="back-button" onClick={()=>setPage("dashboard")}>Dashboard</button></div></header><section className="admin-center-shell"><div className="admin-center-hero"><div><p className="eyebrow">COLLABORATIVE DATABASE CONTROL</p><h1>Admin Center</h1><p>Manage your team, review content, follow changes, preserve revisions, and keep private production notes.</p></div><button className="secondary-action" onClick={()=>void loadAdminCenter()}>{adminBusy?"Refreshing...":"Refresh"}</button></div>{adminError&&<p className="login-error">{adminError}</p>}<div className="admin-metrics"><div><strong>{adminMembers.length}</strong><span>Team Members</span></div><div><strong>{adminContent.length}</strong><span>Managed Records</span></div><div><strong>{pending}</strong><span>In Review</span></div><div><strong>{adminRevisions.length}</strong><span>Recent Revisions</span></div></div><nav className="admin-tabs">{(["overview","content","activity","sessions","revisions","notes","team"] as const).map(tab=><button key={tab} className={adminTab===tab?"active":""} onClick={()=>setAdminTab(tab)}>{tab}</button>)}</nav>
+return <main className="dashboard-shell admin-center-page"><StudioTopNav /><section className="admin-center-shell"><div className="admin-center-hero"><div><p className="eyebrow">COLLABORATIVE DATABASE CONTROL</p><h1>Admin Center</h1><p>Manage your team, review content, follow changes, preserve revisions, and keep private production notes.</p></div><button className="secondary-action" onClick={()=>void loadAdminCenter()}>{adminBusy?"Refreshing...":"Refresh"}</button></div>{adminError&&<p className="login-error">{adminError}</p>}<div className="admin-metrics"><div><strong>{adminMembers.length}</strong><span>Team Members</span></div><div><strong>{adminContent.length}</strong><span>Managed Records</span></div><div><strong>{pending}</strong><span>In Review</span></div><div><strong>{adminRevisions.length}</strong><span>Recent Revisions</span></div></div><nav className="admin-tabs">{(["overview","content","activity","sessions","revisions","notes","team"] as const).map(tab=><button key={tab} className={adminTab===tab?"active":""} onClick={()=>setAdminTab(tab)}>{tab}</button>)}</nav>
 {adminTab==="overview"&&<div className="admin-overview-grid"><section className="admin-panel"><span className="card-label">WORKFLOW</span><h2>Editorial Queue</h2><p>{pending?`${pending} record${pending===1?" is":"s are"} waiting for review.`:"Nothing is waiting for review."}</p><button className="secondary-action" onClick={()=>setAdminTab("content")}>Open Content Manager</button></section><section className="admin-panel"><span className="card-label">RECENT ACTIVITY</span><h2>Latest Changes</h2>{adminActivity.slice(0,6).map(x=><div className="admin-feed-row" key={x.id}><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")} • {adminMembers.find(m=>m.user_id===x.actor_user_id)?.display_name||x.actor_email||"system"}</span></div>)}</section></div>}
 {adminTab==="content"&&<section className="admin-panel"><div className="admin-panel-heading"><div><span className="card-label">DATABASE WORKFLOW</span><h2>Content Manager</h2></div><small>Draft → In Review → Approved → Published</small></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Record</th><th>Type</th><th>Creator</th><th>Workflow</th><th>Updated</th></tr></thead><tbody>{adminContent.map(row=><tr key={`${row.entity_type}:${row.id}`}><td><strong>{row.label}</strong></td><td>{row.entity_type}</td><td>{adminMembers.find(x=>x.user_id===row.user_id)?.display_name||adminMembers.find(x=>x.user_id===row.user_id)?.email||"Creator"}</td><td><select value={row.workflow_status} onChange={e=>void setWorkflowStatus(row,e.target.value)}><option value="draft">Draft</option><option value="in_review">In Review</option><option value="approved">Approved</option><option value="published">Published</option></select></td><td>{row.updated_at?new Date(row.updated_at).toLocaleString():"—"}</td></tr>)}</tbody></table></div></section>}
 {adminTab==="activity"&&<section className="admin-panel"><span className="card-label">AUDIT TRAIL</span><h2>Activity Log</h2><div className="admin-feed">{adminActivity.map(x=><div className="admin-feed-row" key={x.id}><div><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")}</span></div><small>{adminMembers.find(m=>m.user_id===x.actor_user_id)?.display_name||x.actor_email||"system"} • {new Date(x.created_at).toLocaleString()}</small></div>)}</div></section>}
@@ -3467,58 +3444,10 @@ return <main className="dashboard-shell admin-center-page"><header className="st
 {adminTab==="team"&&<section className="admin-panel"><span className="card-label">ACCESS & ROLES</span><h2>Studio Team</h2>{adminRole==="primary_admin"&&<div className="admin-add-member"><input type="email" value={adminMemberEmail} onChange={e=>setAdminMemberEmail(e.target.value)} placeholder="Existing Umbra Studio account email"/><select value={adminMemberRole} onChange={e=>setAdminMemberRole(e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button className="primary-action" onClick={()=>void addStudioAdmin()}>Add Collaborator</button></div>}<div className="admin-team-grid">{adminMembers.map(m=><article className="admin-member-card" key={m.user_id}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><span>{m.email}</span></div><span className="admin-role-pill">{m.role}</span><small>Last login: {m.last_login_at?new Date(m.last_login_at).toLocaleString():"Never recorded"}</small>{adminRole==="primary_admin"&&<div className="admin-member-actions"><button onClick={()=>{const n=prompt("Studio display name",m.display_name||"");if(n)void setMemberDisplayName(m.user_id,n)}}>Rename</button><select value={m.role} disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onChange={e=>void changeAdminRole(m.user_id,e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onClick={()=>void removeStudioAdmin(m.user_id)}>Remove</button></div>}</article>)}</div></section>}</section></main>;
 }
 
-return ( <main className="dashboard-shell"> <header className="studio-header"> <div className="brand"> <div className="brand-moon">
-☾ </div>
-
-      <div>
-        <p className="header-eyebrow">
-          UMBRA CONNECT
-        </p>
-
-        <h2>
-          Umbra Studio
-        </h2>
-      </div>
-    </div>
-
-    <div className="account-area">
-      <div className="connection-dot" />
-
-      <div className="account-copy">
-        <span>
-          Connected
-        </span>
-
-        <small>
-          {session.user.email}
-        </small>
-      </div>
-
-      <button
-        type="button"
-        className="sign-out-button"
-        onClick={handleSignOut}
-      >
-        Sign Out
-      </button>
-    </div>
-  </header>
+return ( <main className="dashboard-shell"> <StudioTopNav />
 
   <section className="dashboard-content">
-    <div className="welcome-section">
-      <p className="eyebrow">
-        THE UMBRAL WORLD AWAITS
-      </p>
-
-      <h1>
-        Welcome to Umbra Studio
-      </h1>
-
-      <p>
-        Create, organize, and develop the
-        characters that inhabit your world.
-      </p>
-    </div>
+    
 
     <section className="studio-command-center">
       <div className="command-search"><span>⌕</span><input type="search" value={studioSearch} onChange={e=>setStudioSearch(e.target.value)} placeholder="Search your Studio — characters, Codex, locations, timeline..."/></div>
@@ -3528,133 +3457,7 @@ return ( <main className="dashboard-shell"> <header className="studio-header"> <
 
     <section className="v10-dashboard-pulse"><div className="v10-pulse-head"><div><span className="card-label">STUDIO 1.0 COMMAND CENTER</span><h2>{studioSettings?.studio_subtitle||"Production Pulse"}</h2></div><div className="v10-quick-actions"><button onClick={()=>void openProduction("projects")}>+ Story Project</button><button onClick={()=>void openWorldDatabase("records")}>+ Lore Record</button><button onClick={()=>void openProduction("inbox")}>Inbox</button></div></div><div className="v10-pulse-grid"><button onClick={()=>void openProduction("inbox")}><strong>{studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread Notifications</span></button><button onClick={()=>void openProduction("assignments")}><strong>{studioAssignments.filter(x=>!["done","cancelled"].includes(x.status)).length}</strong><span>Open Assignments</span></button><button onClick={()=>void openWorldDatabase("continuity")}><strong>{continuityIssues.filter(x=>["open","reviewing"].includes(x.status)).length}</strong><span>Continuity Alerts</span></button><button onClick={()=>void openProduction("overview")}><strong>{changesSinceVisit.length}</strong><span>Changes Since Visit</span></button></div>{studioSettings?.show_dashboard_activity!==false&&changesSinceVisit.length>0&&<div className="v10-recent-strip">{changesSinceVisit.slice(0,4).map(x=><span key={x.id}><strong>{x.actor_name}</strong> {x.action.replace(/_/g," ")} <em>{x.entity_label||x.entity_type}</em></span>)}</div>}</section>
 
-    <div className="dashboard-grid">
-      <button
-        type="button"
-        className="dashboard-card primary-card"
-        onClick={openCreateCharacter}
-      >
-        <div className="card-icon">
-          ✦
-        </div>
-
-        <div>
-          <span className="card-label">
-            CREATE
-          </span>
-
-          <h3>
-            Create Character
-          </h3>
-
-          <p>
-            Begin a new character and bring
-            another soul into the Umbral World.
-          </p>
-        </div>
-
-        <span className="card-arrow">
-          →
-        </span>
-      </button>
-
-      <button
-        type="button"
-        className="dashboard-card"
-        onClick={openMyCharacters}
-      >
-        <div className="card-icon">
-          ♙
-        </div>
-
-        <div>
-          <span className="card-label">
-            YOUR CREATIONS
-          </span>
-
-          <h3>
-            My Characters
-          </h3>
-
-          <p>
-            Continue working on your characters,
-            designs, lore, and profiles.
-          </p>
-        </div>
-
-        <span className="card-arrow">
-          →
-        </span>
-      </button>
-
-      <button
-        type="button"
-        className="dashboard-card"
-        onClick={openCharacterLibrary}
-      >
-        <div className="card-icon">
-          ◆
-        </div>
-
-        <div>
-          <span className="card-label">
-            EXPLORE
-          </span>
-
-          <h3>
-            Character Library
-          </h3>
-
-          <p>
-            Browse characters connected to the
-            Umbra Connect universe.
-          </p>
-        </div>
-
-        <span className="card-arrow">
-          →
-        </span>
-      </button>
-
-      <button
-        type="button"
-        className="dashboard-card"
-        onClick={() => void openWorldOrganization()}
-      >
-        <div className="card-icon">⌘</div>
-        <div>
-          <span className="card-label">WORLDBUILDING</span>
-          <h3>World Organization</h3>
-          <p>Manage realms, races, factions, clans, houses, families, and bloodlines.</p>
-        </div>
-        <span className="card-arrow">→</span>
-      </button>
-
-      <button type="button" className="dashboard-card" onClick={() => void openWorldExplorer("map")}>
-        <div className="card-icon">✧</div><div><span className="card-label">EXPLORE & CHRONICLE</span><h3>World Explorer</h3><p>Open the interactive map, nested locations, historical timeline, tags, and favorites.</p></div><span className="card-arrow">→</span>
-      </button>
-
-
-      <button type="button" className="dashboard-card database-dashboard-card" onClick={() => void openWorldDatabase()}><div className="card-icon">▦</div><div><span className="card-label">CANON • DATABASE • PUBLISHING</span><h3>World Database</h3><p>Control canon, continuity, public encyclopedia records, expanded lore, collections, links, media, imports, exports, and backups.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card production-dashboard-card" onClick={() => void openProduction()}>
-        <div className="card-icon">✦</div>
-        <div>
-          <span className="card-label">STORY • PLANNING • COLLABORATION</span>
-          <h3>Story Production Center</h3>
-          <p>Build projects, story arcs, scenes, plot beats, character journeys, assignments, reviews, notifications, and story-world connections.</p>
-        </div>
-        <span className="card-arrow">→</span>
-      </button>
-
-      <button type="button" className="dashboard-card v101-messages-card" onClick={() => void openMessages()}><div className="card-icon">✉</div><div><span className="card-label">COLLABORATOR • DIRECT MESSAGES</span><h3>Studio Messages</h3><p>Private conversations with your authorized Studio collaborators, with unread and read status.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card v101-transfer-card" onClick={() => void openTransferCenter()}><div className="card-icon">⇩</div><div><span className="card-label">BACKUP • TRANSFER • SETUP</span><h3>Backup & Transfer Center</h3><p>Download complete Studio backups, create cloud snapshots, validate backup files, and set up another admin computer.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card v10-settings-card" onClick={() => void openStudioSettings()}><div className="card-icon">⚙</div><div><span className="card-label">STUDIO 1.0 • PREFERENCES</span><h3>Studio Settings</h3><p>Control autosave, canon and spoiler defaults, collaborator presence, dashboard preferences, and Studio identity.</p></div><span className="card-arrow">→</span></button>
-
-      <button type="button" className="dashboard-card admin-dashboard-card" onClick={() => void openAdminCenter()}><div className="card-icon">⚙</div><div><span className="card-label">COLLABORATE & MANAGE</span><h3>Admin Center</h3><p>Manage collaborator names, login timestamps, presence history, editorial workflow, revisions, private notes, and the full change trail.</p></div><span className="card-arrow">→</span></button>
-    </div>
+    <section className="v104-home-panel"><div className="v104-home-main"><div><span className="card-label">UMBRA STUDIO 1.0.4</span><h1>Studio Overview</h1><p>Everything you use most is above. Search or jump directly into current work below.</p></div><div className="v104-home-counts"><button onClick={openMyCharacters}><strong>{studioCharacters.length}</strong><span>Characters</span></button><button onClick={()=>void openWorldOrganization()}><strong>{worldRecords.length}</strong><span>Codex</span></button><button onClick={()=>void openWorldExplorer("locations")}><strong>{worldLocations.filter(x=>!x.archived_at).length}</strong><span>Locations</span></button><button onClick={()=>void openProduction("scenes")}><strong>{storyScenes.length}</strong><span>Scenes</span></button><button onClick={()=>{const target=studioCharacters.find(x=>x.is_complete)||studioCharacters[0];if(target)void openConnections(target);else openMyCharacters();}}><strong>↗</strong><span>Family Tree</span></button></div></div></section>
 
     <div className="studio-footer-card">
       <div>

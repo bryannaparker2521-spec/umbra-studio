@@ -1,6 +1,6 @@
 [package]
 name = "umbra-studio"
-version = "1.0.3"
+version = "1.0.4"
 description = "Umbra Studio Desktop"
 authors = ["Umbra Connect"]
 edition = "2021"
