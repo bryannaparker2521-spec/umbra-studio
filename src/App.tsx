@@ -19,7 +19,7 @@ type CharacterRelationship = {
 type WorldRecord = {
   id: string;
   user_id: string;
-  record_type: "realm" | "race" | "faction" | "family";
+  record_type: "realm" | "race" | "faction" | "clan" | "house" | "family" | "bloodline" | "culture" | "organization" | "religion";
   name: string;
   subtype: string | null;
   description: string | null;
@@ -156,9 +156,9 @@ const [loadingConnections, setLoadingConnections] = useState(false);
 const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
 const [loadingWorld, setLoadingWorld] = useState(false);
 const [worldError, setWorldError] = useState("");
-const [worldTypeFilter, setWorldTypeFilter] = useState<"all" | "realm" | "race" | "faction" | "family">("all");
+const [worldTypeFilter, setWorldTypeFilter] = useState<"all" | "realm" | "race" | "faction" | "clan" | "house" | "family" | "bloodline" | "culture" | "organization" | "religion">("all");
 const [worldSearch, setWorldSearch] = useState("");
-const [worldFormType, setWorldFormType] = useState<"realm" | "race" | "faction" | "family">("realm");
+const [worldFormType, setWorldFormType] = useState<"realm" | "race" | "faction" | "clan" | "house" | "family" | "bloodline" | "culture" | "organization" | "religion">("realm");
 const [worldFormName, setWorldFormName] = useState("");
 const [worldFormSubtype, setWorldFormSubtype] = useState("");
 const [worldFormDescription, setWorldFormDescription] = useState("");
@@ -2306,7 +2306,7 @@ return <main className="dashboard-shell explorer-page">
 }
 
 if (page === "world") {
-const labels: Record<string,string> = { realm:"Realm / Homeland", race:"Race / Species", faction:"Faction / Clan / House", family:"Family / Bloodline" };
+const labels: Record<string,string> = { realm:"Realm / Kingdom", race:"Race / Species", faction:"Faction", clan:"Clan", house:"House", family:"Family", bloodline:"Bloodline", culture:"Culture / People", organization:"Organization", religion:"Religion / Belief" };
 const filteredWorld = worldRecords.filter((record) => {
   const q = worldSearch.trim().toLowerCase();
   return (worldTypeFilter === "all" || record.record_type === worldTypeFilter)
@@ -2339,7 +2339,7 @@ return (
         <section className="codex-section"><h3>Related Codex Entries</h3><div className="related-codex-grid">{worldRelated.map((link)=>{const target=link.target;if(!target)return null;return <div className="related-codex-card" key={link.id}><button type="button" style={{all:"unset",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>void openWorldOrganization(target)}>{target.emblem_url&&<img src={target.emblem_url} alt=""/>}<div><strong>{target.name}</strong><small>{link.relation_label||labels[target.record_type]}</small></div></button><button type="button" className="related-remove" onClick={()=>void removeWorldRelation(link)}>×</button></div>})}</div><div className="relation-builder"><select value={worldRelatedTargetId} onChange={(e)=>setWorldRelatedTargetId(e.target.value)}><option value="">Choose another Codex entry...</option>{worldRecords.filter((item)=>item.id!==selectedWorldRecord.id).map((item)=><option key={item.id} value={item.id}>{item.name} — {labels[item.record_type]}</option>)}</select><input value={worldRelatedLabel} onChange={(e)=>setWorldRelatedLabel(e.target.value)} placeholder="Relationship label: homeland of, allied with..."/><button type="button" className="secondary-action" disabled={!worldRelatedTargetId||worldDetailBusy} onClick={addWorldRelation}>Connect</button></div></section>
       </>}
       {!selectedWorldRecord && <>
-        <div className="world-form"><span className="creator-kicker">NEW CODEX ENTRY</span><h3>Create World Record</h3><div className="world-form-grid"><select value={worldFormType} onChange={(e)=>setWorldFormType(e.target.value as typeof worldFormType)}><option value="realm">Realm / Homeland</option><option value="race">Race / Species</option><option value="faction">Faction / Clan / House</option><option value="family">Family / Bloodline</option></select><input value={worldFormName} onChange={(e)=>setWorldFormName(e.target.value)} placeholder="Name..."/><input value={worldFormSubtype} onChange={(e)=>setWorldFormSubtype(e.target.value)} placeholder="Subtype / title (optional)..."/><textarea rows={4} value={worldFormDescription} onChange={(e)=>setWorldFormDescription(e.target.value)} placeholder="Describe this part of the Umbral World..."/></div><button type="button" className="primary-action" disabled={worldSaving||!worldFormName.trim()} onClick={createWorldRecord}>{worldSaving?"Creating...":"Create Codex Entry"}</button></div>
+        <div className="world-form"><span className="creator-kicker">NEW CODEX ENTRY</span><h3>Create World Record</h3><div className="world-form-grid"><select value={worldFormType} onChange={(e)=>setWorldFormType(e.target.value as typeof worldFormType)}><option value="realm">Realm / Kingdom</option><option value="race">Race / Species</option><option value="culture">Culture / People</option><option value="faction">Faction</option><option value="clan">Clan</option><option value="house">House</option><option value="family">Family</option><option value="bloodline">Bloodline</option><option value="organization">Organization</option><option value="religion">Religion / Belief</option></select><input value={worldFormName} onChange={(e)=>setWorldFormName(e.target.value)} placeholder="Name..."/><input value={worldFormSubtype} onChange={(e)=>setWorldFormSubtype(e.target.value)} placeholder="Subtype / title (optional)..."/><textarea rows={4} value={worldFormDescription} onChange={(e)=>setWorldFormDescription(e.target.value)} placeholder="Describe this part of the Umbral World..."/></div><button type="button" className="primary-action" disabled={worldSaving||!worldFormName.trim()} onClick={createWorldRecord}>{worldSaving?"Creating...":"Create Codex Entry"}</button></div>
         <div className="world-toolbar"><input type="search" value={worldSearch} onChange={(e)=>setWorldSearch(e.target.value)} placeholder="Search the Codex..."/><select value={worldTypeFilter} onChange={(e)=>setWorldTypeFilter(e.target.value as typeof worldTypeFilter)}><option value="all">All types</option><option value="realm">Realms / Homelands</option><option value="race">Races / Species</option><option value="faction">Factions / Clans / Houses</option><option value="family">Families / Bloodlines</option></select></div>
         {loadingWorld?<div className="studio-footer-card"><strong>Opening the Codex...</strong></div>:<div className="world-grid">{filteredWorld.map((record)=><article className="world-card" key={record.id}><div className="world-card-cover">{record.cover_url&&<img src={record.cover_url} alt=""/>}{record.emblem_url&&<img className="world-card-emblem" src={record.emblem_url} alt=""/>}</div><div className="world-card-body"><span className="world-type">{labels[record.record_type]}</span><h3>{record.name}</h3>{record.subtype&&<strong>{record.subtype}</strong>}<p>{record.description||"Ready for worldbuilding details."}</p><div className="world-actions"><button type="button" className="primary-action" onClick={()=>void openWorldOrganization(record)}>Open Codex Page</button><button type="button" className="secondary-action" onClick={()=>toggleWorldPublication(record)}>{record.is_public?"Published":"Private"}</button><button type="button" className="secondary-action danger-action" onClick={()=>deleteWorldRecord(record)}>Delete</button></div></div></article>)}</div>}
       </>}
