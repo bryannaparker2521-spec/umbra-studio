@@ -50,6 +50,14 @@ function randomSessionToken(): string {
 	return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function randomSetupCode(): string {
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	const bytes = crypto.getRandomValues(new Uint8Array(10));
+	let code = "";
+	for (let i = 0; i < bytes.length; i++) code += alphabet[bytes[i] % alphabet.length];
+	return code.slice(0, 5) + "-" + code.slice(5);
+}
+
 const corsHeaders = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -288,6 +296,28 @@ export default {
 					.bind(id,account.id,tokenHash,now.toISOString(),expires.toISOString(),now.toISOString()).run();
 				return json({ok:true,token,user:{id:account.id,email:account.email,displayName:account.display_name,role:account.role},expiresAt:expires.toISOString()});
 			}
+			if(request.method==="POST"&&url.pathname==="/api/auth/activate"){
+				const b=await readJsonBody(request);
+				const email=String(b.email??"").trim().toLowerCase(),code=String(b.code??"").trim().toUpperCase(),password=String(b.password??"");
+				if(!email||!code||!password)return errorResponse(400,"Email, setup code, and password are required.");
+				if(password.length<12)return errorResponse(400,"Password must be at least 12 characters.");
+				const codeHash=await sha256Hex(code),now=new Date().toISOString();
+				const target=await env.umbra_studio_production.prepare(`
+					SELECT u.id,u.password_hash,c.id AS code_id FROM studio_users u
+					INNER JOIN studio_admin_members a ON a.user_id=u.id
+					INNER JOIN studio_account_setup_codes c ON c.user_id=u.id
+					WHERE lower(u.email)=? AND u.auth_status='active' AND c.code_hash=? AND c.used_at IS NULL AND c.expires_at>?
+					ORDER BY c.created_at DESC LIMIT 1
+				`).bind(email,codeHash,now).first<any>();
+				if(!target)return errorResponse(400,"That setup code is invalid or expired.");
+				if(target.password_hash)return errorResponse(409,"This account is already activated. Sign in normally.");
+				const passwordHash=await hashPassword(password);
+				await env.umbra_studio_production.batch([
+					env.umbra_studio_production.prepare("UPDATE studio_users SET password_hash=?,updated_at=? WHERE id=?").bind(passwordHash,now,target.id),
+					env.umbra_studio_production.prepare("UPDATE studio_account_setup_codes SET used_at=? WHERE id=?").bind(now,target.code_id)
+				]);
+				return json({ok:true});
+			}
 			if(request.method==="POST"&&url.pathname==="/api/auth/logout"){
 				const token=getBearerToken(request);
 				if(token){const hash=await sha256Hex(token);await env.umbra_studio_production.prepare("UPDATE studio_auth_sessions SET revoked_at=? WHERE token_hash=?").bind(new Date().toISOString(),hash).run();}
@@ -312,6 +342,18 @@ export default {
 			}
 
 			const user = await authenticate(request, env);
+
+			if(request.method==="POST"&&url.pathname==="/api/auth/setup-code"){
+				requireRole(user,["primary_admin"]);
+				const b=await readJsonBody(request),userId=String(b.userId??"").trim();
+				const target=await env.umbra_studio_production.prepare("SELECT u.id,u.email,u.password_hash FROM studio_users u INNER JOIN studio_admin_members a ON a.user_id=u.id WHERE u.id=? AND u.auth_status='active' LIMIT 1").bind(userId).first<any>();
+				if(!target)return errorResponse(404,"Studio member not found.");
+				if(target.password_hash)return errorResponse(409,"This account is already activated.");
+				const code=randomSetupCode(),codeHash=await sha256Hex(code),now=new Date(),expires=new Date(now.getTime()+24*60*60*1000);
+				await env.umbra_studio_production.prepare("UPDATE studio_account_setup_codes SET used_at=? WHERE user_id=? AND used_at IS NULL").bind(now.toISOString(),target.id).run();
+				await env.umbra_studio_production.prepare("INSERT INTO studio_account_setup_codes(id,user_id,code_hash,created_by,created_at,expires_at) VALUES(?,?,?,?,?,?)").bind(crypto.randomUUID(),target.id,codeHash,user.id,now.toISOString(),expires.toISOString()).run();
+				return json({ok:true,code,email:target.email,expiresAt:expires.toISOString()});
+			}
 
 			// ------------------------------------------------------------
 			// R2 MEDIA WRITE API
