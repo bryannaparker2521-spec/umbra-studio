@@ -13,7 +13,7 @@ interface AuthenticatedStudioUser {
 }
 
 const SESSION_DAYS = 30;
-const PBKDF2_ITERATIONS = 210_000;
+const PBKDF2_ITERATIONS = 100_000;
 
 function bytesToBase64(bytes: Uint8Array): string {
 	let binary = "";
