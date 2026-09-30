@@ -1153,7 +1153,7 @@ export default {
 			if(request.method==="GET"&&url.pathname==="/api/explorer"){
 				const atlas=await env.umbra_studio_production.prepare(`SELECT * FROM studio_world_atlas LIMIT 1`).first<any>();
 				let favorites:any[]=[];
-				try{favorites=await getAll(env,`SELECT entity_type,entity_id FROM studio_favorites WHERE user_id=?`,[user.id]);}catch{favorites=[];}
+				try{favorites=await getAll(env,`SELECT entity_type AS item_type,entity_id AS item_id FROM studio_favorites WHERE user_id=?`,[user.id]);}catch{favorites=[];}
 				return json({ok:true,atlas:atlas??null,favorites});
 			}
 			if(request.method==="PUT"&&url.pathname==="/api/explorer/atlas"){
