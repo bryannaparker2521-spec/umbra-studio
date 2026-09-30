@@ -1249,22 +1249,15 @@ function populateWorldEditor(record: WorldRecord | null) {
 }
 
 async function loadWorldRelations(recordId: string) {
-  const { data, error: relationError } = await supabase
-    .from("studio_world_relations")
-    .select("id, source_record_id, target_record_id, relation_label")
-    .eq("source_record_id", recordId)
-    .order("created_at", { ascending: true });
-  if (relationError) { setWorldError(relationError.message); return; }
-  const rows = (data ?? []) as WorldRelation[];
-  const ids = rows.map((row) => row.target_record_id);
-  if (!ids.length) { setWorldRelated([]); return; }
-  const { data: targets, error: targetError } = await supabase
-    .from("studio_world_records")
-    .select("id, user_id, record_type, name, subtype, description, emblem_url, cover_url, lore_details, is_public, created_at, updated_at")
-    .in("id", ids);
-  if (targetError) { setWorldError(targetError.message); return; }
-  const map = new Map(((targets ?? []) as WorldRecord[]).map((item) => [item.id, item]));
-  setWorldRelated(rows.map((row) => ({ ...row, target: map.get(row.target_record_id) ?? null })));
+  try {
+    const data=await umbraCloudFetch<any>(`/api/world-relations?sourceId=${encodeURIComponent(recordId)}`);
+    const rows=(data.relations??[]) as WorldRelation[];
+    const targets=(data.targets??[]) as WorldRecord[];
+    const map=new Map(targets.map(item=>[item.id,item]));
+    setWorldRelated(rows.map(row=>({...row,target:map.get(row.target_record_id)??null})));
+  } catch (failure) {
+    setWorldError(failure instanceof Error?failure.message:"World relationships could not be loaded.");
+  }
 }
 
 async function openWorldOrganization(record?: WorldRecord | null) {
@@ -1455,40 +1448,23 @@ function linkWorldRecord(kind: "realm" | "race" | "faction" | "family", id: stri
 async function setCharacterPublication(saved: StudioCharacterRow, makePublic: boolean) {
   if (!session) return;
   setCharactersError("");
-  const { error: publishError } = await supabase
-    .from("studio_characters")
-    .update({ is_public: makePublic })
-    .eq("id", saved.id);
-
-  if (publishError) {
-    setCharactersError(publishError.message);
-    return;
-  }
-
-  setStudioCharacters((current) =>
-    current.map((item) => item.id === saved.id ? { ...item, is_public: makePublic } : item)
-  );
-  if (selectedCharacter?.id === saved.id) {
-    setSelectedCharacter({ ...selectedCharacter, is_public: makePublic });
+  try {
+    await umbraCloudFetch(`/api/characters/${encodeURIComponent(saved.id)}`,{method:"PUT",body:JSON.stringify({...saved,is_public:makePublic})});
+    setStudioCharacters(current=>current.map(item=>item.id===saved.id?{...item,is_public:makePublic}:item));
+    if(selectedCharacter?.id===saved.id)setSelectedCharacter({...selectedCharacter,is_public:makePublic});
+  } catch(failure) {
+    setCharactersError(failure instanceof Error?failure.message:"Character publication could not be changed.");
   }
 }
-
-
 
 async function ensureStudioCharacterId() {
   if (studioCharacterId) return studioCharacterId;
   if (!session) throw new Error("You must be signed in to upload media.");
-
-  const record = buildStudioCharacterRecord(6, false);
-  const { data, error: insertError } = await supabase
-    .from("studio_characters")
-    .insert(record)
-    .select("id")
-    .single();
-
-  if (insertError) throw insertError;
-  setStudioCharacterId(data.id);
-  return data.id as string;
+  const record=buildStudioCharacterRecord(6,false);
+  const id=crypto.randomUUID();
+  await umbraCloudFetch("/api/characters",{method:"POST",body:JSON.stringify({...record,id})});
+  setStudioCharacterId(id);
+  return id;
 }
 
 async function uploadCharacterImage(
@@ -1534,20 +1510,14 @@ function removeGalleryImage(url: string) {
 }
 
 async function deleteStudioCharacter(id: string, name: string) {
-if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
-
-setCharactersError("");
-const { error: deleteError } = await supabase
-  .from("studio_characters")
-  .delete()
-  .eq("id", id);
-
-if (deleteError) {
-  setCharactersError(deleteError.message);
-  return;
-}
-
-setStudioCharacters((current) => current.filter((item) => item.id !== id));
+  if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  setCharactersError("");
+  try {
+    await umbraCloudFetch(`/api/characters/${encodeURIComponent(id)}`,{method:"DELETE"});
+    setStudioCharacters(current=>current.filter(item=>item.id!==id));
+  } catch(failure) {
+    setCharactersError(failure instanceof Error?failure.message:"Character could not be deleted.");
+  }
 }
 
 function openCreateCharacter() {
@@ -3376,7 +3346,7 @@ if(page==="messages"){
 }
 
 if(page==="transfer"){
- return <main className="dashboard-shell v101-transfer-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">BACKUP & TRANSFER</span><button className="back-button" onClick={goBack}>← Back</button></div></header><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">SAFETY • PORTABILITY • COLLABORATION</p><h1>Backup & Transfer Center</h1><p>Keep local safety copies of Studio data and set up another administrator without splitting the live Umbra database.</p></div></div><div className="v101-transfer-grid"><section className="admin-panel"><span className="card-label">LOCAL SAFETY COPY</span><h2>Download Studio Backup</h2><p className="admin-help">Downloads a Studio 1.0 JSON archive to this computer. Keep dated copies somewhere safe. This file is for backup/recovery—not live collaboration.</p><button className="primary-action" onClick={exportStudioData}>Download Complete Studio Backup</button></section><section className="admin-panel"><span className="card-label">SUPABASE SNAPSHOT</span><h2>Create Cloud Backup</h2><p className="admin-help">Create a named server-side snapshot before major edits or imports.</p>{adminRole==="primary_admin"?<div className="database-backup-actions"><input placeholder="Backup label" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Cloud Backup</button></div>:<p className="admin-help">Only a Primary Admin can create server snapshots.</p>}<div className="admin-feed">{backups.slice(0,8).map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section><section className="admin-panel"><span className="card-label">RECOVERY CHECK</span><h2>Validate Backup File</h2><p className="admin-help">Choose a downloaded Studio backup. Validation reads it locally and does not change Supabase.</p><input type="file" accept="application/json,.json" onChange={e=>validateBackupFile(e.target.files?.[0]||null)}/>{backupValidation&&<div className={backupValidation.ok?"v101-valid":"v101-invalid"}><strong>{backupValidation.ok?"✓ Valid backup":"⚠ Backup problem"}</strong><p>{backupValidation.message}</p>{backupValidation.summary&&<small>{backupValidation.summary}</small>}</div>}<p className="admin-help"><strong>Restore safety:</strong> automatic destructive restore is intentionally not performed from this screen. A validated backup should be restored only after creating a fresh cloud snapshot and reviewing what will be replaced.</p></section><section className="admin-panel v101-admin-setup"><span className="card-label">OTHER ADMIN COMPUTER</span><h2>Set Up Another Administrator</h2><ol><li>Keep this Supabase project as the single live database.</li><li>Make sure the other person has their own Umbra Connect account and is listed in Admin Center → Team.</li><li>Send them the current Umbra Studio Desktop installer or your permanent Studio download page.</li><li>The installed desktop app already targets the shared Umbra Studio backend; they do not configure Supabase or download a database.</li><li>They sign in with their own authorized Umbra Connect account. Do not share your password.</li><li>Both computers use the same live characters, lore, story production, messages, assignments, and changes automatically.</li><li>Future database/content edits require no reinstall. Application feature updates are delivered as signed Umbra Studio Desktop releases.</li></ol><p className="admin-help">Do not import the downloaded JSON onto their computer for everyday collaboration. That would create a separate copy instead of a shared Studio.</p></section></div></section></main>;
+ return <main className="dashboard-shell v101-transfer-page"><header className="studio-header"><button className="brand-button" onClick={()=>setPage("dashboard")}><div className="brand-moon">☾</div><div className="brand-button-copy"><span className="header-eyebrow">UMBRA CONNECT</span><strong>Umbra Studio</strong></div></button><div className="account-area"><span className="admin-role-pill">BACKUP & TRANSFER</span><button className="back-button" onClick={goBack}>← Back</button></div></header><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">SAFETY • PORTABILITY • COLLABORATION</p><h1>Backup & Transfer Center</h1><p>Keep local safety copies of Studio data and set up another administrator without splitting the live Umbra database.</p></div></div><div className="v101-transfer-grid"><section className="admin-panel"><span className="card-label">LOCAL SAFETY COPY</span><h2>Download Studio Backup</h2><p className="admin-help">Downloads a Studio 1.0 JSON archive to this computer. Keep dated copies somewhere safe. This file is for backup/recovery—not live collaboration.</p><button className="primary-action" onClick={exportStudioData}>Download Complete Studio Backup</button></section><section className="admin-panel"><span className="card-label">CLOUD SNAPSHOT</span><h2>Create Cloud Backup</h2><p className="admin-help">Create a named server-side snapshot before major edits or imports.</p>{adminRole==="primary_admin"?<div className="database-backup-actions"><input placeholder="Backup label" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Cloud Backup</button></div>:<p className="admin-help">Only a Primary Admin can create server snapshots.</p>}<div className="admin-feed">{backups.slice(0,8).map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section><section className="admin-panel"><span className="card-label">RECOVERY CHECK</span><h2>Validate Backup File</h2><p className="admin-help">Choose a downloaded Studio backup. Validation reads it locally and does not change Umbra Studio Cloud.</p><input type="file" accept="application/json,.json" onChange={e=>validateBackupFile(e.target.files?.[0]||null)}/>{backupValidation&&<div className={backupValidation.ok?"v101-valid":"v101-invalid"}><strong>{backupValidation.ok?"✓ Valid backup":"⚠ Backup problem"}</strong><p>{backupValidation.message}</p>{backupValidation.summary&&<small>{backupValidation.summary}</small>}</div>}<p className="admin-help"><strong>Restore safety:</strong> automatic destructive restore is intentionally not performed from this screen. A validated backup should be restored only after creating a fresh cloud snapshot and reviewing what will be replaced.</p></section><section className="admin-panel v101-admin-setup"><span className="card-label">OTHER ADMIN COMPUTER</span><h2>Set Up Another Administrator</h2><ol><li>Umbra Studio Cloud is the shared live database.</li><li>Make sure the other person has their own Umbra Connect account and is listed in Admin Center → Team.</li><li>Send them the current Umbra Studio Desktop installer or your permanent Studio download page.</li><li>The installed desktop app already targets the shared Umbra Studio backend; they do not configure a separate database.</li><li>They sign in with their own authorized Umbra Connect account. Do not share your password.</li><li>Both computers use the same live characters, lore, story production, messages, assignments, and changes automatically.</li><li>Future database/content edits require no reinstall. Application feature updates are delivered as signed Umbra Studio Desktop releases.</li></ol><p className="admin-help">Do not import the downloaded JSON onto their computer for everyday collaboration. That would create a separate copy instead of a shared Studio.</p></section></div></section></main>;
 }
 
 if(page==="settings"){
