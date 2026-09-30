@@ -6,7 +6,7 @@ import StudioUpdateCenter from "./StudioUpdateCenter";
 import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
 
-type StudioPage = "dashboard" | "create" | "characters" | "library" | "profile" | "connections" | "world" | "explorer" | "admin" | "database" | "canon" | "production" | "settings" | "messages" | "transfer";
+type StudioPage = "dashboard" | "create" | "characters" | "library" | "profile" | "my-profile" | "connections" | "world" | "explorer" | "admin" | "database" | "canon" | "production" | "settings" | "messages" | "transfer";
 
 type CharacterRelationship = {
   id: string;
@@ -56,6 +56,7 @@ type TimelineEvent = {
 type WorldAtlas = { id: string; user_id: string; title: string; map_url: string | null; description: string | null; is_public: boolean; };
 
 type StudioAdminMember = { user_id:string; email:string|null; display_name:string|null; role:"primary_admin"|"admin"|"editor"; created_at:string; last_login_at?:string|null; last_seen_at?:string|null; password_set?:number|boolean; };
+type StudioUserProfile = { user_id:string; profile_image_url:string|null; personal_notes:string|null; created_at:string|null; updated_at:string|null; };
 type CollaboratorSession = { id:string; user_id:string; display_name:string|null; email:string|null; role:string|null; signed_in_at:string; last_seen_at:string; signed_out_at:string|null; };
 type CanonHistory = { id:string; entity_type:string; entity_id:string; entity_label:string|null; previous_status:string|null; new_status:string; reason:string|null; changed_by:string|null; changed_by_name:string|null; created_at:string; };
 type ContinuityIssue = { id:string; issue_type:string; severity:"info"|"warning"|"critical"; entity_type:string; entity_id:string|null; entity_label:string|null; message:string; details:Record<string,any>; status:string; created_at:string; updated_at:string; };
@@ -226,6 +227,19 @@ const [editingEventId, setEditingEventId] = useState<string | null>(null);
 const [draggingLocationId, setDraggingLocationId] = useState<string | null>(null);
 const [studioSearch, setStudioSearch] = useState("");
 const [adminMembers,setAdminMembers]=useState<StudioAdminMember[]>([]);
+const [myProfile,setMyProfile]=useState<StudioUserProfile|null>(null);
+const [myProfileNotes,setMyProfileNotes]=useState("");
+const [myProfileBusy,setMyProfileBusy]=useState(false);
+const [myProfileError,setMyProfileError]=useState("");
+const [myProfileDisplayName,setMyProfileDisplayName]=useState("");
+const [myProfileRole,setMyProfileRole]=useState("");
+const [myProfileEmail,setMyProfileEmail]=useState("");
+const [myProfileImageBusy,setMyProfileImageBusy]=useState(false);
+const [myProfilePasswordCurrent,setMyProfilePasswordCurrent]=useState("");
+const [myProfilePasswordNew,setMyProfilePasswordNew]=useState("");
+const [myProfilePasswordConfirm,setMyProfilePasswordConfirm]=useState("");
+const [myProfilePasswordBusy,setMyProfilePasswordBusy]=useState(false);
+const [myProfileMessage,setMyProfileMessage]=useState("");
 const [adminRole,setAdminRole]=useState<StudioAdminMember["role"]|null>(null);
 const [adminActivity,setAdminActivity]=useState<StudioActivity[]>([]);
 const [adminRevisions,setAdminRevisions]=useState<StudioRevision[]>([]);
@@ -851,6 +865,189 @@ async function saveStudioSettings(){if(!studioSettings||adminRole!=="primary_adm
 async function registerStudioSession(){if(!session?.user.id||activeStudioSessionId)return;try{const data=await umbraCloudFetch<{ok:true;id:string}>("/api/sessions",{method:"POST"});setActiveStudioSessionId(data.id);}catch(failure){console.error("Studio session registration failed:",failure);}}
 async function touchStudioSession(){if(!activeStudioSessionId)return;try{await umbraCloudFetch(`/api/sessions/${encodeURIComponent(activeStudioSessionId)}`,{method:"PATCH"});}catch(failure){console.error("Studio session heartbeat failed:",failure);}}
 async function setMyDisplayName(){if(!myStudioDisplayName.trim())return;try{await umbraCloudFetch("/api/me/display-name",{method:"PATCH",body:JSON.stringify({display_name:myStudioDisplayName.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
+async function loadMyProfile(){
+  setMyProfileBusy(true);
+  setMyProfileError("");
+  try{
+    const [profileData,meData]=await Promise.all([
+      umbraCloudFetch<{ok:true;profile:StudioUserProfile}>("/api/me/profile"),
+      umbraCloudFetch<{ok:true;user:{id:string;email:string|null;displayName:string|null;role:string|null}}>("/api/me")
+    ]);
+
+    setMyProfile(profileData.profile);
+    setMyProfileNotes(profileData.profile.personal_notes??"");
+    setMyProfileDisplayName(meData.user.displayName??"");
+    setMyProfileEmail(meData.user.email??"");
+    setMyProfileRole(meData.user.role??"member");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Your profile could not be loaded.");
+  }finally{
+    setMyProfileBusy(false);
+  }
+}
+
+async function openMyProfile(){
+  setPage("my-profile");
+  setMyProfileMessage("");
+  window.scrollTo({top:0,behavior:"smooth"});
+  await Promise.all([loadMyProfile(),loadV9Production()]);
+}
+
+async function saveMyProfile(){
+  setMyProfileBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+  try{
+    await umbraCloudFetch("/api/me/profile",{
+      method:"PATCH",
+      body:JSON.stringify({
+        profile_image_url:myProfile?.profile_image_url??null,
+        personal_notes:myProfileNotes
+      })
+    });
+    await loadMyProfile();
+    setMyProfileMessage("Personal notes saved.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Your profile could not be saved.");
+  }finally{
+    setMyProfileBusy(false);
+  }
+}
+
+async function saveMyProfileDisplayName(){
+  const displayName=myProfileDisplayName.trim();
+  if(!displayName){
+    setMyProfileError("Display name is required.");
+    return;
+  }
+
+  setMyProfileBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    await umbraCloudFetch("/api/me/display-name",{
+      method:"PATCH",
+      body:JSON.stringify({display_name:displayName})
+    });
+    await loadMyProfile();
+    setMyProfileMessage("Display name updated.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Display name could not be saved.");
+  }finally{
+    setMyProfileBusy(false);
+  }
+}
+
+async function uploadMyProfileImage(file:File){
+  if(!session?.user.id)return;
+
+  if(!file.type.startsWith("image/")){
+    setMyProfileError("Choose an image file for your profile picture.");
+    return;
+  }
+
+  if(file.size>15*1024*1024){
+    setMyProfileError("Profile images must be 15 MB or smaller.");
+    return;
+  }
+
+  setMyProfileImageBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    const uploaded=await uploadUmbraCloudMedia(
+      file,
+      `profiles/${session.user.id}`,
+      session.user.id
+    );
+
+    await umbraCloudFetch("/api/me/profile",{
+      method:"PATCH",
+      body:JSON.stringify({
+        profile_image_url:uploaded.url,
+        personal_notes:myProfileNotes
+      })
+    });
+
+    await loadMyProfile();
+    setMyProfileMessage("Profile picture updated.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Profile picture could not be uploaded.");
+  }finally{
+    setMyProfileImageBusy(false);
+  }
+}
+
+async function removeMyProfileImage(){
+  setMyProfileImageBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    await umbraCloudFetch("/api/me/profile",{
+      method:"PATCH",
+      body:JSON.stringify({
+        profile_image_url:null,
+        personal_notes:myProfileNotes
+      })
+    });
+
+    await loadMyProfile();
+    setMyProfileMessage("Profile picture removed.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Profile picture could not be removed.");
+  }finally{
+    setMyProfileImageBusy(false);
+  }
+}
+
+async function changeMyProfilePassword(){
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  if(!myProfilePasswordCurrent){
+    setMyProfileError("Enter your current password.");
+    return;
+  }
+
+  if(myProfilePasswordNew.length<8){
+    setMyProfileError("New password must be at least 8 characters.");
+    return;
+  }
+
+  if(myProfilePasswordNew!==myProfilePasswordConfirm){
+    setMyProfileError("New passwords do not match.");
+    return;
+  }
+
+  if(myProfilePasswordCurrent===myProfilePasswordNew){
+    setMyProfileError("New password must be different from your current password.");
+    return;
+  }
+
+  setMyProfilePasswordBusy(true);
+
+  try{
+    await umbraCloudFetch("/api/me/password",{
+      method:"PATCH",
+      body:JSON.stringify({
+        current_password:myProfilePasswordCurrent,
+        new_password:myProfilePasswordNew
+      })
+    });
+
+    setMyProfilePasswordCurrent("");
+    setMyProfilePasswordNew("");
+    setMyProfilePasswordConfirm("");
+    setMyProfileMessage("Password changed successfully.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Password could not be changed.");
+  }finally{
+    setMyProfilePasswordBusy(false);
+  }
+}
 async function setMemberDisplayName(userId:string,name:string){try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"PATCH",body:JSON.stringify({display_name:name.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
 async function changeCanonStatus(recordId:string,status:string){try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/canon`,{method:"PATCH",body:JSON.stringify({status,reason:canonReason.trim()||null})});setCanonReason("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Canon status could not be changed.");}}
 async function toggleRecordPublic(recordId:string,value:boolean){const record=databaseRecords.find(r=>r.id===recordId);if(!record)return;if(value&&record.workflow_status!=="published"){setDatabaseError("Publish the editorial workflow first, then enable encyclopedia visibility.");return;}if(value&&!['draft_canon','canon'].includes(record.canon_status||'concept')){setDatabaseError("Only Draft Canon or Canon records can be exposed to the encyclopedia.");return;}const slug=(record.public_slug||record.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+record.record_code.toLowerCase()).slice(0,120);try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/public`,{method:"PATCH",body:JSON.stringify({is_public:value,public_slug:slug})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Public visibility could not be changed.");}}
@@ -1671,6 +1868,7 @@ const StudioTopNav = () => (
         <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
         <button onClick={()=>void openAdminCenter()}>Admin</button>
         <button onClick={()=>void openStudioSettings()}>Settings</button>
+        <button onClick={()=>void openMyProfile()}>My Profile</button>
         <button type="button" onClick={()=>void handleSignOut()}>Sign Out</button>
       </div>
     </header>
@@ -2448,6 +2646,276 @@ return <main className="dashboard-shell connections-page">
 <p className="connections-hint">Unlock Layout to drag cards. Lock protects individual positions. Hide only changes this tree view; it never deletes a character or canon relationship.</p></section></main>;
 }
 
+if (page === "my-profile") {
+const profileName=myProfileDisplayName||myProfileEmail||session?.user.email||"Studio Member";
+const myAssignments=studioAssignments.filter(assignment=>assignment.assigned_to===session?.user.id);
+
+return (
+<main className="dashboard-shell my-profile-page">
+  <StudioTopNav />
+
+  <section className="admin-center-shell">
+    <div className="admin-center-hero">
+      <div>
+        <p className="eyebrow">UMBRA STUDIO TEAM</p>
+        <h1>My Profile</h1>
+        <p>Your Studio identity, private workspace, assignments, training, and account security.</p>
+      </div>
+
+      <button
+        className="secondary-action"
+        disabled={myProfileBusy}
+        onClick={()=>void Promise.all([loadMyProfile(),loadV9Production()])}
+      >
+        {myProfileBusy?"Refreshing...":"Refresh"}
+      </button>
+    </div>
+
+    {myProfileError&&<p className="login-error">{myProfileError}</p>}
+    {myProfileMessage&&<p className="my-profile-success">{myProfileMessage}</p>}
+
+    <div className="admin-overview-grid">
+
+      <section className="admin-panel my-profile-main-card">
+        <span className="card-label">PROFILE</span>
+
+        <div className="my-profile-identity">
+          <div className="my-profile-avatar">
+            {myProfile?.profile_image_url
+              ?<img src={myProfile.profile_image_url} alt={`${profileName} profile`}/>
+              :<span>☾</span>}
+          </div>
+
+          <div className="my-profile-identity-copy">
+            <h2>{profileName}</h2>
+            <p>{myProfileEmail||session?.user.email||"No email available"}</p>
+            <span className="admin-role-pill">
+              {(myProfileRole||studioAccessRole||"member").replace(/_/g," ")}
+            </span>
+          </div>
+        </div>
+
+        <div className="my-profile-photo-actions">
+          <label className="secondary-action my-profile-file-button">
+            {myProfileImageBusy?"Uploading...":"Change Photo"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={myProfileImageBusy}
+              onChange={e=>{
+                const file=e.target.files?.[0];
+                if(file)void uploadMyProfileImage(file);
+                e.currentTarget.value="";
+              }}
+            />
+          </label>
+
+          {myProfile?.profile_image_url&&
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={myProfileImageBusy}
+              onClick={()=>void removeMyProfileImage()}
+            >
+              Remove Photo
+            </button>
+          }
+        </div>
+
+        <p className="admin-help">
+          Profile pictures are stored in Umbra Studio Cloud. Images may be up to 15 MB.
+        </p>
+      </section>
+
+      <section className="admin-panel">
+        <span className="card-label">IDENTITY</span>
+        <h2>Account Information</h2>
+
+        <div className="my-profile-form">
+          <label>
+            <span>Display Name</span>
+            <input
+              type="text"
+              value={myProfileDisplayName}
+              onChange={e=>setMyProfileDisplayName(e.target.value)}
+              placeholder="Your Studio display name"
+            />
+          </label>
+
+          <button
+            type="button"
+            className="primary-action"
+            disabled={myProfileBusy||!myProfileDisplayName.trim()}
+            onClick={()=>void saveMyProfileDisplayName()}
+          >
+            {myProfileBusy?"Saving...":"Save Display Name"}
+          </button>
+
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              value={myProfileEmail||session?.user.email||""}
+              readOnly
+            />
+          </label>
+
+          <label>
+            <span>Studio Role</span>
+            <input
+              type="text"
+              value={(myProfileRole||studioAccessRole||"member").replace(/_/g," ")}
+              readOnly
+            />
+          </label>
+        </div>
+
+        <p className="admin-help">
+          Email and Studio role are managed through the existing Umbra Studio team system.
+        </p>
+      </section>
+
+      <section className="admin-panel">
+        <span className="card-label">PRIVATE</span>
+        <h2>Personal Notes</h2>
+
+        <p className="admin-help">
+          This is your private Studio workspace. These notes are separate from Admin Center team notes.
+        </p>
+
+        <textarea
+          value={myProfileNotes}
+          onChange={e=>setMyProfileNotes(e.target.value)}
+          placeholder="Write private Studio notes for yourself..."
+          rows={8}
+        />
+
+        <button
+          type="button"
+          className="primary-action"
+          disabled={myProfileBusy}
+          onClick={()=>void saveMyProfile()}
+        >
+          {myProfileBusy?"Saving...":"Save Notes"}
+        </button>
+      </section>
+
+      <section className="admin-panel my-profile-work-card">
+        <span className="card-label">WORK</span>
+        <h2>Training & Assignments</h2>
+
+        <p className="admin-help">
+          Your existing Umbra Studio assignments appear here. Training will use this same profile workspace.
+        </p>
+
+        <div className="my-profile-assignments">
+          {myAssignments.length===0&&
+            <div className="my-profile-empty">
+              <strong>No assignments yet.</strong>
+              <span>Studio work assigned to you will appear here.</span>
+            </div>
+          }
+
+          {myAssignments.map(assignment=>
+            <article className="my-profile-assignment" key={assignment.id}>
+              <div className="my-profile-assignment-heading">
+                <div>
+                  <h3>{assignment.title}</h3>
+                  {assignment.description&&<p>{assignment.description}</p>}
+                </div>
+
+                <span className={`my-profile-priority priority-${assignment.priority}`}>
+                  {assignment.priority||"normal"}
+                </span>
+              </div>
+
+              <div className="my-profile-assignment-meta">
+                {assignment.entity_type&&
+                  <span>Type: {assignment.entity_type.replace(/_/g," ")}</span>
+                }
+
+                {assignment.due_at&&
+                  <span>Due: {new Date(assignment.due_at).toLocaleDateString()}</span>
+                }
+              </div>
+
+              <label className="my-profile-assignment-status">
+                <span>Status</span>
+                <select
+                  value={assignment.status}
+                  onChange={e=>void updateProductionStatus(
+                    "studio_assignments",
+                    assignment.id,
+                    e.target.value
+                  )}
+                >
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="review">Review</option>
+                  <option value="done">Done</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+            </article>
+          )}
+        </div>
+      </section>
+
+      <section className="admin-panel my-profile-security-card">
+        <span className="card-label">SECURITY</span>
+        <h2>Change Password</h2>
+
+        <p className="admin-help">
+          Changing your password requires your current password and does not alter your Studio role or account.
+        </p>
+
+        <div className="my-profile-form">
+          <label>
+            <span>Current Password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={myProfilePasswordCurrent}
+              onChange={e=>setMyProfilePasswordCurrent(e.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>New Password</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={myProfilePasswordNew}
+              onChange={e=>setMyProfilePasswordNew(e.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>Confirm New Password</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={myProfilePasswordConfirm}
+              onChange={e=>setMyProfilePasswordConfirm(e.target.value)}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="primary-action"
+            disabled={myProfilePasswordBusy}
+            onClick={()=>void changeMyProfilePassword()}
+          >
+            {myProfilePasswordBusy?"Changing Password...":"Change Password"}
+          </button>
+        </div>
+      </section>
+
+    </div>
+  </section>
+</main>
+);
+}
 if (page === "profile" && selectedCharacter) {
 const saved = selectedCharacter;
 const identity = saved.identity ?? {};

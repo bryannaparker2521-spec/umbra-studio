@@ -2183,3 +2183,234 @@ select optgroup {
   background: #120b15;
   color: #f4e9f4;
 }
+
+/* Umbra Studio v1.2.0 — My Profile */
+.my-profile-identity{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  margin:20px 0;
+}
+
+.my-profile-identity h2{
+  margin:0 0 6px;
+}
+
+.my-profile-identity p{
+  margin:0 0 12px;
+  color:#927f94;
+}
+
+.my-profile-avatar{
+  width:96px;
+  height:96px;
+  flex:0 0 96px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border:1px solid rgba(218,169,74,.34);
+  border-radius:50%;
+  background:radial-gradient(circle at 50% 35%,rgba(139,68,159,.22),rgba(13,7,17,.95));
+  color:#e2c36e;
+  font:42px Georgia,serif;
+}
+
+.my-profile-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.my-profile-page .admin-panel textarea{
+  width:100%;
+  min-height:180px;
+  box-sizing:border-box;
+  margin:10px 0 16px;
+  padding:14px;
+  resize:vertical;
+  border:1px solid rgba(155,77,180,.28);
+  border-radius:12px;
+  outline:none;
+  background:#110916;
+  color:#f0e5f0;
+  font:inherit;
+  line-height:1.6;
+}
+
+.my-profile-page .admin-panel textarea:focus{
+  border-color:rgba(218,169,74,.55);
+}
+
+@media(max-width:600px){
+  .my-profile-identity{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
+/* Umbra Studio v1.2.0 — Complete My Profile */
+
+.my-profile-success{
+  margin:0 0 18px;
+  padding:12px 14px;
+  border:1px solid rgba(218,169,74,.3);
+  border-radius:10px;
+  background:rgba(218,169,74,.08);
+  color:#e7cc7c;
+}
+
+.my-profile-main-card,
+.my-profile-work-card,
+.my-profile-security-card{
+  min-width:0;
+}
+
+.my-profile-identity-copy{
+  min-width:0;
+}
+
+.my-profile-photo-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:14px;
+}
+
+.my-profile-file-button{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.my-profile-file-button input{
+  position:absolute;
+  width:1px;
+  height:1px;
+  opacity:0;
+  pointer-events:none;
+}
+
+.my-profile-form{
+  display:grid;
+  gap:14px;
+  margin-top:16px;
+}
+
+.my-profile-form label{
+  display:grid;
+  gap:7px;
+}
+
+.my-profile-form label > span,
+.my-profile-assignment-status > span{
+  color:#c9b5cc;
+  font-size:.82rem;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+.my-profile-form input,
+.my-profile-assignment-status select{
+  width:100%;
+  box-sizing:border-box;
+  padding:11px 12px;
+  border:1px solid rgba(155,77,180,.28);
+  border-radius:10px;
+  outline:none;
+  background:#110916;
+  color:#f0e5f0;
+  font:inherit;
+}
+
+.my-profile-form input:focus,
+.my-profile-assignment-status select:focus{
+  border-color:rgba(218,169,74,.55);
+}
+
+.my-profile-form input[readonly]{
+  color:#a996ac;
+  background:#0d0810;
+  cursor:default;
+}
+
+.my-profile-assignments{
+  display:grid;
+  gap:12px;
+  margin-top:16px;
+}
+
+.my-profile-assignment{
+  padding:15px;
+  border:1px solid rgba(155,77,180,.22);
+  border-radius:12px;
+  background:rgba(17,9,22,.72);
+}
+
+.my-profile-assignment-heading{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+}
+
+.my-profile-assignment-heading h3{
+  margin:0 0 6px;
+}
+
+.my-profile-assignment-heading p{
+  margin:0;
+  color:#a995ad;
+  line-height:1.5;
+}
+
+.my-profile-priority{
+  flex:0 0 auto;
+  padding:5px 8px;
+  border:1px solid rgba(218,169,74,.28);
+  border-radius:999px;
+  color:#d8bd70;
+  font-size:.72rem;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+.my-profile-assignment-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 16px;
+  margin:13px 0;
+  color:#8f7c94;
+  font-size:.82rem;
+}
+
+.my-profile-assignment-status{
+  display:grid;
+  gap:7px;
+}
+
+.my-profile-empty{
+  display:grid;
+  gap:5px;
+  padding:18px;
+  border:1px dashed rgba(155,77,180,.28);
+  border-radius:12px;
+  color:#927f94;
+}
+
+.my-profile-empty strong{
+  color:#d6c5d8;
+}
+
+@media(max-width:600px){
+  .my-profile-assignment-heading{
+    flex-direction:column;
+  }
+
+  .my-profile-photo-actions{
+    align-items:stretch;
+    flex-direction:column;
+  }
+}

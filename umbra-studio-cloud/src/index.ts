@@ -342,6 +342,38 @@ export default {
 			}
 
 			const user = await authenticate(request, env);
+                  // MY ACCOUNT PASSWORD
+                  if(request.method==="PATCH"&&url.pathname==="/api/me/password"){
+                          const b=await readJsonBody(request);
+                          const currentPassword=String(b.current_password??"");
+                          const newPassword=String(b.new_password??"");
+
+                          if(!currentPassword||!newPassword)
+                                  return errorResponse(400,"Current password and new password are required.");
+
+                          if(newPassword.length<8)
+                                  return errorResponse(400,"New password must be at least 8 characters.");
+
+                          if(currentPassword===newPassword)
+                                  return errorResponse(400,"New password must be different from your current password.");
+
+                          const account=await env.umbra_studio_production
+                                  .prepare("SELECT password_hash FROM studio_users WHERE id=? LIMIT 1")
+                                  .bind(user.id)
+                                  .first<any>();
+
+                          if(!account?.password_hash||!(await verifyPassword(currentPassword,String(account.password_hash))))
+                                  return errorResponse(401,"Current password is incorrect.");
+
+                          const passwordHash=await hashPassword(newPassword);
+
+                          await env.umbra_studio_production
+                                  .prepare("UPDATE studio_users SET password_hash=?,updated_at=? WHERE id=?")
+                                  .bind(passwordHash,new Date().toISOString(),user.id)
+                                  .run();
+
+                          return json({ok:true});
+                  }
 
 			if(request.method==="POST"&&url.pathname==="/api/auth/setup-code"){
 				requireRole(user,["primary_admin"]);
