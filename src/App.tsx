@@ -874,7 +874,7 @@ try {
 async function handleFirstTimeSetup(e: FormEvent<HTMLFormElement>) {
 e.preventDefault();
 setError("");
-if(password.length<12){setError("Password must be at least 12 characters.");return;}
+if(password.length<8){setError("Password must be at least 8 characters.");return;}
 if(password!==confirmPassword){setError("Passwords do not match.");return;}
 setSigningIn(true);
 try{
@@ -1982,7 +1982,7 @@ return ( <main className="studio-shell"> <div className="studio-card login-card"
       <form className="login-form" onSubmit={firstTimeSetup?handleFirstTimeSetup:handleSignIn}>
         <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
         {firstTimeSetup&&<input type="text" placeholder="One-time setup code" value={setupCode} onChange={e=>setSetupCode(e.target.value.toUpperCase())} autoComplete="one-time-code" required />}
-        <input type="password" placeholder={firstTimeSetup?"Create password (12+ characters)":"Password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={firstTimeSetup?"new-password":"current-password"} required />
+        <input type="password" placeholder={firstTimeSetup?"Create password (8+ characters)":"Password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={firstTimeSetup?"new-password":"current-password"} required />
         {firstTimeSetup&&<input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" required />}
         {error&&<p className="login-error">{error}</p>}
         <button type="submit" disabled={signingIn}>{signingIn?(firstTimeSetup?"Activating...":"Entering..."):(firstTimeSetup?"Activate & Enter Umbra Studio":"Enter Umbra Studio")}</button>
