@@ -838,7 +838,7 @@ export default {
 			// ------------------------------------------------------------
 			if(request.method==="GET"&&url.pathname==="/api/admin-center"){
 				const [members,activity,revisions,notes,characters,codex,locations,events,sessions]=await Promise.all([
-					getAll(env,`SELECT a.user_id,u.email,u.display_name,a.role,a.created_at,a.last_login_at,a.last_seen_at FROM studio_admin_members a JOIN studio_users u ON u.id=a.user_id ORDER BY a.created_at ASC`),
+					getAll(env,`SELECT a.user_id,u.email,u.display_name,a.role,a.created_at,a.last_login_at,a.last_seen_at,CASE WHEN u.password_hash IS NOT NULL THEN 1 ELSE 0 END AS password_set FROM studio_admin_members a JOIN studio_users u ON u.id=a.user_id ORDER BY a.created_at ASC`),
 					getAll(env,`SELECT id,actor_user_id,actor_email,actor_name,action,entity_type,entity_id,entity_label,details,created_at FROM studio_activity_log ORDER BY created_at DESC LIMIT 100`),
 					getAll(env,`SELECT id,entity_type,entity_id,entity_label,changed_by,changed_by_email,snapshot,created_at FROM studio_revisions ORDER BY created_at DESC LIMIT 100`),
 					getAll(env,`SELECT id,entity_type,entity_id,note,created_by,created_by_email,created_at,updated_at FROM studio_admin_notes ORDER BY updated_at DESC LIMIT 100`),
