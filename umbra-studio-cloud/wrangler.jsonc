@@ -1,0 +1,23 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "umbra-studio-cloud",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-26",
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "umbra_studio_production",
+			"database_name": "umbra-studio-production",
+			"database_id": "69ef2ac8-202d-494d-a342-5f44f39f5fb9"
+		}
+	],
+	"r2_buckets": [
+		{
+			"bucket_name": "umbra-studio-media",
+			"binding": "umbra_studio_media"
+		}
+	]
+}

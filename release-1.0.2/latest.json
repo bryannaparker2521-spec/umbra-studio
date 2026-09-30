@@ -1,0 +1,11 @@
+{
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUY3Z6VnNTK1pYWnVkMjZ5MG1ISlUxME9oSXJscVpYMU5tVDZwa1Q4ZGFoREU4Sk1IRmNNczZGZEVrWnltSEdRTUpONmx4WkpUN2d4VGhwUnN1dFFmY1kwUnpvb21qK0FZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMjc0NTMwCWZpbGU6VW1icmEgU3R1ZGlvXzEuMC4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuMgpMTzFqUFBnV3h4K096NnlEdHVzbkdBeXF1dnBQQ0ZocU03bmtCM1FWTU9uTUY0NjMweFp6L3FSZ1ZQNHVna3lVNmZtRzdmS1Z4SzJwL01sd2kvNHVBUT09Cg==",
+                                             "url":  "https://github.com/bryannaparker2521-spec/umbra-studio/releases/download/v1.0.2/Umbra.Studio_1.0.2_x64-setup.exe"
+                                         }
+                  },
+    "pub_date":  "2026-09-24T18:30:02Z",
+    "version":  "1.0.2",
+    "notes":  "Umbra Studio 1.0.2 fixes corrupted UI icons and Unicode text and removes the extra Windows console window from release builds."
+}

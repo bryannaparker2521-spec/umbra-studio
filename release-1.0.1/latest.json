@@ -1,0 +1,11 @@
+{
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUY3Z6VnNTK1pYWmtoQ1pJb3FHS3d2RG4zOFJFMWlWdWZiYUFIayt0aGdkUk9qS0FTQUxhU0llSHQ5MHg1bUhOZlpjUmlMaUZKaWs0NFRFVmg1QjJjWi9jQzI0S01JQlFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMjcwNjk1CWZpbGU6VW1icmEgU3R1ZGlvXzEuMC4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuMQp4cmRYRmxmOGJ6SkRZR0V0aHFscitjbkhReE9kU0FxVGNvSEZpczQ4ZkxXczVUdDUwOE53SFJjYnBxMVllSzkvTmI5Mm52VEEyay9XNVRYc2dYVktBdz09Cg==",
+                                             "url":  "https://github.com/bryannaparker2521-spec/umbra-studio/releases/download/v1.0.1/Umbra.Studio_1.0.1_x64-setup.exe"
+                                         }
+                  },
+    "pub_date":  "2026-09-24T17:28:33Z",
+    "version":  "1.0.1",
+    "notes":  "Umbra Studio 1.0.1 fixes Studio Messages recipient handling and adds the new desktop Update Center with signed application updates."
+}
