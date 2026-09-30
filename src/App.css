@@ -2414,3 +2414,247 @@ select optgroup {
     flex-direction:column;
   }
 }
+
+/* Umbra Studio v1.2.0 — Training */
+
+.training-admin-panel,
+.training-create-card,
+.training-library-card,
+.my-profile-training,
+.my-profile-assignment-section {
+  display:grid;
+  gap:16px;
+}
+
+.training-admin-grid {
+  display:grid;
+  grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);
+  gap:18px;
+  align-items:start;
+}
+
+.training-create-card,
+.training-library-card,
+.my-profile-training {
+  min-width:0;
+  padding:18px;
+  border:1px solid rgba(155,77,180,.22);
+  border-radius:14px;
+  background:rgba(17,9,22,.55);
+}
+
+.training-create-card label,
+.training-file-field {
+  display:grid;
+  gap:7px;
+}
+
+.training-create-card label > span,
+.training-file-field > span {
+  color:#c9b5cc;
+  font-size:.82rem;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+.training-create-card input,
+.training-create-card textarea,
+.my-training-heading select {
+  width:100%;
+  box-sizing:border-box;
+  padding:11px 12px;
+  border:1px solid rgba(155,77,180,.28);
+  border-radius:10px;
+  outline:none;
+  background:#110916;
+  color:#f0e5f0;
+  font:inherit;
+}
+
+.training-create-card textarea {
+  min-height:130px;
+  resize:vertical;
+}
+
+.training-create-card input:focus,
+.training-create-card textarea:focus,
+.my-training-heading select:focus {
+  border-color:rgba(218,169,74,.58);
+}
+
+.training-upload-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.training-section-heading,
+.training-library-heading,
+.my-training-heading,
+.training-progress-row {
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+}
+
+.training-section-heading h3,
+.training-library-heading h3,
+.my-training-heading h3 {
+  margin-top:4px;
+}
+
+.training-member-picker {
+  display:grid;
+  gap:12px;
+}
+
+.training-member-list,
+.training-library-list,
+.my-training-list,
+.training-progress-list {
+  display:grid;
+  gap:12px;
+}
+
+.training-member-option {
+  display:flex !important;
+  align-items:flex-start;
+  gap:10px !important;
+  padding:12px;
+  border:1px solid rgba(155,77,180,.18);
+  border-radius:11px;
+  background:rgba(0,0,0,.12);
+  cursor:pointer;
+}
+
+.training-member-option input {
+  width:auto;
+  margin-top:3px;
+}
+
+.training-member-option > span,
+.training-progress-row > div {
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+
+.training-library-item,
+.my-training-card {
+  display:grid;
+  gap:13px;
+  min-width:0;
+  padding:15px;
+  border:1px solid rgba(155,77,180,.2);
+  border-radius:12px;
+  background:rgba(0,0,0,.14);
+}
+
+.training-library-item p,
+.my-training-card p {
+  margin:0;
+  line-height:1.65;
+}
+
+.training-resource-links {
+  display:flex;
+  flex-wrap:wrap;
+  gap:9px;
+}
+
+.training-resource-links a {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 11px;
+  border:1px solid rgba(218,169,74,.3);
+  border-radius:9px;
+  color:#e7cc7c;
+  text-decoration:none;
+}
+
+.training-resource-links a:hover {
+  border-color:rgba(218,169,74,.65);
+}
+
+.training-progress-row {
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+
+.training-status {
+  display:inline-flex;
+  width:fit-content;
+  padding:4px 8px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:999px;
+  font-size:.76rem;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:capitalize;
+  white-space:nowrap;
+}
+
+.training-status.not_started {
+  color:#c9b5cc;
+}
+
+.training-status.in_progress {
+  color:#e7cc7c;
+  border-color:rgba(218,169,74,.3);
+}
+
+.training-status.completed {
+  color:#9fdda9;
+  border-color:rgba(93,184,111,.3);
+}
+
+.my-training-heading > div {
+  display:grid;
+  gap:8px;
+}
+
+.my-training-heading select {
+  width:auto;
+  min-width:150px;
+}
+
+.my-training-video {
+  overflow:hidden;
+  border-radius:12px;
+}
+
+.my-training-video video {
+  display:block;
+  width:100%;
+  max-height:420px;
+  background:#000;
+}
+
+.training-assigned-date {
+  color:#9f8ca3;
+}
+
+.my-profile-assignment-section {
+  margin-top:4px;
+}
+
+@media (max-width:900px) {
+  .training-admin-grid,
+  .training-upload-grid {
+    grid-template-columns:1fr;
+  }
+
+  .training-section-heading,
+  .training-library-heading,
+  .my-training-heading,
+  .training-progress-row {
+    flex-direction:column;
+  }
+
+  .my-training-heading select {
+    width:100%;
+  }
+}

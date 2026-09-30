@@ -67,6 +67,49 @@ type StoryScene = { id:string; project_id:string|null; arc_id:string|null; title
 type StoryBeat = { id:string; project_id:string|null; arc_id:string|null; scene_id:string|null; title:string; description:string|null; beat_type:string; status:string; sort_order:number; updated_at:string; };
 type StoryEntityLink = { id:string; story_entity_type:string; story_entity_id:string; linked_entity_type:string; linked_entity_id:string; relation_label:string|null; notes:string|null; created_at:string; };
 type ReviewComment = { id:string; entity_type:string; entity_id:string; body:string; status:string; created_by:string|null; created_by_name:string|null; created_at:string; resolved_at:string|null; };
+type StudioTrainingItem = {
+  id:string;
+  title:string;
+  description:string|null;
+  video_url:string|null;
+  resource_url:string|null;
+  resource_name:string|null;
+  created_by:string;
+  created_at:string;
+  updated_at:string;
+  created_by_name?:string|null;
+};
+
+type StudioTrainingAssignment = {
+  id:string;
+  training_id:string;
+  assigned_to:string;
+  assigned_by:string;
+  status:"not_started"|"in_progress"|"completed";
+  assigned_at:string;
+  updated_at:string;
+  completed_at:string|null;
+  assigned_to_name?:string|null;
+  assigned_to_email?:string|null;
+  assigned_by_name?:string|null;
+};
+
+type MyTrainingAssignment = {
+  assignment_id:string;
+  training_id:string;
+  assigned_to:string;
+  assigned_by:string;
+  status:"not_started"|"in_progress"|"completed";
+  assigned_at:string;
+  updated_at:string;
+  completed_at:string|null;
+  title:string;
+  description:string|null;
+  video_url:string|null;
+  resource_url:string|null;
+  resource_name:string|null;
+};
+
 type StudioAssignment = { id:string; title:string; description:string|null; entity_type:string|null; entity_id:string|null; assigned_to:string; assigned_by:string|null; priority:string; status:string; due_at:string|null; created_at:string; updated_at:string; };
 type StudioNotification = { id:string; recipient_user_id:string; actor_user_id:string|null; actor_name:string|null; notification_type:string; title:string; message:string|null; entity_type:string|null; entity_id:string|null; is_read:boolean; created_at:string; };
 type StudioDirectMessage = { id:string; sender_user_id:string; recipient_user_id:string; body:string; entity_type:string|null; entity_id:string|null; read_at:string|null; created_at:string; };
@@ -240,12 +283,26 @@ const [myProfilePasswordNew,setMyProfilePasswordNew]=useState("");
 const [myProfilePasswordConfirm,setMyProfilePasswordConfirm]=useState("");
 const [myProfilePasswordBusy,setMyProfilePasswordBusy]=useState(false);
 const [myProfileMessage,setMyProfileMessage]=useState("");
+
+const [myTraining,setMyTraining]=useState<MyTrainingAssignment[]>([]);
+const [trainingItems,setTrainingItems]=useState<StudioTrainingItem[]>([]);
+const [trainingAssignments,setTrainingAssignments]=useState<StudioTrainingAssignment[]>([]);
+
+const [trainingTitle,setTrainingTitle]=useState("");
+const [trainingDescription,setTrainingDescription]=useState("");
+const [trainingVideoFile,setTrainingVideoFile]=useState<File|null>(null);
+const [trainingResourceFile,setTrainingResourceFile]=useState<File|null>(null);
+const [trainingSelectedMembers,setTrainingSelectedMembers]=useState<string[]>([]);
+
+const [trainingBusy,setTrainingBusy]=useState(false);
+const [trainingError,setTrainingError]=useState("");
+const [trainingMessage,setTrainingMessage]=useState("");
 const [adminRole,setAdminRole]=useState<StudioAdminMember["role"]|null>(null);
 const [adminActivity,setAdminActivity]=useState<StudioActivity[]>([]);
 const [adminRevisions,setAdminRevisions]=useState<StudioRevision[]>([]);
 const [adminNotes,setAdminNotes]=useState<StudioNote[]>([]);
 const [adminContent,setAdminContent]=useState<AdminContentRow[]>([]);
-const [adminTab,setAdminTab]=useState<"overview"|"content"|"activity"|"sessions"|"revisions"|"notes"|"team">("overview");
+const [adminTab,setAdminTab]=useState<"overview"|"content"|"activity"|"sessions"|"revisions"|"notes"|"team"|"training">("overview");
 const [adminBusy,setAdminBusy]=useState(false);
 const [adminError,setAdminError]=useState("");
 const [adminMemberEmail,setAdminMemberEmail]=useState("");
@@ -597,7 +654,7 @@ async function createUniversalLink(){if(!session||!linkForm.sourceId||!linkForm.
 async function deleteUniversalLink(id:string){try{await umbraCloudFetch(`/api/world-database/links/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Link could not be deleted.");}}
 function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);try{localStorage.setItem("umbra-studio-guidance",enabled?"on":"off");}catch{}}
 function StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>{title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips for me</button></div>:null;}
-const adminGuide:Record<string,string>={overview:"See the Studio workflow at a glance: review queue, team activity, and work needing attention.",content:"Review and move characters, Codex entries, locations, and timeline records through Draft, Review, Approved, and Published.",activity:"Audit who changed Studio content and when. Use this for accountability and troubleshooting.",sessions:"See authorized collaborator sign-ins, last-seen activity, and recorded sign-outs.",revisions:"Review automatic snapshots captured before tracked content changes or deletion.",notes:"Keep private production notes for the admin team. These are not public lore.",team:"Manage Studio collaborators, display names, access roles, and permissions."};
+const adminGuide:Record<string,string>={overview:"See the Studio workflow at a glance: review queue, team activity, and work needing attention.",content:"Review and move characters, Codex entries, locations, and timeline records through Draft, Review, Approved, and Published.",activity:"Audit who changed Studio content and when. Use this for accountability and troubleshooting.",sessions:"See authorized collaborator sign-ins, last-seen activity, and recorded sign-outs.",revisions:"Review automatic snapshots captured before tracked content changes or deletion.",notes:"Keep private production notes for the admin team. These are not public lore.",team:"Manage Studio collaborators, display names, access roles, and permissions.",training:"Create training lessons, attach videos and resources, assign team members, and review individual progress."};
 const explorerGuide:Record<string,string>={map:"Place and move locations on the interactive world map.",locations:"Create, edit, organize, and archive places in the Umbral world.",timeline:"Build chronological world and story events and connect them to characters, locations, and Codex records.",favorites:"Keep frequently used world items together for faster access.",archive:"Review locations and timeline events removed from active work without permanently losing them."};
 const productionGuide:Record<string,string>={overview:"See current story-production activity, pending work, and recent collaborator changes.",projects:"Create major stories, books, seasons, campaigns, or other top-level productions.",arcs:"Organize story arcs inside projects and track their production status.",scenes:"Write and organize scenes, POV characters, locations, dates, and production notes.",plot:"Break stories into ordered beats and plot events.",journeys:"Track how characters change across projects, arcs, and scenes.",review:"Leave and resolve editorial comments without changing the underlying canon directly.",assignments:"Assign production work to Studio collaborators with priority, status, and due dates.",inbox:"Read Studio notifications and work that needs your attention.",graph:"View connections between story entities and linked world information."};
 async function uploadCatalogFile(file:File){
@@ -890,7 +947,7 @@ async function openMyProfile(){
   setPage("my-profile");
   setMyProfileMessage("");
   window.scrollTo({top:0,behavior:"smooth"});
-  await Promise.all([loadMyProfile(),loadV9Production()]);
+  await Promise.all([loadMyProfile(),loadV9Production(),loadMyTraining()]);
 }
 
 async function saveMyProfile(){
@@ -1048,6 +1105,221 @@ async function changeMyProfilePassword(){
     setMyProfilePasswordBusy(false);
   }
 }
+async function loadMyTraining(){
+  try{
+    const data=await umbraCloudFetch<{
+      ok:true;
+      training:MyTrainingAssignment[];
+    }>("/api/me/training");
+
+    setMyTraining(data.training??[]);
+  }catch(f){
+    setMyProfileError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be loaded."
+    );
+  }
+}
+
+async function loadAdminTraining(){
+  setTrainingBusy(true);
+  setTrainingError("");
+
+  try{
+    const data=await umbraCloudFetch<{
+      ok:true;
+      items:StudioTrainingItem[];
+      assignments:StudioTrainingAssignment[];
+    }>("/api/training");
+
+    setTrainingItems(data.items??[]);
+    setTrainingAssignments(data.assignments??[]);
+  }catch(f){
+    setTrainingError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be loaded."
+    );
+  }finally{
+    setTrainingBusy(false);
+  }
+}
+
+function toggleTrainingMember(userId:string){
+  setTrainingSelectedMembers(current=>
+    current.includes(userId)
+      ?current.filter(id=>id!==userId)
+      :[...current,userId]
+  );
+}
+
+async function createTraining(){
+  const title=trainingTitle.trim();
+
+  if(!title){
+    setTrainingError("Training title is required.");
+    return;
+  }
+
+  if(!trainingSelectedMembers.length){
+    setTrainingError("Choose at least one team member.");
+    return;
+  }
+
+  if(!session?.user.id){
+    setTrainingError("Your Studio session is unavailable.");
+    return;
+  }
+
+  if(trainingVideoFile&&trainingVideoFile.size>20*1024*1024){
+    setTrainingError("Training videos must be 20 MB or smaller.");
+    return;
+  }
+
+  if(trainingResourceFile&&trainingResourceFile.size>20*1024*1024){
+    setTrainingError("Training resources must be 20 MB or smaller.");
+    return;
+  }
+
+  setTrainingBusy(true);
+  setTrainingError("");
+  setTrainingMessage("");
+
+  try{
+    let videoUrl:string|null=null;
+    let resourceUrl:string|null=null;
+    let resourceName:string|null=null;
+
+    if(trainingVideoFile){
+      const uploaded=await uploadUmbraCloudMedia(
+        trainingVideoFile,
+        `training/videos/${session.user.id}`,
+        session.user.id
+      );
+
+      videoUrl=uploaded.url;
+    }
+
+    if(trainingResourceFile){
+      const uploaded=await uploadUmbraCloudMedia(
+        trainingResourceFile,
+        `training/resources/${session.user.id}`,
+        session.user.id
+      );
+
+      resourceUrl=uploaded.url;
+      resourceName=trainingResourceFile.name;
+    }
+
+    const created=await umbraCloudFetch<{
+      ok:true;
+      id:string;
+    }>("/api/training",{
+      method:"POST",
+      body:JSON.stringify({
+        title,
+        description:trainingDescription.trim()||null,
+        video_url:videoUrl,
+        resource_url:resourceUrl,
+        resource_name:resourceName
+      })
+    });
+
+    await umbraCloudFetch(
+      `/api/training/${encodeURIComponent(created.id)}/assign`,
+      {
+        method:"POST",
+        body:JSON.stringify({
+          assigned_to:trainingSelectedMembers
+        })
+      }
+    );
+
+    setTrainingTitle("");
+    setTrainingDescription("");
+    setTrainingVideoFile(null);
+    setTrainingResourceFile(null);
+    setTrainingSelectedMembers([]);
+
+    await loadAdminTraining();
+
+    setTrainingMessage("Training created and assigned.");
+  }catch(f){
+    setTrainingError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be created."
+    );
+  }finally{
+    setTrainingBusy(false);
+  }
+}
+
+async function deleteTraining(
+  trainingId:string,
+  title:string
+){
+  if(!confirm(
+    `Delete training "${title}" and its assigned progress records?`
+  ))return;
+
+  setTrainingBusy(true);
+  setTrainingError("");
+  setTrainingMessage("");
+
+  try{
+    await umbraCloudFetch(
+      `/api/training/${encodeURIComponent(trainingId)}`,
+      {method:"DELETE"}
+    );
+
+    await loadAdminTraining();
+
+    setTrainingMessage("Training deleted.");
+  }catch(f){
+    setTrainingError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be deleted."
+    );
+  }finally{
+    setTrainingBusy(false);
+  }
+}
+
+async function updateMyTrainingStatus(
+  assignmentId:string,
+  status:MyTrainingAssignment["status"]
+){
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    await umbraCloudFetch(
+      `/api/me/training/${encodeURIComponent(assignmentId)}`,
+      {
+        method:"PATCH",
+        body:JSON.stringify({status})
+      }
+    );
+
+    await loadMyTraining();
+
+    setMyProfileMessage(
+      status==="completed"
+        ?"Training marked complete."
+        :"Training progress updated."
+    );
+  }catch(f){
+    setMyProfileError(
+      f instanceof Error
+        ?f.message
+        :"Training progress could not be updated."
+    );
+  }
+}
+
 async function setMemberDisplayName(userId:string,name:string){try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"PATCH",body:JSON.stringify({display_name:name.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
 async function changeCanonStatus(recordId:string,status:string){try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/canon`,{method:"PATCH",body:JSON.stringify({status,reason:canonReason.trim()||null})});setCanonReason("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Canon status could not be changed.");}}
 async function toggleRecordPublic(recordId:string,value:boolean){const record=databaseRecords.find(r=>r.id===recordId);if(!record)return;if(value&&record.workflow_status!=="published"){setDatabaseError("Publish the editorial workflow first, then enable encyclopedia visibility.");return;}if(value&&!['draft_canon','canon'].includes(record.canon_status||'concept')){setDatabaseError("Only Draft Canon or Canon records can be exposed to the encyclopedia.");return;}const slug=(record.public_slug||record.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+record.record_code.toLowerCase()).slice(0,120);try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/public`,{method:"PATCH",body:JSON.stringify({is_public:value,public_slug:slug})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Public visibility could not be changed.");}}
@@ -2665,7 +2937,7 @@ return (
       <button
         className="secondary-action"
         disabled={myProfileBusy}
-        onClick={()=>void Promise.all([loadMyProfile(),loadV9Production()])}
+        onClick={()=>void Promise.all([loadMyProfile(),loadV9Production(),loadMyTraining()])}
       >
         {myProfileBusy?"Refreshing...":"Refresh"}
       </button>
@@ -2808,7 +3080,117 @@ return (
           Your existing Umbra Studio assignments appear here. Training will use this same profile workspace.
         </p>
 
-        <div className="my-profile-assignments">
+        <div className="my-profile-training">
+  <div className="training-section-heading">
+    <div>
+      <span className="card-label">TRAINING</span>
+      <h3>Assigned Training</h3>
+    </div>
+
+    <small>
+      {myTraining.filter(item=>item.status==="completed").length}
+      /{myTraining.length} completed
+    </small>
+  </div>
+
+  {myTraining.length===0&&
+    <div className="my-profile-empty">
+      <strong>No training assigned yet.</strong>
+      <span>
+        Training assigned by a Studio administrator will appear here.
+      </span>
+    </div>
+  }
+
+  <div className="my-training-list">
+    {myTraining.map(training=>
+      <article
+        className="my-training-card"
+        key={training.assignment_id}
+      >
+        <div className="my-training-heading">
+          <div>
+            <span className={`training-status ${training.status}`}>
+              {training.status.replace(/_/g," ")}
+            </span>
+
+            <h3>{training.title}</h3>
+          </div>
+
+          <select
+            value={training.status}
+            onChange={e=>
+              void updateMyTrainingStatus(
+                training.assignment_id,
+                e.target.value as MyTrainingAssignment["status"]
+              )
+            }
+          >
+            <option value="not_started">Not Started</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+
+        {training.description&&<p>{training.description}</p>}
+
+        {training.video_url&&
+          <div className="my-training-video">
+            <video controls preload="metadata">
+              <source src={training.video_url}/>
+              Your device could not play this training video.
+            </video>
+          </div>
+        }
+
+        <div className="training-resource-links">
+          {training.video_url&&
+            <a
+              href={training.video_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open Video
+            </a>
+          }
+
+          {training.resource_url&&
+            <a
+              href={training.resource_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {training.resource_name||"Open Training Resource"}
+            </a>
+          }
+        </div>
+
+        <small className="training-assigned-date">
+          Assigned {new Date(training.assigned_at).toLocaleString()}
+
+          {training.completed_at
+            ?` • Completed ${new Date(
+                training.completed_at
+              ).toLocaleString()}`
+            :""}
+        </small>
+      </article>
+    )}
+  </div>
+</div>
+
+<div className="my-profile-assignment-section">
+  <div className="training-section-heading">
+    <div>
+      <span className="card-label">ASSIGNMENTS</span>
+      <h3>Work Assignments</h3>
+    </div>
+
+    <small>
+      {myAssignments.length} assignment{myAssignments.length===1?"":"s"}
+    </small>
+  </div>
+<div className="my-profile-assignments">
           {myAssignments.length===0&&
             <div className="my-profile-empty">
               <strong>No assignments yet.</strong>
@@ -2859,9 +3241,10 @@ return (
             </article>
           )}
         </div>
+      </div>
       </section>
 
-      <section className="admin-panel my-profile-security-card">
+<section className="admin-panel my-profile-security-card">
         <span className="card-label">SECURITY</span>
         <h2>Change Password</h2>
 
@@ -3909,13 +4292,247 @@ if(page==="database"){
 
 if(page==="admin"){
 const pending=adminContent.filter(x=>x.workflow_status==="in_review").length;
-return <main className="dashboard-shell admin-center-page"><StudioTopNav /><section className="admin-center-shell"><div className="admin-center-hero"><div><p className="eyebrow">COLLABORATIVE DATABASE CONTROL</p><h1>Admin Center</h1><p>Manage your team, review content, follow changes, preserve revisions, and keep private production notes.</p></div><button className="secondary-action" onClick={()=>void loadAdminCenter()}>{adminBusy?"Refreshing...":"Refresh"}</button></div>{adminError&&<p className="login-error">{adminError}</p>}<div className="admin-metrics"><div><strong>{adminMembers.length}</strong><span>Team Members</span></div><div><strong>{adminContent.length}</strong><span>Managed Records</span></div><div><strong>{pending}</strong><span>In Review</span></div><div><strong>{adminRevisions.length}</strong><span>Recent Revisions</span></div></div><nav className="admin-tabs">{(["overview","content","activity","sessions","revisions","notes","team"] as const).map(tab=><button key={tab} className={adminTab===tab?"active":""} onClick={()=>setAdminTab(tab)}>{tab}</button>)}</nav><StudioGuide title={`${adminTab[0].toUpperCase()+adminTab.slice(1)} tab`}>{adminGuide[adminTab]}</StudioGuide>
+return <main className="dashboard-shell admin-center-page"><StudioTopNav /><section className="admin-center-shell"><div className="admin-center-hero"><div><p className="eyebrow">COLLABORATIVE DATABASE CONTROL</p><h1>Admin Center</h1><p>Manage your team, review content, follow changes, preserve revisions, and keep private production notes.</p></div><button className="secondary-action" onClick={()=>void loadAdminCenter()}>{adminBusy?"Refreshing...":"Refresh"}</button></div>{adminError&&<p className="login-error">{adminError}</p>}<div className="admin-metrics"><div><strong>{adminMembers.length}</strong><span>Team Members</span></div><div><strong>{adminContent.length}</strong><span>Managed Records</span></div><div><strong>{pending}</strong><span>In Review</span></div><div><strong>{adminRevisions.length}</strong><span>Recent Revisions</span></div></div><nav className="admin-tabs">{(["overview","content","activity","sessions","revisions","notes","team","training"] as const)
+.filter(tab=>tab!=="training"||adminRole==="primary_admin"||adminRole==="admin")
+.map(tab=><button key={tab} className={adminTab===tab?"active":""} onClick={()=>{setAdminTab(tab);if(tab==="training")void loadAdminTraining();}}>{tab}</button>)}</nav><StudioGuide title={`${adminTab[0].toUpperCase()+adminTab.slice(1)} tab`}>{adminGuide[adminTab]}</StudioGuide>
 {adminTab==="overview"&&<div className="admin-overview-grid"><section className="admin-panel"><span className="card-label">WORKFLOW</span><h2>Editorial Queue</h2><p>{pending?`${pending} record${pending===1?" is":"s are"} waiting for review.`:"Nothing is waiting for review."}</p><button className="secondary-action" onClick={()=>setAdminTab("content")}>Open Content Manager</button></section><section className="admin-panel"><span className="card-label">RECENT ACTIVITY</span><h2>Latest Changes</h2>{adminActivity.slice(0,6).map(x=><div className="admin-feed-row" key={x.id}><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")} • {adminMembers.find(m=>m.user_id===x.actor_user_id)?.display_name||x.actor_email||"system"}</span></div>)}</section></div>}
 {adminTab==="content"&&<section className="admin-panel"><div className="admin-panel-heading"><div><span className="card-label">DATABASE WORKFLOW</span><h2>Content Manager</h2></div><small>Draft → In Review → Approved → Published</small></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Record</th><th>Type</th><th>Creator</th><th>Workflow</th><th>Updated</th></tr></thead><tbody>{adminContent.map(row=><tr key={`${row.entity_type}:${row.id}`}><td><strong>{row.label}</strong></td><td>{row.entity_type}</td><td>{adminMembers.find(x=>x.user_id===row.user_id)?.display_name||adminMembers.find(x=>x.user_id===row.user_id)?.email||"Creator"}</td><td><select value={row.workflow_status} onChange={e=>void setWorkflowStatus(row,e.target.value)}><option value="draft">Draft</option><option value="in_review">In Review</option><option value="approved">Approved</option><option value="published">Published</option></select></td><td>{row.updated_at?new Date(row.updated_at).toLocaleString():"—"}</td></tr>)}</tbody></table></div></section>}
 {adminTab==="activity"&&<section className="admin-panel"><span className="card-label">AUDIT TRAIL</span><h2>Activity Log</h2><div className="admin-feed">{adminActivity.map(x=><div className="admin-feed-row" key={x.id}><div><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")}</span></div><small>{adminMembers.find(m=>m.user_id===x.actor_user_id)?.display_name||x.actor_email||"system"} • {new Date(x.created_at).toLocaleString()}</small></div>)}</div></section>}
 {adminTab==="sessions"&&<section className="admin-panel"><span className="card-label">LOGIN & PRESENCE HISTORY</span><h2>Collaborator Sessions</h2><p className="admin-help">Every authorized Studio login is timestamped. Last seen updates while Studio remains open.</p><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Collaborator</th><th>Role</th><th>Signed In</th><th>Last Seen</th><th>Signed Out</th></tr></thead><tbody>{collaboratorSessions.map(x=><tr key={x.id}><td><strong>{x.display_name||adminMembers.find(m=>m.user_id===x.user_id)?.display_name||x.email||"Studio Member"}</strong></td><td>{x.role||"member"}</td><td>{new Date(x.signed_in_at).toLocaleString()}</td><td>{new Date(x.last_seen_at).toLocaleString()}</td><td>{x.signed_out_at?new Date(x.signed_out_at).toLocaleString():<span className="presence-live">● Active / no logout recorded</span>}</td></tr>)}</tbody></table></div></section>}
 {adminTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Recent Revisions</h2><p className="admin-help">A snapshot is captured before tracked records are changed or deleted, giving you a history independent of the live record.</p><div className="admin-feed">{adminRevisions.map(x=><details className="revision-row" key={x.id}><summary><strong>{x.entity_label||x.entity_type}</strong><span>{adminMembers.find(m=>m.user_id===x.changed_by)?.display_name||x.changed_by_email||"system"} • {new Date(x.created_at).toLocaleString()}</span></summary><pre>{JSON.stringify(x.snapshot,null,2)}</pre></details>)}</div></section>}
 {adminTab==="notes"&&<section className="admin-panel"><span className="card-label">PRIVATE PRODUCTION NOTES</span><h2>Admin Notes</h2><div className="admin-note-form"><select value={adminNoteEntityType} onChange={e=>setAdminNoteEntityType(e.target.value)}><option value="general">General Studio</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><input value={adminNoteEntityId} onChange={e=>setAdminNoteEntityId(e.target.value)} placeholder="Record ID or studio"/><textarea value={adminNoteText} onChange={e=>setAdminNoteText(e.target.value)} placeholder="Private note for the admin team..."/><button className="primary-action" onClick={()=>void addAdminNote()}>Add Private Note</button></div><div className="admin-feed">{adminNotes.map(n=><div className="admin-note-card" key={n.id}><div><span>{n.entity_type} • {n.entity_id}</span><small>{n.created_by_email||"admin"} • {new Date(n.updated_at).toLocaleString()}</small></div><p>{n.note}</p><button onClick={()=>void deleteAdminNote(n.id)}>Delete</button></div>)}</div></section>}
+{adminTab==="training"&&
+<section className="admin-panel training-admin-panel">
+  <div className="admin-panel-heading">
+    <div>
+      <span className="card-label">TEAM DEVELOPMENT</span>
+      <h2>Studio Training</h2>
+    </div>
+
+    <button
+      className="secondary-action"
+      disabled={trainingBusy}
+      onClick={()=>void loadAdminTraining()}
+    >
+      {trainingBusy?"Refreshing...":"Refresh Training"}
+    </button>
+  </div>
+
+  {trainingError&&<p className="login-error">{trainingError}</p>}
+  {trainingMessage&&<p className="my-profile-success">{trainingMessage}</p>}
+
+  {(adminRole==="primary_admin"||adminRole==="admin")&&
+  <div className="training-admin-grid">
+
+    <section className="training-create-card">
+      <span className="card-label">NEW TRAINING</span>
+      <h3>Create & Assign</h3>
+
+      <label>
+        <span>Training Title</span>
+        <input
+          value={trainingTitle}
+          onChange={e=>setTrainingTitle(e.target.value)}
+          placeholder="Example: Character Import Workflow"
+        />
+      </label>
+
+      <label>
+        <span>Instructions</span>
+        <textarea
+          value={trainingDescription}
+          onChange={e=>setTrainingDescription(e.target.value)}
+          placeholder="Explain what the team member should learn or complete..."
+        />
+      </label>
+
+      <div className="training-upload-grid">
+        <label className="training-file-field">
+          <span>Training Video</span>
+          <input
+            type="file"
+            accept="video/*"
+            onChange={e=>setTrainingVideoFile(e.target.files?.[0]??null)}
+          />
+          <small>
+            {trainingVideoFile
+              ?trainingVideoFile.name
+              :"Optional video • 20 MB maximum"}
+          </small>
+        </label>
+
+        <label className="training-file-field">
+          <span>Resource File</span>
+          <input
+            type="file"
+            onChange={e=>setTrainingResourceFile(e.target.files?.[0]??null)}
+          />
+          <small>
+            {trainingResourceFile
+              ?trainingResourceFile.name
+              :"Optional resource • 20 MB maximum"}
+          </small>
+        </label>
+      </div>
+
+      <div className="training-member-picker">
+        <div className="training-section-heading">
+          <div>
+            <span className="card-label">ASSIGN TO</span>
+            <h3>Team Members</h3>
+          </div>
+
+          <small>{trainingSelectedMembers.length} selected</small>
+        </div>
+
+        <div className="training-member-list">
+          {adminMembers.map(member=>
+            <label
+              className="training-member-option"
+              key={member.user_id}
+            >
+              <input
+                type="checkbox"
+                checked={trainingSelectedMembers.includes(member.user_id)}
+                onChange={()=>toggleTrainingMember(member.user_id)}
+              />
+
+              <span>
+                <strong>
+                  {member.display_name||member.email||"Studio Member"}
+                </strong>
+
+                <small>
+                  {member.email} • {member.role.replace(/_/g," ")}
+                </small>
+              </span>
+            </label>
+          )}
+        </div>
+      </div>
+
+      <button
+        className="primary-action"
+        disabled={trainingBusy}
+        onClick={()=>void createTraining()}
+      >
+        {trainingBusy
+          ?"Creating Training..."
+          :"Create & Assign Training"}
+      </button>
+    </section>
+
+    <section className="training-library-card">
+      <div className="training-section-heading">
+        <div>
+          <span className="card-label">TRAINING LIBRARY</span>
+          <h3>Lessons & Progress</h3>
+        </div>
+
+        <small>
+          {trainingItems.length} lesson{trainingItems.length===1?"":"s"}
+        </small>
+      </div>
+
+      {trainingItems.length===0&&
+        <div className="my-profile-empty">
+          <strong>No training created yet.</strong>
+          <span>Create the first Studio training lesson.</span>
+        </div>
+      }
+
+      <div className="training-library-list">
+        {trainingItems.map(item=>{
+          const assigned=trainingAssignments.filter(
+            assignment=>assignment.training_id===item.id
+          );
+
+          return (
+            <article className="training-library-item" key={item.id}>
+              <div className="training-library-heading">
+                <div>
+                  <h3>{item.title}</h3>
+
+                  <small>
+                    Created by {item.created_by_name||"Studio Admin"}
+                    {" • "}
+                    {new Date(item.created_at).toLocaleString()}
+                  </small>
+                </div>
+
+                <button
+                  className="danger-action"
+                  disabled={trainingBusy}
+                  onClick={()=>void deleteTraining(item.id,item.title)}
+                >
+                  Delete
+                </button>
+              </div>
+
+              {item.description&&<p>{item.description}</p>}
+
+              <div className="training-resource-links">
+                {item.video_url&&
+                  <a
+                    href={item.video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Training Video
+                  </a>
+                }
+
+                {item.resource_url&&
+                  <a
+                    href={item.resource_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {item.resource_name||"Open Resource"}
+                  </a>
+                }
+              </div>
+
+              <div className="training-progress-list">
+                {assigned.length===0&&
+                  <small>No team members assigned.</small>
+                }
+
+                {assigned.map(assignment=>
+                  <div
+                    className="training-progress-row"
+                    key={assignment.id}
+                  >
+                    <div>
+                      <strong>
+                        {assignment.assigned_to_name||
+                         assignment.assigned_to_email||
+                         "Studio Member"}
+                      </strong>
+
+                      <small>
+                        Assigned {new Date(
+                          assignment.assigned_at
+                        ).toLocaleDateString()}
+                      </small>
+                    </div>
+
+                    <span className={`training-status ${assignment.status}`}>
+                      {assignment.status.replace(/_/g," ")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+
+  </div>
+  }
+</section>
+}
 {adminTab==="team"&&<section className="admin-panel"><span className="card-label">ACCESS & ROLES</span><h2>Studio Team</h2>{adminRole==="primary_admin"&&<div className="admin-add-member"><input type="email" value={adminMemberEmail} onChange={e=>setAdminMemberEmail(e.target.value)} placeholder="Existing Umbra Studio account email"/><select value={adminMemberRole} onChange={e=>setAdminMemberRole(e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button className="primary-action" onClick={()=>void addStudioAdmin()}>Add Collaborator</button></div>}<div className="admin-team-grid">{adminMembers.map(m=><article className="admin-member-card" key={m.user_id}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><span>{m.email}</span></div><span className="admin-role-pill">{m.role}</span><small>Last login: {m.last_login_at?new Date(m.last_login_at).toLocaleString():"Never recorded"} • {Boolean(m.password_set)?"Account Active":"Setup Required"}</small>{adminRole==="primary_admin"&&<div className="admin-member-actions"><button onClick={()=>{const n=prompt("Studio display name",m.display_name||"");if(n)void setMemberDisplayName(m.user_id,n)}}>Rename</button>{Boolean(m.password_set)?<span className="admin-role-pill">Account Active</span>:<button onClick={()=>void generateMemberSetupCode(m.user_id)}>Generate Setup Code</button>}<select value={m.role} disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onChange={e=>void changeAdminRole(m.user_id,e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onClick={()=>void removeStudioAdmin(m.user_id)}>Remove</button></div>}{memberSetupCodes[m.user_id]&&<div className="admin-help"><strong>One-time setup code: {memberSetupCodes[m.user_id].code}</strong><br/><small>Expires {new Date(memberSetupCodes[m.user_id].expiresAt).toLocaleString()}. Share this code privately with this member.</small></div>}</article>)}</div></section>}</section></main>;
 }
 

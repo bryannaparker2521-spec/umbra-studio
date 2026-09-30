@@ -1029,6 +1029,186 @@ export default {
 
 
 			// ------------------------------------------------------------
+                // ------------------------------------------------------------
+                // TEAM TRAINING
+                // ------------------------------------------------------------
+                if(request.method==="GET"&&url.pathname==="/api/training"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const [items,assignments]=await Promise.all([
+                                getAll(env,`SELECT t.*,COALESCE(u.display_name,u.email,'Studio Member') created_by_name
+                                FROM studio_training_items t
+                                LEFT JOIN studio_users u ON u.id=t.created_by
+                                ORDER BY t.updated_at DESC`),
+                                getAll(env,`SELECT a.*,
+                                COALESCE(u.display_name,u.email,'Studio Member') assigned_to_name,
+                                u.email assigned_to_email,
+                                COALESCE(by_user.display_name,by_user.email,'Studio Member') assigned_by_name
+                                FROM studio_training_assignments a
+                                LEFT JOIN studio_users u ON u.id=a.assigned_to
+                                LEFT JOIN studio_users by_user ON by_user.id=a.assigned_by
+                                ORDER BY a.assigned_at DESC`)
+                        ]);
+                        return json({ok:true,items,assignments});
+                }
+
+                if(request.method==="GET"&&url.pathname==="/api/me/training"){
+                        const rows=await getAll(env,`SELECT
+                        a.id assignment_id,a.training_id,a.assigned_to,a.assigned_by,
+                        a.status,a.assigned_at,a.updated_at,a.completed_at,
+                        t.title,t.description,t.video_url,t.resource_url,t.resource_name,
+                        t.created_by,t.created_at training_created_at,t.updated_at training_updated_at
+                        FROM studio_training_assignments a
+                        JOIN studio_training_items t ON t.id=a.training_id
+                        WHERE a.assigned_to=?
+                        ORDER BY
+                        CASE a.status
+                          WHEN 'in_progress' THEN 0
+                          WHEN 'not_started' THEN 1
+                          WHEN 'completed' THEN 2
+                          ELSE 3
+                        END,
+                        a.assigned_at DESC`,[user.id]);
+                        return json({ok:true,training:rows});
+                }
+
+                if(request.method==="POST"&&url.pathname==="/api/training"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const b=await readJsonBody(request);
+                        const title=String(b.title??"").trim();
+
+                        if(!title)
+                                return errorResponse(400,"Training title is required.");
+
+                        const id=crypto.randomUUID(),now=new Date().toISOString();
+
+                        await env.umbra_studio_production.prepare(`INSERT INTO
+                        studio_training_items(
+                          id,title,description,video_url,resource_url,resource_name,
+                          created_by,created_at,updated_at
+                        ) VALUES(?,?,?,?,?,?,?,?,?)`)
+                        .bind(
+                          id,
+                          title,
+                          nullableString(b.description),
+                          nullableString(b.video_url),
+                          nullableString(b.resource_url),
+                          nullableString(b.resource_name),
+                          user.id,
+                          now,
+                          now
+                        ).run();
+
+                        return json({ok:true,id},201);
+                }
+
+                const trainingAssignMatch=url.pathname.match(/^\/api\/training\/([^/]+)\/assign$/);
+                if(trainingAssignMatch&&request.method==="POST"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const trainingId=decodeURIComponent(trainingAssignMatch[1]);
+                        const b=await readJsonBody(request);
+                        const assignedTo=Array.isArray(b.assigned_to)
+                          ? b.assigned_to.map(String).filter(Boolean)
+                          : [String(b.assigned_to??"")].filter(Boolean);
+
+                        if(!assignedTo.length)
+                                return errorResponse(400,"Choose at least one team member.");
+
+                        const training=await env.umbra_studio_production
+                          .prepare(`SELECT id FROM studio_training_items WHERE id=? LIMIT 1`)
+                          .bind(trainingId)
+                          .first<any>();
+
+                        if(!training)
+                                return errorResponse(404,"Training item not found.");
+
+                        const now=new Date().toISOString();
+                        let assigned=0;
+
+                        for(const memberId of assignedTo){
+                                const member=await env.umbra_studio_production
+                                  .prepare(`SELECT user_id FROM studio_admin_members WHERE user_id=? LIMIT 1`)
+                                  .bind(memberId)
+                                  .first<any>();
+
+                                if(!member)continue;
+
+                                await env.umbra_studio_production.prepare(`INSERT INTO
+                                studio_training_assignments(
+                                  id,training_id,assigned_to,assigned_by,status,
+                                  assigned_at,updated_at,completed_at
+                                ) VALUES(?,?,?,?,?,?,?,?)
+                                ON CONFLICT(training_id,assigned_to) DO NOTHING`)
+                                .bind(
+                                  crypto.randomUUID(),
+                                  trainingId,
+                                  memberId,
+                                  user.id,
+                                  "not_started",
+                                  now,
+                                  now,
+                                  null
+                                ).run();
+
+                                assigned++;
+                        }
+
+                        return json({ok:true,assigned});
+                }
+
+                const myTrainingMatch=url.pathname.match(/^\/api\/me\/training\/([^/]+)$/);
+                if(myTrainingMatch&&request.method==="PATCH"){
+                        const assignmentId=decodeURIComponent(myTrainingMatch[1]);
+                        const b=await readJsonBody(request);
+                        const status=String(b.status??"");
+
+                        if(!["not_started","in_progress","completed"].includes(status))
+                                return errorResponse(400,"Invalid training status.");
+
+                        const existing=await env.umbra_studio_production
+                          .prepare(`SELECT id FROM studio_training_assignments
+                          WHERE id=? AND assigned_to=? LIMIT 1`)
+                          .bind(assignmentId,user.id)
+                          .first<any>();
+
+                        if(!existing)
+                                return errorResponse(404,"Training assignment not found.");
+
+                        const now=new Date().toISOString();
+
+                        await env.umbra_studio_production.prepare(`UPDATE studio_training_assignments
+                        SET status=?,updated_at=?,completed_at=?
+                        WHERE id=? AND assigned_to=?`)
+                        .bind(
+                          status,
+                          now,
+                          status==="completed"?now:null,
+                          assignmentId,
+                          user.id
+                        ).run();
+
+                        return json({ok:true,id:assignmentId,status});
+                }
+
+                const trainingDeleteMatch=url.pathname.match(/^\/api\/training\/([^/]+)$/);
+                if(trainingDeleteMatch&&request.method==="DELETE"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const id=decodeURIComponent(trainingDeleteMatch[1]);
+
+                        const existing=await env.umbra_studio_production
+                          .prepare(`SELECT id FROM studio_training_items WHERE id=? LIMIT 1`)
+                          .bind(id)
+                          .first<any>();
+
+                        if(!existing)
+                                return errorResponse(404,"Training item not found.");
+
+                        await env.umbra_studio_production
+                          .prepare(`DELETE FROM studio_training_items WHERE id=?`)
+                          .bind(id)
+                          .run();
+
+                        return json({ok:true,id});
+                }
 			// STORY PRODUCTION (D1)
 			// ------------------------------------------------------------
 			if(request.method==="GET"&&url.pathname==="/api/production"){
