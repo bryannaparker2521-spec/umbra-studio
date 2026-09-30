@@ -510,6 +510,7 @@ async function loadAdminCenter() {
   try {
     const data=await umbraCloudFetch<any>("/api/admin-center");
     const memberRows=(data.members??[]) as StudioAdminMember[]; setAdminMembers(memberRows);
+    setMemberSetupCodes(current=>Object.fromEntries(Object.entries(current).filter(([userId])=>!Boolean(memberRows.find(member=>member.user_id===userId)?.password_set))));
     setAdminRole(memberRows.find(x=>x.user_id===session.user.id)?.role??studioAccessRole??null);
     setCollaboratorSessions((data.sessions??[]) as CollaboratorSession[]);
     setAdminActivity((data.activity??[]) as StudioActivity[]);
