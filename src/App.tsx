@@ -164,6 +164,7 @@ const [connectedRelationships, setConnectedRelationships] = useState<CharacterRe
 const [relationshipTargetId, setRelationshipTargetId] = useState("");
 const [relationshipType, setRelationshipType] = useState("sibling");
 const [relationshipCharacterSearch, setRelationshipCharacterSearch] = useState("");
+const [relationshipSearchOpen, setRelationshipSearchOpen] = useState(false);
 const [pendingImportedRelationshipSync, setPendingImportedRelationshipSync] = useState<any | null>(null);
 const [relationshipBusy, setRelationshipBusy] = useState(false);
 const [relationshipError, setRelationshipError] = useState("");
@@ -2976,7 +2977,7 @@ const renderAbilitiesStep = () => (
 );
 
 const renderRelationshipsStep = () => (
-  <section className="creator-form-card">
+  <section className="creator-form-card relationships-form-card">
     <div className="form-section-heading">
       <span className="form-section-icon">✦</span>
       <div>
@@ -2986,9 +2987,23 @@ const renderRelationshipsStep = () => (
     </div>
 
     <style>{`
+      .relationships-form-card{overflow:visible!important}.relationships-form-card .connection-builder{overflow:visible!important}
       .connection-builder{padding:20px;border:1px solid rgba(229,189,87,.18);border-radius:18px;background:rgba(18,8,21,.5);margin-bottom:24px}
       .connection-builder h4{margin:0 0 6px;color:#f0d481;font-family:Georgia,serif;font-size:22px}.connection-builder>p{margin:0 0 16px;color:#9f8ba2}
       .connection-controls{display:grid;grid-template-columns:1fr 1fr auto;gap:10px}.connection-controls select{padding:12px;border-radius:10px;border:1px solid rgba(185,92,209,.25);background:#110914;color:#eee}
+      .relationship-search-wrap{position:relative;min-width:0}
+      .relationship-search-wrap input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid rgba(185,92,209,.25);background:#110914;color:#eee;outline:none}
+      .relationship-search-wrap input:focus{border-color:rgba(229,189,87,.55);box-shadow:0 0 0 2px rgba(229,189,87,.08)}
+      .relationship-search-wrap input::placeholder{color:#806f84}
+      .relationship-search-menu{position:absolute;z-index:1000;top:calc(100% + 8px);left:0;width:100%;box-sizing:border-box;max-height:220px;overflow-y:auto;padding:6px;background:#110914;border:1px solid rgba(229,189,87,.35);border-radius:12px;box-shadow:0 18px 45px rgba(0,0,0,.6);scrollbar-width:thin;scrollbar-color:#7b3b89 #160b19}
+      .relationship-search-menu::-webkit-scrollbar{width:9px}
+      .relationship-search-menu::-webkit-scrollbar-track{background:#160b19;border-radius:10px}
+      .relationship-search-menu::-webkit-scrollbar-thumb{background:#7b3b89;border-radius:10px;border:2px solid #160b19}
+      .relationship-search-menu::-webkit-scrollbar-thumb:hover{background:#a35ab4}
+      .relationship-search-option{display:block;width:100%;padding:11px 12px;border:0;border-radius:8px;background:transparent;color:#eee;text-align:left;cursor:pointer;font:inherit}
+      .relationship-search-option:hover,.relationship-search-option:focus{background:rgba(185,92,209,.16);color:#f0d481;outline:none}
+      .relationship-search-option strong{color:#ead180;font-weight:600}
+      .relationship-search-alias{color:#b68abe}
       .connection-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:16px}.connection-chip{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid rgba(185,92,209,.18);border-radius:14px;background:#0d0811}.connection-chip img,.connection-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1b0c20;display:grid;place-items:center;color:#e5bd57}.connection-chip-copy{flex:1}.connection-chip-copy strong{display:block;color:#ead180}.connection-chip-copy span{font-size:12px;color:#b68abe;text-transform:capitalize}.connection-remove{border:0;background:transparent;color:#c98b99;cursor:pointer;font-size:18px}
       .written-relations-title{grid-column:1/-1;margin:8px 0 0;color:#d7bddb;font-family:Georgia,serif;font-size:20px}
       @media(max-width:700px){.connection-controls{grid-template-columns:1fr}}
@@ -3006,7 +3021,41 @@ const renderRelationshipsStep = () => (
           <optgroup label="Rank & Service"><option value="king">King / Ruler</option><option value="subject">Subject</option><option value="lord">Lord</option><option value="underling">Underling</option><option value="master">Master</option><option value="servant">Servant</option><option value="captain">Captain</option><option value="lieutenant">Lieutenant</option><option value="commander">Commander</option><option value="subordinate">Subordinate</option><option value="leader">Leader</option><option value="member">Member</option></optgroup>
           <optgroup label="Identity"><option value="same_person">Same Person</option><option value="alter_ego">Alter Ego / Persona</option><option value="true_identity">True Identity</option></optgroup>
         </select>
-        <div><input list="relationship-character-options" value={relationshipCharacterSearch} onChange={(e)=>{const value=e.target.value;setRelationshipCharacterSearch(value);const match=relationshipOptions.find(x=>x.name===value||`${x.name}${x.identity?.alias?` — ${x.identity.alias}`:""}`===value);setRelationshipTargetId(match?.id||"");}} placeholder="Search characters by name or alias..."/><datalist id="relationship-character-options">{relationshipOptions.filter(item=>!relationshipCharacterSearch.trim()||`${item.name} ${item.identity?.alias||""}`.toLowerCase().includes(relationshipCharacterSearch.toLowerCase())).map(item=><option key={item.id} value={`${item.name}${item.identity?.alias?` — ${item.identity.alias}`:""}`}/>)}</datalist></div>
+        <div className="relationship-search-wrap">
+          <input
+            value={relationshipCharacterSearch}
+            onFocus={() => setRelationshipSearchOpen(true)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setRelationshipCharacterSearch(value);
+              setRelationshipTargetId("");
+              setRelationshipSearchOpen(true);
+            }}
+            placeholder="Search characters by name or alias..."
+            autoComplete="off"
+          />
+          {relationshipSearchOpen && (
+            <div className="relationship-search-menu">
+              {relationshipOptions
+                .filter(item => !relationshipCharacterSearch.trim() || `${item.name} ${item.identity?.alias || ""}`.toLowerCase().includes(relationshipCharacterSearch.toLowerCase()))
+                .map(item => (
+                  <button
+                    type="button"
+                    className="relationship-search-option"
+                    key={item.id}
+                    onClick={() => {
+                      setRelationshipCharacterSearch(`${item.name}${item.identity?.alias ? ` — ${item.identity.alias}` : ""}`);
+                      setRelationshipTargetId(item.id);
+                      setRelationshipSearchOpen(false);
+                    }}
+                  >
+                    <strong>{item.name}</strong>
+                    {item.identity?.alias && <span className="relationship-search-alias"> — {item.identity.alias}</span>}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
         <button type="button" className="primary-action" disabled={!relationshipTargetId || relationshipBusy} onClick={() => void addConnectedRelationship()}>{relationshipBusy ? "Saving..." : "Connect"}</button>
       </div>
       <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:12,flexWrap:"wrap"}}>
