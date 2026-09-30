@@ -112,7 +112,7 @@ type MyTrainingAssignment = {
 
 type StudioAssignment = { id:string; title:string; description:string|null; entity_type:string|null; entity_id:string|null; assigned_to:string; assigned_by:string|null; priority:string; status:string; due_at:string|null; created_at:string; updated_at:string; };
 type StudioNotification = { id:string; recipient_user_id:string; actor_user_id:string|null; actor_name:string|null; notification_type:string; title:string; message:string|null; entity_type:string|null; entity_id:string|null; is_read:boolean; created_at:string; };
-type StudioDirectMessage = { id:string; sender_user_id:string; recipient_user_id:string; body:string; entity_type:string|null; entity_id:string|null; read_at:string|null; created_at:string; };
+type StudioDirectMessage = { id:string; sender_user_id:string; recipient_user_id:string; body:string; entity_type:string|null; entity_id:string|null; read_at:string|null; created_at:string; attachment_url:string|null; attachment_name:string|null; attachment_type:string|null; attachment_size:number|null; };
 type CharacterJourney = { id:string; character_id:string; project_id:string|null; arc_id:string|null; scene_id:string|null; journey_type:string; title:string; description:string|null; before_value:string|null; after_value:string|null; sort_order:number; created_at:string; };
 type V9Health = { projects:number; arcs:number; scenes:number; beats:number; open_comments:number; open_assignments:number; my_unread_notifications:number; continuity_open:number; };
 type StudioSettings = { id:boolean; studio_name:string; studio_subtitle:string; default_canon_status:string; default_spoiler_level:string; autosave_enabled:boolean; autosave_seconds:number; stale_session_minutes:number; show_dashboard_activity:boolean; show_help_descriptions:boolean; updated_at:string; };
@@ -400,6 +400,7 @@ const [appVersion,setAppVersion]=useState("...");
 const [directMessages,setDirectMessages]=useState<StudioDirectMessage[]>([]);
 const [messageRecipientId,setMessageRecipientId]=useState("");
 const [messageBody,setMessageBody]=useState("");
+const [messageAttachmentFile,setMessageAttachmentFile]=useState<File|null>(null);
 const [messagesBusy,setMessagesBusy]=useState(false);
 const [messagesError,setMessagesError]=useState("");
 const [backupValidation,setBackupValidation]=useState<{ok:boolean;message:string;summary?:string}|null>(null);
@@ -913,7 +914,53 @@ useEffect(()=>{
 async function openStudioSettings(){setPage("settings");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadStudioSettings(),loadAdminCenter(),loadV9Production()]);}
 async function loadDirectMessages(){if(!session)return;setMessagesBusy(true);setMessagesError("");try{const data=await umbraCloudFetch<any>("/api/messages");setDirectMessages((data.messages??[]) as StudioDirectMessage[]);}catch(f){setMessagesError(f instanceof Error?f.message:"Messages could not be loaded.");}finally{setMessagesBusy(false);}}
 async function openMessages(){setPage("messages");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadAdminCenter(),loadDirectMessages()]);}
-async function sendDirectMessage(){const targetUserId=messageRecipientId||adminMembers.find(m=>m.user_id!==session?.user.id)?.user_id||"";if(!session||!targetUserId||!messageBody.trim()||messagesBusy)return;const body=messageBody.trim();setMessagesBusy(true);setMessagesError("");try{await umbraCloudFetch("/api/messages",{method:"POST",body:JSON.stringify({recipient_user_id:targetUserId,body})});setMessageRecipientId(targetUserId);setMessageBody("");await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Message could not be sent.");}finally{setMessagesBusy(false);}}
+async function sendDirectMessage(){
+ const targetUserId=messageRecipientId||adminMembers.find(m=>m.user_id!==session?.user.id)?.user_id||"";
+ if(!session||!targetUserId||(!messageBody.trim()&&!messageAttachmentFile)||messagesBusy)return;
+ const body=messageBody.trim();
+ setMessagesBusy(true);
+ setMessagesError("");
+ try{
+   let attachmentUrl:string|null=null;
+   let attachmentName:string|null=null;
+   let attachmentType:string|null=null;
+   let attachmentSize:number|null=null;
+
+   if(messageAttachmentFile){
+     if(messageAttachmentFile.size>20*1024*1024)throw new Error("Message attachments must be 20 MB or smaller.");
+     const uploaded=await uploadUmbraCloudMedia(
+       messageAttachmentFile,
+       `messages/${session.user.id}`,
+       session.user.id
+     );
+     attachmentUrl=uploaded.url;
+     attachmentName=messageAttachmentFile.name;
+     attachmentType=uploaded.contentType||messageAttachmentFile.type||"application/octet-stream";
+     attachmentSize=uploaded.size;
+   }
+
+   await umbraCloudFetch("/api/messages",{
+     method:"POST",
+     body:JSON.stringify({
+       recipient_user_id:targetUserId,
+       body,
+       attachment_url:attachmentUrl,
+       attachment_name:attachmentName,
+       attachment_type:attachmentType,
+       attachment_size:attachmentSize
+     })
+   });
+
+   setMessageRecipientId(targetUserId);
+   setMessageBody("");
+   setMessageAttachmentFile(null);
+   await loadDirectMessages();
+ }catch(f){
+   setMessagesError(f instanceof Error?f.message:"Message could not be sent.");
+ }finally{
+   setMessagesBusy(false);
+ }
+}
 async function markConversationRead(otherUserId:string){if(!session)return;try{await umbraCloudFetch(`/api/messages/read/${encodeURIComponent(otherUserId)}`,{method:"PATCH"});await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Conversation could not be marked read.");}}
 async function openTransferCenter(){setPage("transfer");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadWorldDatabase(),loadAdminCenter(),loadV9Production(),loadStudioSettings(),loadDirectMessages()]);}
 function validateBackupFile(file:File|null){setBackupValidation(null);if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const payload=JSON.parse(String(reader.result||"{}"));if(!payload||typeof payload!=="object")throw new Error("This is not a Studio backup object.");const version=String(payload.version||"");if(!version.startsWith("v10"))throw new Error(`Unsupported backup version: ${version||"unknown"}.`);const counts=[['characters',payload.characters],['codex',payload.codex],['locations',payload.locations],['timeline',payload.timeline],['lore records',payload.expanded_records],['story projects',payload.story_projects],['story scenes',payload.story_scenes]].map(([label,rows]:any)=>`${Array.isArray(rows)?rows.length:0} ${label}`).join(" • ");setBackupValidation({ok:true,message:"Valid Umbra Studio 1.0 backup.",summary:counts});}catch(e){setBackupValidation({ok:false,message:e instanceof Error?e.message:"Backup could not be validated."});}};reader.readAsText(file);}
@@ -4231,7 +4278,64 @@ if(page==="messages"){
  const activeMember=others.find(m=>m.user_id===activeId);
  const thread=directMessages.filter(m=>activeId&&(m.sender_user_id===activeId||m.recipient_user_id===activeId));
  const unreadFrom=(id:string)=>directMessages.filter(m=>m.sender_user_id===id&&m.recipient_user_id===session?.user.id&&!m.read_at).length;
- return <main className="dashboard-shell studio-messages-page"><StudioTopNav /><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">PRIVATE STUDIO COMMUNICATION</p><h1>Studio Messages</h1><p>Direct conversations between authorized Umbra Studio collaborators. Notifications and review comments remain separate.</p></div><button className="secondary-action" onClick={()=>void loadDirectMessages()}>{messagesBusy?"Refreshing...":"Refresh"}</button></div>{messagesError&&<p className="login-error">{messagesError}</p>}<div className="v101-message-layout"><aside className="v101-conversations"><h3>Collaborators</h3>{others.map(m=><button key={m.user_id} className={activeId===m.user_id?"active":""} onClick={()=>{setMessageRecipientId(m.user_id);void markConversationRead(m.user_id)}}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><small>{m.role.replace(/_/g," ")}</small></div>{unreadFrom(m.user_id)>0&&<span>{unreadFrom(m.user_id)}</span>}</button>)}{others.length===0&&<p className="admin-empty">Add another Studio collaborator to begin messaging.</p>}</aside><section className="v101-thread"><div className="v101-thread-head"><div><span>CONVERSATION</span><h2>{activeMember?.display_name||activeMember?.email||"Choose a collaborator"}</h2></div></div><div className="v101-message-scroll">{thread.map(m=>{const mine=m.sender_user_id===session?.user.id;return <article key={m.id} className={mine?"mine":"theirs"}><p>{m.body}</p><small>{new Date(m.created_at).toLocaleString()}{mine?m.read_at?" • Read":" • Sent":""}</small></article>})}{activeId&&thread.length===0&&<p className="admin-empty">No messages yet. Start the conversation below.</p>}</div>{activeId&&<div className="v101-compose"><textarea placeholder={`Message ${activeMember?.display_name||activeMember?.email||"collaborator"}...`} value={messageBody} onChange={e=>setMessageBody(e.target.value)} maxLength={10000}/><button className="primary-action" disabled={!messageBody.trim()||messagesBusy} onClick={()=>void sendDirectMessage()}>Send Message</button></div>}</section></div></section></main>;
+ return <main className="dashboard-shell studio-messages-page"><StudioTopNav /><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">PRIVATE STUDIO COMMUNICATION</p><h1>Studio Messages</h1><p>Direct conversations between authorized Umbra Studio collaborators. Notifications and review comments remain separate.</p></div><button className="secondary-action" onClick={()=>void loadDirectMessages()}>{messagesBusy?"Refreshing...":"Refresh"}</button></div>{messagesError&&<p className="login-error">{messagesError}</p>}<div className="v101-message-layout"><aside className="v101-conversations"><h3>Collaborators</h3>{others.map(m=><button key={m.user_id} className={activeId===m.user_id?"active":""} onClick={()=>{setMessageRecipientId(m.user_id);void markConversationRead(m.user_id)}}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><small>{m.role.replace(/_/g," ")}</small></div>{unreadFrom(m.user_id)>0&&<span>{unreadFrom(m.user_id)}</span>}</button>)}{others.length===0&&<p className="admin-empty">Add another Studio collaborator to begin messaging.</p>}</aside><section className="v101-thread"><div className="v101-thread-head"><div><span>CONVERSATION</span><h2>{activeMember?.display_name||activeMember?.email||"Choose a collaborator"}</h2></div></div><div className="v101-message-scroll">{thread.map(m=>{const mine=m.sender_user_id===session?.user.id;return <article key={m.id} className={mine?"mine":"theirs"}>
+  {m.body&&<p>{m.body}</p>}
+  {m.attachment_url&&(
+    m.attachment_type?.startsWith("image/")
+      ? <a className="v101-message-image-link" href={m.attachment_url} target="_blank" rel="noreferrer">
+          <img className="v101-message-image" src={m.attachment_url} alt={m.attachment_name||"Message attachment"}/>
+        </a>
+      : <a className="v101-message-file" href={m.attachment_url} target="_blank" rel="noreferrer">
+          <span className="v101-message-file-icon">FILE</span>
+          <span>
+            <strong>{m.attachment_name||"Attachment"}</strong>
+            <small>{m.attachment_size!=null?`${(m.attachment_size/1024/1024).toFixed(m.attachment_size>=1024*1024?1:2)} MB`:"Open attachment"}</small>
+          </span>
+        </a>
+  )}
+  <small>{new Date(m.created_at).toLocaleString()}{mine?m.read_at?" • Read":" • Sent":""}</small>
+</article>})}{activeId&&thread.length===0&&<p className="admin-empty">No messages yet. Start the conversation below.</p>}</div>{activeId&&<div className="v101-compose">
+  <textarea
+    placeholder={`Message ${activeMember?.display_name||activeMember?.email||"collaborator"}...`}
+    value={messageBody}
+    onChange={e=>setMessageBody(e.target.value)}
+    maxLength={10000}
+  />
+  {messageAttachmentFile&&<div className="v101-selected-attachment">
+    <div>
+      <strong>{messageAttachmentFile.name}</strong>
+      <small>{(messageAttachmentFile.size/1024/1024).toFixed(messageAttachmentFile.size>=1024*1024?1:2)} MB</small>
+    </div>
+    <button type="button" onClick={()=>setMessageAttachmentFile(null)} disabled={messagesBusy}>Remove</button>
+  </div>}
+  <div className="v101-compose-actions">
+    <label className={`secondary-action v101-attach-button ${messagesBusy?"disabled":""}`}>
+      Attach File
+      <input
+        type="file"
+        disabled={messagesBusy}
+        onChange={e=>{
+          const file=e.target.files?.[0]??null;
+          if(file&&file.size>20*1024*1024){
+            setMessagesError("Message attachments must be 20 MB or smaller.");
+            e.currentTarget.value="";
+            return;
+          }
+          setMessagesError("");
+          setMessageAttachmentFile(file);
+          e.currentTarget.value="";
+        }}
+      />
+    </label>
+    <button
+      className="primary-action"
+      disabled={(!messageBody.trim()&&!messageAttachmentFile)||messagesBusy}
+      onClick={()=>void sendDirectMessage()}
+    >
+      {messagesBusy?"Sending...":"Send Message"}
+    </button>
+  </div>
+</div>}</section></div></section></main>;
 }
 
 if(page==="transfer"){

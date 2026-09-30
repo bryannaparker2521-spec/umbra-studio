@@ -1289,14 +1289,19 @@ export default {
 				.bind(id,String(b.character_id),nullableString(b.project_id),nullableString(b.arc_id),nullableString(b.scene_id),String(b.journey_type??"development"),String(b.title??""),nullableString(b.description),nullableString(b.before_value),nullableString(b.after_value),user.id,now).run();return json({ok:true,id},201);
 			}
 			if(request.method==="GET"&&url.pathname==="/api/messages"){
-				const rows=await getAll(env,`SELECT id,sender_user_id,recipient_user_id,body,entity_type,entity_id,read_at,created_at FROM studio_direct_messages WHERE sender_user_id=? OR recipient_user_id=? ORDER BY created_at ASC LIMIT 1000`,[user.id,user.id]);
+				const rows=await getAll(env,`SELECT id,sender_user_id,recipient_user_id,body,entity_type,entity_id,read_at,created_at,attachment_url,attachment_name,attachment_type,attachment_size FROM studio_direct_messages WHERE sender_user_id=? OR recipient_user_id=? ORDER BY created_at ASC LIMIT 1000`,[user.id,user.id]);
 				return json({ok:true,messages:rows});
 			}
 			if(request.method==="POST"&&url.pathname==="/api/messages"){
-				const b=await readJsonBody(request),id=crypto.randomUUID(),body=String(b.body??"").trim(),target=String(b.recipient_user_id??"");
-				if(!body||!target)return errorResponse(400,"Recipient and message are required.");
-				await env.umbra_studio_production.prepare(`INSERT INTO studio_direct_messages(id,sender_user_id,recipient_user_id,body,entity_type,entity_id,created_at) VALUES(?,?,?,?,?,?,?)`)
-				.bind(id,user.id,target,body,nullableString(b.entity_type),nullableString(b.entity_id),new Date().toISOString()).run();return json({ok:true,id},201);
+				const b=await readJsonBody(request),id=crypto.randomUUID(),body=String(b.body??"").trim(),target=String(b.recipient_user_id??"").trim();
+                        const attachmentUrl=nullableString(b.attachment_url),attachmentName=nullableString(b.attachment_name),attachmentType=nullableString(b.attachment_type);
+                        const rawAttachmentSize=Number(b.attachment_size);
+                        const attachmentSize=Number.isFinite(rawAttachmentSize)&&rawAttachmentSize>=0?Math.round(rawAttachmentSize):null;
+				if(!target)return errorResponse(400,"Recipient is required.");
+                        if(!body&&!attachmentUrl)return errorResponse(400,"Message text or an attachment is required.");
+                        if(attachmentUrl&&!attachmentName)return errorResponse(400,"Attachment name is required.");
+				await env.umbra_studio_production.prepare(`INSERT INTO studio_direct_messages(id,sender_user_id,recipient_user_id,body,entity_type,entity_id,attachment_url,attachment_name,attachment_type,attachment_size,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+				.bind(id,user.id,target,body,nullableString(b.entity_type),nullableString(b.entity_id),attachmentUrl,attachmentName,attachmentType,attachmentSize,new Date().toISOString()).run();return json({ok:true,id},201);
 			}
 
 
