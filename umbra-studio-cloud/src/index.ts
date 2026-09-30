@@ -296,10 +296,12 @@ export default {
 			if(request.method==="POST"&&url.pathname==="/api/auth/set-password"){
 				const b=await readJsonBody(request),email=String(b.email??"").trim().toLowerCase(),password=String(b.password??"");
 				if(password.length<12)return errorResponse(400,"Password must be at least 12 characters.");
-				const target=await env.umbra_studio_production.prepare("SELECT u.id FROM studio_users u INNER JOIN studio_admin_members a ON a.user_id=u.id WHERE lower(u.email)=? LIMIT 1").bind(email).first<any>();
+				const target=await env.umbra_studio_production.prepare("SELECT u.id,a.role FROM studio_users u INNER JOIN studio_admin_members a ON a.user_id=u.id WHERE lower(u.email)=? LIMIT 1").bind(email).first<any>();
 				if(!target)return errorResponse(404,"Umbra Studio account not found.");
 				const bootstrap=await env.umbra_studio_production.prepare("SELECT COUNT(*) AS n FROM studio_users WHERE password_hash IS NOT NULL").first<any>();
-				if(Number(bootstrap?.n??0)>0){
+				if(Number(bootstrap?.n??0)===0){
+					if(target.role!=="primary_admin")return errorResponse(403,"The first Umbra Studio password must belong to the Primary Admin.");
+				}else{
 					const actor=await authenticate(request,env);
 					requireRole(actor,["primary_admin"]);
 				}
