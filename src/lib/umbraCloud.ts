@@ -33,6 +33,11 @@ export async function signInUmbraCloud(email:string,password:string):Promise<Umb
   localStorage.setItem(TOKEN_KEY,body.token); localStorage.setItem(USER_KEY,JSON.stringify(body.user));
   return {user:{id:body.user.id,email:body.user.email}};
 }
+export async function activateUmbraCloudAccount(email:string,code:string,password:string):Promise<void>{
+  const response=await fetch(`${UMBRA_CLOUD_URL}/api/auth/activate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,code,password})});
+  const body=await response.json().catch(()=>null);
+  if(!response.ok)throw new Error(body?.error||`Umbra Studio account setup failed (${response.status}).`);
+}
 export async function signOutUmbraCloud():Promise<void>{
   const token=localStorage.getItem(TOKEN_KEY);
   try{if(token)await fetch(`${UMBRA_CLOUD_URL}/api/auth/logout`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});}finally{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(USER_KEY);}
