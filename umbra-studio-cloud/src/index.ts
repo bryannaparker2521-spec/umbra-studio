@@ -300,7 +300,7 @@ export default {
 				const b=await readJsonBody(request);
 				const email=String(b.email??"").trim().toLowerCase(),code=String(b.code??"").trim().toUpperCase(),password=String(b.password??"");
 				if(!email||!code||!password)return errorResponse(400,"Email, setup code, and password are required.");
-				if(password.length<12)return errorResponse(400,"Password must be at least 12 characters.");
+				if(password.length<8)return errorResponse(400,"Password must be at least 8 characters.");
 				const codeHash=await sha256Hex(code),now=new Date().toISOString();
 				const target=await env.umbra_studio_production.prepare(`
 					SELECT u.id,u.password_hash,c.id AS code_id FROM studio_users u
@@ -325,7 +325,7 @@ export default {
 			}
 			if(request.method==="POST"&&url.pathname==="/api/auth/set-password"){
 				const b=await readJsonBody(request),email=String(b.email??"").trim().toLowerCase(),password=String(b.password??"");
-				if(password.length<12)return errorResponse(400,"Password must be at least 12 characters.");
+				if(password.length<8)return errorResponse(400,"Password must be at least 8 characters.");
 				const target=await env.umbra_studio_production.prepare("SELECT u.id,a.role FROM studio_users u INNER JOIN studio_admin_members a ON a.user_id=u.id WHERE lower(u.email)=? LIMIT 1").bind(email).first<any>();
 				if(!target)return errorResponse(404,"Umbra Studio account not found.");
 				const bootstrap=await env.umbra_studio_production.prepare("SELECT COUNT(*) AS n FROM studio_users WHERE password_hash IS NOT NULL").first<any>();
