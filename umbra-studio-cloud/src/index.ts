@@ -1,9 +1,3 @@
-import {
-	createRemoteJWKSet,
-	jwtVerify,
-	type JWTPayload,
-} from "jose";
-
 interface Env {
 	umbra_studio_production: D1Database;
 	umbra_studio_media: R2Bucket;
@@ -16,16 +10,45 @@ interface AuthenticatedStudioUser {
 	email: string | null;
 	displayName: string | null;
 	role: StudioRole;
-	token: JWTPayload;
 }
 
-const SUPABASE_URL = "https://dblwgpiiwkjhdegsindx.supabase.co";
-const SUPABASE_ISSUER = `${SUPABASE_URL}/auth/v1`;
-const SUPABASE_JWKS_URL = new URL(
-	`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`,
-);
+const SESSION_DAYS = 30;
+const PBKDF2_ITERATIONS = 210_000;
 
-const SUPABASE_JWKS = createRemoteJWKSet(SUPABASE_JWKS_URL);
+function bytesToBase64(bytes: Uint8Array): string {
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary);
+}
+function base64ToBytes(value: string): Uint8Array {
+	const binary = atob(value);
+	return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+async function sha256Hex(value: string): Promise<string> {
+	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+	return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function hashPassword(password: string, salt?: Uint8Array): Promise<string> {
+	const actualSalt = salt ?? crypto.getRandomValues(new Uint8Array(16));
+	const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+	const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: actualSalt, iterations: PBKDF2_ITERATIONS }, key, 256);
+	return `pbkdf2-sha256$${PBKDF2_ITERATIONS}$${bytesToBase64(actualSalt)}$${bytesToBase64(new Uint8Array(bits))}`;
+}
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+	const parts = stored.split("$");
+	if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256") return false;
+	const iterations = Number(parts[1]);
+	if (!Number.isInteger(iterations) || iterations < 100_000) return false;
+	const salt = base64ToBytes(parts[2]);
+	const expected = base64ToBytes(parts[3]);
+	const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+	const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, expected.byteLength * 8));
+	return bits.byteLength === expected.byteLength && crypto.subtle.timingSafeEqual(bits, expected);
+}
+function randomSessionToken(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(32));
+	return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
 
 const corsHeaders = {
 	"Access-Control-Allow-Origin": "*",
@@ -76,154 +99,26 @@ async function authenticate(
 	env: Env,
 ): Promise<AuthenticatedStudioUser> {
 	const accessToken = getBearerToken(request);
+	if (!accessToken) throw errorResponse(401, "Authentication required.");
 
-	if (!accessToken) {
-		throw new Response(
-			JSON.stringify({
-				ok: false,
-				error: "Authentication required.",
-			}),
-			{
-				status: 401,
-				headers: {
-					...corsHeaders,
-					"Content-Type": "application/json",
-				},
-			},
-		);
-	}
+	const tokenHash = await sha256Hex(accessToken);
+	const now = new Date().toISOString();
+	const account = await env.umbra_studio_production.prepare(`
+		SELECT u.id,u.email,u.display_name,u.auth_status,a.role,s.id AS session_id
+		FROM studio_auth_sessions s
+		INNER JOIN studio_users u ON u.id=s.user_id
+		INNER JOIN studio_admin_members a ON a.user_id=u.id
+		WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?
+		LIMIT 1
+	`).bind(tokenHash,now).first<any>();
 
-	let payload: JWTPayload;
+	if (!account) throw errorResponse(401, "Your Umbra Studio login session has expired. Please sign in again.");
+	if (account.auth_status !== "active") throw errorResponse(403, "This Umbra Studio account is not active.");
+	if (!["primary_admin","admin","editor"].includes(account.role)) throw errorResponse(403, "Umbra Studio role is invalid.");
 
-	try {
-		const verified = await jwtVerify(accessToken, SUPABASE_JWKS, {
-			issuer: SUPABASE_ISSUER,
-			algorithms: ["ES256"],
-		});
-
-		payload = verified.payload;
-	} catch (failure) {
-		console.error("JWT verification failed:", failure);
-
-		throw new Response(
-			JSON.stringify({
-				ok: false,
-				error:
-					"Your Umbra Studio login session could not be verified. Please sign out and sign in again.",
-			}),
-			{
-				status: 401,
-				headers: {
-					...corsHeaders,
-					"Content-Type": "application/json",
-				},
-			},
-		);
-	}
-
-	const userId =
-		typeof payload.sub === "string" ? payload.sub.trim() : "";
-
-	if (!userId) {
-		throw new Response(
-			JSON.stringify({
-				ok: false,
-				error: "Authenticated token does not contain a user ID.",
-			}),
-			{
-				status: 401,
-				headers: {
-					...corsHeaders,
-					"Content-Type": "application/json",
-				},
-			},
-		);
-	}
-
-	const account = await env.umbra_studio_production
-		.prepare(`
-			SELECT
-				u.id,
-				u.email,
-				u.display_name,
-				u.auth_status,
-				a.role
-			FROM studio_users u
-			INNER JOIN studio_admin_members a
-				ON a.user_id = u.id
-			WHERE u.id = ?
-			LIMIT 1
-		`)
-		.bind(userId)
-		.first<{
-			id: string;
-			email: string | null;
-			display_name: string | null;
-			auth_status: string;
-			role: string;
-		}>();
-
-	if (!account) {
-		throw new Response(
-			JSON.stringify({
-				ok: false,
-				error: "This account does not have Umbra Studio access.",
-			}),
-			{
-				status: 403,
-				headers: {
-					...corsHeaders,
-					"Content-Type": "application/json",
-				},
-			},
-		);
-	}
-
-	if (account.auth_status !== "active") {
-		throw new Response(
-			JSON.stringify({
-				ok: false,
-				error: "This Umbra Studio account is not active.",
-			}),
-			{
-				status: 403,
-				headers: {
-					...corsHeaders,
-					"Content-Type": "application/json",
-				},
-			},
-		);
-	}
-
-	if (
-		account.role !== "primary_admin" &&
-		account.role !== "admin" &&
-		account.role !== "editor"
-	) {
-		throw new Response(
-			JSON.stringify({
-				ok: false,
-				error: "Umbra Studio role is invalid.",
-			}),
-			{
-				status: 403,
-				headers: {
-					...corsHeaders,
-					"Content-Type": "application/json",
-				},
-			},
-		);
-	}
-
-	return {
-		id: account.id,
-		email: account.email,
-		displayName: account.display_name,
-		role: account.role as StudioRole,
-		token: payload,
-	};
+	await env.umbra_studio_production.prepare("UPDATE studio_auth_sessions SET last_seen_at=? WHERE id=?").bind(now,account.session_id).run();
+	return { id:account.id,email:account.email,displayName:account.display_name,role:account.role as StudioRole };
 }
-
 
 function requireRole(
 	user: AuthenticatedStudioUser,
@@ -377,6 +272,43 @@ export default {
 			}
 
 			// Everything below here requires a valid Umbra Studio account.
+			if(request.method==="POST"&&url.pathname==="/api/auth/login"){
+				const b=await readJsonBody(request);
+				const email=String(b.email??"").trim().toLowerCase(),password=String(b.password??"");
+				if(!email||!password)return errorResponse(400,"Email and password are required.");
+				const account=await env.umbra_studio_production.prepare(`
+					SELECT u.id,u.email,u.display_name,u.password_hash,u.auth_status,a.role
+					FROM studio_users u INNER JOIN studio_admin_members a ON a.user_id=u.id
+					WHERE lower(u.email)=? LIMIT 1
+				`).bind(email).first<any>();
+				if(!account||account.auth_status!=="active"||!account.password_hash||!(await verifyPassword(password,String(account.password_hash))))
+					return errorResponse(401,"Email or password is incorrect.");
+				const token=randomSessionToken(),tokenHash=await sha256Hex(token),id=crypto.randomUUID(),now=new Date(),expires=new Date(now.getTime()+SESSION_DAYS*86400000);
+				await env.umbra_studio_production.prepare(`INSERT INTO studio_auth_sessions(id,user_id,token_hash,created_at,expires_at,last_seen_at) VALUES(?,?,?,?,?,?)`)
+					.bind(id,account.id,tokenHash,now.toISOString(),expires.toISOString(),now.toISOString()).run();
+				return json({ok:true,token,user:{id:account.id,email:account.email,displayName:account.display_name,role:account.role},expiresAt:expires.toISOString()});
+			}
+			if(request.method==="POST"&&url.pathname==="/api/auth/logout"){
+				const token=getBearerToken(request);
+				if(token){const hash=await sha256Hex(token);await env.umbra_studio_production.prepare("UPDATE studio_auth_sessions SET revoked_at=? WHERE token_hash=?").bind(new Date().toISOString(),hash).run();}
+				return json({ok:true});
+			}
+			if(request.method==="POST"&&url.pathname==="/api/auth/set-password"){
+				const b=await readJsonBody(request),email=String(b.email??"").trim().toLowerCase(),password=String(b.password??"");
+				if(password.length<12)return errorResponse(400,"Password must be at least 12 characters.");
+				const target=await env.umbra_studio_production.prepare("SELECT u.id FROM studio_users u INNER JOIN studio_admin_members a ON a.user_id=u.id WHERE lower(u.email)=? LIMIT 1").bind(email).first<any>();
+				if(!target)return errorResponse(404,"Umbra Studio account not found.");
+				const bootstrap=await env.umbra_studio_production.prepare("SELECT COUNT(*) AS n FROM studio_users WHERE password_hash IS NOT NULL").first<any>();
+				if(Number(bootstrap?.n??0)>0){
+					const actor=await authenticate(request,env);
+					requireRole(actor,["primary_admin"]);
+				}
+				const passwordHash=await hashPassword(password);
+				await env.umbra_studio_production.prepare("UPDATE studio_users SET password_hash=?,updated_at=? WHERE id=?").bind(passwordHash,new Date().toISOString(),target.id).run();
+				await env.umbra_studio_production.prepare("UPDATE studio_auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL").bind(new Date().toISOString(),target.id).run();
+				return json({ok:true});
+			}
+
 			const user = await authenticate(request, env);
 
 			// ------------------------------------------------------------
