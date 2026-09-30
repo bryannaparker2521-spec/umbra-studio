@@ -1,0 +1,11 @@
+{
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUY3Z6VnNTK1pYWnBJS0VvSFZXd1EyYytpeXZ2ay9iZ25UVW12ZjNtejBxVjhrNnpkblJickV1NnNLS21jaHo3eGQzRFpoOXM0MWNoTUJmSTRuVzRXeGtSQVh4N3J4b0FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMjgwOTc4CWZpbGU6VW1icmEgU3R1ZGlvXzEuMC4zX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuMwp3WE1GaXFJSlpmVWJPRm9UZnNaMVpIUUJEMjMrMXgyMU5ZZ3F5b0IrbTJQbzhrVzN5eXlhNDAvZ0JDQ2ZKNzU2VUJTRTNnQU1CRWlOV2VSbWUvdllBQT09Cg==",
+                                             "url":  "https://github.com/bryannaparker2521-spec/umbra-studio/releases/download/v1.0.3/Umbra.Studio_1.0.3_x64-setup.exe"
+                                         }
+                  },
+    "pub_date":  "2026-09-24T20:21:52Z",
+    "version":  "1.0.3",
+    "notes":  "Umbra Studio 1.0.3 expands the Character Master Profile and Character Builder, adds production and canon fields, HEX color previews, and fixes My Characters action button layouts."
+}

@@ -1,0 +1,11 @@
+{
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUY3Z6VnNTK1pYWm02NlhBZ2xKaWVITysrTjdxZktxeUUwR0dDQXFFRlhDdzdzWGNqNlNBSDk4UE1IQ2djTkVLZHV5TER6TFc2TXdiQ2htNnlqdVRQaWRleisyNU5IZWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzE1NjQ2CWZpbGU6VW1icmEgU3R1ZGlvXzEuMC41X3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuNQpkNldiMlFUb1krc1dEeHJ6djlnMmpXak9iME9zVHVuZ3RTUGNVQVZheGVkMnBTR2pOUXlGNStXNmwydmhPQ04ralZBYld0K0RNL3ZscVZMdkR3TGlDZz09Cg==",
+                                             "url":  "https://github.com/bryannaparker2521-spec/umbra-studio/releases/download/v1.0.5/Umbra.Studio_1.0.5_x64-setup.exe"
+                                         }
+                  },
+    "pub_date":  "2026-09-25T05:54:00Z",
+    "version":  "1.0.5",
+    "notes":  "Umbra Studio v1.0.5 improves Character Creator imports and fixes character profiles with complex imported appearance, relationship, ability, and production data."
+}

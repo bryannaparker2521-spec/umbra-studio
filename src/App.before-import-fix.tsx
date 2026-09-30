@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { getUmbraCloudUser, umbraCloudFetch, uploadUmbraCloudMedia } from "./lib/umbraCloud";
 import StudioUpdateCenter from "./StudioUpdateCenter";
 import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
@@ -160,25 +159,12 @@ const [relationshipOptions, setRelationshipOptions] = useState<StudioCharacterRo
 const [connectedRelationships, setConnectedRelationships] = useState<CharacterRelationship[]>([]);
 const [relationshipTargetId, setRelationshipTargetId] = useState("");
 const [relationshipType, setRelationshipType] = useState("sibling");
-const [relationshipCharacterSearch, setRelationshipCharacterSearch] = useState("");
-const [pendingImportedRelationshipSync, setPendingImportedRelationshipSync] = useState<any | null>(null);
 const [relationshipBusy, setRelationshipBusy] = useState(false);
 const [relationshipError, setRelationshipError] = useState("");
 const [connectionView, setConnectionView] = useState<"family" | "all">("family");
 const [connectionCenter, setConnectionCenter] = useState<StudioCharacterRow | null>(null);
 const [connectionLinks, setConnectionLinks] = useState<CharacterRelationship[]>([]);
-const [familyGraphRows, setFamilyGraphRows] = useState<CharacterRelationship[]>([]);
-const [familyGraphCharacters, setFamilyGraphCharacters] = useState<StudioCharacterRow[]>([]);
-const connectionHistory = useRef<StudioCharacterRow[]>([]);
-const [connectionCharacterSearch, setConnectionCharacterSearch] = useState("");
 const [loadingConnections, setLoadingConnections] = useState(false);
-const [treePositions, setTreePositions] = useState<Record<string,{x:number;y:number}>>({});
-const [treeHiddenIds, setTreeHiddenIds] = useState<string[]>([]);
-const [treeLockedIds, setTreeLockedIds] = useState<string[]>([]);
-const [treeLayoutUnlocked, setTreeLayoutUnlocked] = useState(false);
-const [treeShowHidden, setTreeShowHidden] = useState(false);
-const [treeDraggingId, setTreeDraggingId] = useState<string | null>(null);
-const treeDragOffset = useRef({x:0,y:0});
 const [worldRecords, setWorldRecords] = useState<WorldRecord[]>([]);
 const [loadingWorld, setLoadingWorld] = useState(false);
 const [worldError, setWorldError] = useState("");
@@ -481,48 +467,18 @@ return () => {
 useEffect(() => {
   let active = true;
   async function verifyStudioAccess() {
-    if (!session?.user.id) {
-      setStudioAccessChecked(false);
-      setStudioAccessRole(null);
-      setAdminRole(null);
-      return;
-    }
-
+    if (!session?.user.id) { setStudioAccessChecked(false); setStudioAccessRole(null); return; }
     setStudioAccessChecked(false);
-
-    try {
-      const cloudUser = await getUmbraCloudUser();
-      if (!active) return;
-
-      const role = cloudUser.role;
-      setStudioAccessRole(role);
-      setAdminRole(role);
-      setStudioAccessChecked(true);
-
-      void Promise.all([
-        loadMyCharacters(),
-        loadWorldRecords(),
-        loadWorldExplorer(),
-        loadV9Production(),
-        loadStudioSettings(),
-      ]);
-
-      setTimeout(() => void registerStudioSession(), 0);
-    } catch (accessError) {
-      if (!active) return;
-
-      console.error("Umbra Studio Cloud access check failed:", accessError);
-      setStudioAccessRole(null);
-      setAdminRole(null);
-      setStudioAccessChecked(true);
-    }
+    const { data, error: accessError } = await supabase.rpc("studio_get_my_role");
+    if (!active) return;
+    const role = (!accessError && (data === "primary_admin" || data === "admin" || data === "editor")) ? data as StudioAdminMember["role"] : null;
+    setStudioAccessRole(role);
+    setAdminRole(role);
+    setStudioAccessChecked(true);
+    if (role) { void Promise.all([loadMyCharacters(), loadWorldRecords(), loadWorldExplorer(), loadV9Production(), loadStudioSettings()]); setTimeout(()=>void registerStudioSession(),0); }
   }
-
   void verifyStudioAccess();
-
-  return () => {
-    active = false;
-  };
+  return () => { active = false; };
 }, [session?.user.id]);
 
 useEffect(()=>{if(!activeStudioSessionId)return;const timer=window.setInterval(()=>{void touchStudioSession();},60000);return()=>window.clearInterval(timer);},[activeStudioSessionId]);
@@ -533,76 +489,94 @@ async function loadAdminCenter() {
   if (!session) return;
   setAdminBusy(true); setAdminError("");
   try {
-    const data=await umbraCloudFetch<any>("/api/admin-center");
-    const memberRows=(data.members??[]) as StudioAdminMember[]; setAdminMembers(memberRows);
-    setAdminRole(memberRows.find(x=>x.user_id===session.user.id)?.role??studioAccessRole??null);
-    setCollaboratorSessions((data.sessions??[]) as CollaboratorSession[]);
-    setAdminActivity((data.activity??[]) as StudioActivity[]);
-    setAdminRevisions((data.revisions??[]) as StudioRevision[]);
-    setAdminNotes((data.notes??[]) as StudioNote[]);
-    setAdminContent([
-      ...((data.characters??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.name,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"character" as const})),
-      ...((data.codex??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.name,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"codex" as const})),
-      ...((data.locations??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.name,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"location" as const})),
-      ...((data.events??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.title,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"timeline" as const})),
+    const [members,activity,revisions,notes,characters,codex,locations,events,sessions] = await Promise.all([
+      supabase.from("studio_admin_members").select("user_id,email,display_name,role,created_at,last_login_at,last_seen_at").order("created_at"),
+      supabase.from("studio_activity_log").select("id,actor_user_id,actor_email,action,entity_type,entity_id,entity_label,details,created_at").order("created_at",{ascending:false}).limit(100),
+      supabase.from("studio_revisions").select("id,entity_type,entity_id,entity_label,changed_by,changed_by_email,snapshot,created_at").order("created_at",{ascending:false}).limit(100),
+      supabase.from("studio_admin_notes").select("id,entity_type,entity_id,note,created_by,created_by_email,created_at,updated_at").order("updated_at",{ascending:false}).limit(100),
+      supabase.from("studio_characters").select("id,user_id,name,workflow_status,updated_at"),
+      supabase.from("studio_world_records").select("id,user_id,name,workflow_status,updated_at"),
+      supabase.from("studio_world_locations").select("id,user_id,name,workflow_status,updated_at").is("archived_at",null),
+      supabase.from("studio_timeline_events").select("id,user_id,title,workflow_status,updated_at").is("archived_at",null),
+      supabase.from("studio_collaborator_sessions").select("*").order("signed_in_at",{ascending:false}).limit(200),
     ]);
-  } catch (failure) { setAdminError(failure instanceof Error?failure.message:"Admin Center could not be loaded from Umbra Cloud."); }
+    for (const result of [members,activity,revisions,notes,characters,codex,locations,events,sessions]) if (result.error) throw result.error;
+    const memberRows=(members.data??[]) as StudioAdminMember[]; setAdminMembers(memberRows);
+    setAdminRole(memberRows.find(x=>x.user_id===session.user.id)?.role??null);
+    setCollaboratorSessions((sessions.data??[]) as CollaboratorSession[]); setAdminActivity((activity.data??[]) as StudioActivity[]); setAdminRevisions((revisions.data??[]) as StudioRevision[]); setAdminNotes((notes.data??[]) as StudioNote[]);
+    setAdminContent([
+      ...((characters.data??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.name,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"character" as const})),
+      ...((codex.data??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.name,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"codex" as const})),
+      ...((locations.data??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.name,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"location" as const})),
+      ...((events.data??[]) as any[]).map(x=>({id:x.id,user_id:x.user_id,label:x.title,workflow_status:x.workflow_status||"draft",updated_at:x.updated_at,entity_type:"timeline" as const})),
+    ]);
+  } catch (failure) { setAdminError(failure instanceof Error?failure.message:"Admin Center could not be loaded."); }
   finally { setAdminBusy(false); }
 }
 async function openAdminCenter(tab:typeof adminTab="overview"){setAdminTab(tab);setPage("admin");window.scrollTo({top:0,behavior:"smooth"});await loadAdminCenter();}
-async function addStudioAdmin(){if(!adminMemberEmail.trim()||adminBusy)return;setAdminBusy(true);setAdminError("");try{await umbraCloudFetch("/api/collaborators",{method:"POST",body:JSON.stringify({email:adminMemberEmail.trim(),role:adminMemberRole})});setAdminMemberEmail("");await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Admin could not be added.");}finally{setAdminBusy(false);}}
-async function changeAdminRole(userId:string,role:StudioAdminMember["role"]){setAdminError("");try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"PATCH",body:JSON.stringify({role})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Admin role could not be changed.");}}
-async function removeStudioAdmin(userId:string){if(!confirm("Remove this collaborator from Umbra Studio?"))return;try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"DELETE"});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Collaborator could not be removed.");}}
-async function setWorkflowStatus(row:AdminContentRow,status:string){
-  setAdminError("");
-  try{
-    const path=row.entity_type==="character"?`/api/characters/${encodeURIComponent(row.id)}`:
-      row.entity_type==="codex"?`/api/world-records/${encodeURIComponent(row.id)}`:
-      row.entity_type==="location"?`/api/locations/${encodeURIComponent(row.id)}`:
-      `/api/timeline/${encodeURIComponent(row.id)}`;
-    await umbraCloudFetch(path,{method:"PUT",body:JSON.stringify({workflow_status:status})});
-    await loadAdminCenter();
-  }catch(failure){setAdminError(failure instanceof Error?failure.message:"Workflow status could not be changed.");}
-}
-async function addAdminNote(){if(!session||!adminNoteText.trim())return;try{await umbraCloudFetch("/api/admin-notes",{method:"POST",body:JSON.stringify({entity_type:adminNoteEntityType,entity_id:adminNoteEntityId||"studio",note:adminNoteText.trim()})});setAdminNoteText("");await loadAdminCenter();}catch(failure){setAdminError(failure instanceof Error?failure.message:"Admin note could not be saved.");}}
-async function deleteAdminNote(id:string){try{await umbraCloudFetch(`/api/admin-notes/${encodeURIComponent(id)}`,{method:"DELETE"});await loadAdminCenter();}catch(failure){setAdminError(failure instanceof Error?failure.message:"Admin note could not be deleted.");}}
+async function addStudioAdmin(){if(!adminMemberEmail.trim()||adminBusy)return;setAdminBusy(true);setAdminError("");try{const {error}=await supabase.rpc("studio_add_admin_by_email",{member_email:adminMemberEmail.trim(),member_role:adminMemberRole});if(error)throw error;setAdminMemberEmail("");await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Admin could not be added.");}finally{setAdminBusy(false);}}
+async function changeAdminRole(userId:string,role:StudioAdminMember["role"]){setAdminError("");const {error}=await supabase.rpc("studio_change_admin_role",{member_user_id:userId,member_role:role});if(error)setAdminError(error.message);else await loadAdminCenter();}
+async function removeStudioAdmin(userId:string){if(!confirm("Remove this collaborator from Umbra Studio?"))return;const {error}=await supabase.rpc("studio_remove_admin",{member_user_id:userId});if(error)setAdminError(error.message);else await loadAdminCenter();}
+const adminTableFor=(type:AdminContentRow["entity_type"])=>type==="character"?"studio_characters":type==="codex"?"studio_world_records":type==="location"?"studio_world_locations":"studio_timeline_events";
+async function setWorkflowStatus(row:AdminContentRow,status:string){const {error}=await supabase.from(adminTableFor(row.entity_type)).update({workflow_status:status,updated_at:new Date().toISOString()}).eq("id",row.id);if(error)setAdminError(error.message);else await loadAdminCenter();}
+async function addAdminNote(){if(!session||!adminNoteText.trim())return;const {error}=await supabase.from("studio_admin_notes").insert({entity_type:adminNoteEntityType,entity_id:adminNoteEntityId||"studio",note:adminNoteText.trim(),created_by:session.user.id,created_by_email:session.user.email??null});if(error)setAdminError(error.message);else{setAdminNoteText("");await loadAdminCenter();}}
+async function deleteAdminNote(id:string){const {error}=await supabase.from("studio_admin_notes").delete().eq("id",id);if(error)setAdminError(error.message);else await loadAdminCenter();}
 
 
 async function loadWorldDatabase(){
   setDatabaseBusy(true); setDatabaseError("");
   try{
-    const data=await umbraCloudFetch<any>("/api/world-database");
-    const types=(data.types??[]) as StudioRecordType[];
-    setRecordTypes(types); setDatabaseRecords((data.records??[]) as StudioDatabaseRecord[]);
-    setCollections((data.collections??[]) as StudioCollection[]); setStudioTags((data.tags??[]) as StudioTag[]); setUniversalLinks((data.links??[]) as StudioUniversalLink[]);
-    setMediaAssets((data.media??[]) as StudioMediaAsset[]); setBackups((data.backups??[]) as StudioBackup[]);
-    setCollectionItems((data.colItems??[]) as StudioCollectionItem[]); setTagAssignments((data.tagItems??[]) as StudioTagAssignment[]);
-    setDatabaseHealth((data.health??null) as DatabaseHealth|null);
-    setDatabaseRevisions((data.revisions??[]) as DatabaseRevision[]); setDatabaseLocks((data.locks??[]) as DatabaseLock[]);
-    setFieldTemplates((data.templates??[]) as FieldTemplate[]); setMediaAttachments((data.attachments??[]) as MediaAttachment[]); setRecordReferences((data.references??[]) as RecordReference[]); setCanonHistory((data.canon??[]) as CanonHistory[]); setContinuityIssues((data.issues??[]) as ContinuityIssue[]); if(data.publicSettings)setPublicSettings(data.publicSettings as PublicSettings);
-    if(!recordForm.typeId&&types[0]?.id)setRecordForm(x=>({...x,typeId:types[0].id}));
+    const [types,records,cols,tags,links,media,backupRows,colItems,tagItems,health,revisions,locks,templates,attachments,references,canonRows,issuesRows,publicRows]=await Promise.all([
+      supabase.from("studio_record_types").select("*").order("name"),
+      supabase.from("studio_database_records").select("*").order("updated_at",{ascending:false}),
+      supabase.from("studio_collections").select("*").order("name"),
+      supabase.from("studio_tags").select("id,name,created_at").order("name"),
+      supabase.from("studio_universal_links").select("*").order("created_at",{ascending:false}).limit(500),
+      supabase.from("studio_media_assets").select("*").order("updated_at",{ascending:false}),
+      supabase.from("studio_backup_snapshots").select("id,created_by,label,snapshot,created_at").order("created_at",{ascending:false}).limit(50),
+      supabase.from("studio_collection_items").select("id,collection_id,entity_type,entity_id,created_at"),
+      supabase.from("studio_tag_assignments").select("id,tag_id,entity_type,entity_id,created_at"),
+      supabase.rpc("studio_database_health"),
+      supabase.from("studio_database_revisions").select("*").order("created_at",{ascending:false}).limit(200),
+      supabase.from("studio_database_locks").select("*"),
+      supabase.from("studio_field_templates").select("*").order("name"),
+      supabase.from("studio_media_attachments").select("*").order("created_at",{ascending:false}),
+      supabase.from("studio_record_references").select("*").order("created_at",{ascending:false}),
+      supabase.from("studio_canon_history").select("*").order("created_at",{ascending:false}).limit(300),
+      supabase.from("studio_continuity_issues").select("*").order("created_at",{ascending:false}).limit(500),
+      supabase.from("studio_public_settings").select("*").eq("id",true).maybeSingle()
+    ]);
+    for(const r of [types,records,cols,tags,links,media,backupRows,colItems,tagItems,revisions,locks,templates,attachments,references,canonRows,issuesRows]) if(r.error) throw r.error;
+    setRecordTypes((types.data??[]) as StudioRecordType[]); setDatabaseRecords((records.data??[]) as StudioDatabaseRecord[]);
+    setCollections((cols.data??[]) as StudioCollection[]); setStudioTags((tags.data??[]) as StudioTag[]); setUniversalLinks((links.data??[]) as StudioUniversalLink[]);
+    setMediaAssets((media.data??[]) as StudioMediaAsset[]); setBackups((backupRows.data??[]) as StudioBackup[]);
+    setCollectionItems((colItems.data??[]) as StudioCollectionItem[]); setTagAssignments((tagItems.data??[]) as StudioTagAssignment[]);
+    if(!health.error) setDatabaseHealth(health.data as DatabaseHealth);
+    setDatabaseRevisions((revisions.data??[]) as DatabaseRevision[]); setDatabaseLocks((locks.data??[]) as DatabaseLock[]);
+    setFieldTemplates((templates.data??[]) as FieldTemplate[]); setMediaAttachments((attachments.data??[]) as MediaAttachment[]); setRecordReferences((references.data??[]) as RecordReference[]); setCanonHistory((canonRows.data??[]) as CanonHistory[]); setContinuityIssues((issuesRows.data??[]) as ContinuityIssue[]); if(!publicRows.error&&publicRows.data)setPublicSettings(publicRows.data as PublicSettings);
+    if(!recordForm.typeId && types.data?.[0]?.id) setRecordForm(x=>({...x,typeId:types.data![0].id}));
   }catch(f){setDatabaseError(f instanceof Error?f.message:"World Database could not be loaded.");}finally{setDatabaseBusy(false);}
 }
 async function openWorldDatabase(tab:typeof databaseTab="records"){setDatabaseTab(tab);setPage("database");window.scrollTo({top:0,behavior:"smooth"});await loadWorldDatabase();}
-async function createDatabaseRecord(){if(!session||!recordForm.typeId||!recordForm.name.trim())return;setDatabaseBusy(true);setDatabaseError("");try{await umbraCloudFetch("/api/world-database/records",{method:"POST",body:JSON.stringify({record_type_id:recordForm.typeId,name:recordForm.name.trim(),subtitle:recordForm.subtitle.trim()||null,summary:recordForm.summary.trim()||null})});setRecordForm(x=>({...x,name:"",subtitle:"",summary:""}));await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Record could not be created.");}finally{setDatabaseBusy(false);}}
-async function createCollection(){if(!session||!collectionForm.name.trim())return;try{await umbraCloudFetch("/api/world-database/collections",{method:"POST",body:JSON.stringify({name:collectionForm.name.trim(),description:collectionForm.description.trim()||null})});setCollectionForm({name:"",description:""});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Collection could not be created.");}}
-async function createTag(){if(!session||!tagName.trim())return;try{await umbraCloudFetch("/api/world-database/tags",{method:"POST",body:JSON.stringify({name:tagName.trim()})});setTagName("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Tag could not be created.");}}
-async function createCustomType(){if(!session||adminRole!=="primary_admin"||!customTypeForm.name.trim()||!customTypeForm.slug.trim())return;const slug=customTypeForm.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");try{await umbraCloudFetch("/api/world-database/types",{method:"POST",body:JSON.stringify({name:customTypeForm.name.trim(),slug,description:customTypeForm.description.trim()||null})});setCustomTypeForm({name:"",slug:"",description:""});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Record type could not be created.");}}
-async function archiveDatabaseRecord(id:string,restore=false){try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({archived_at:restore?null:new Date().toISOString()})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Record archive state could not be changed.");}}
-async function openDatabaseRecord(r:StudioDatabaseRecord){try{await umbraCloudFetch(`/api/world-database/locks/${encodeURIComponent(r.id)}`,{method:"POST"});}catch(f){setDatabaseError(f instanceof Error?f.message:"This record is currently being edited by another Studio admin.");await loadWorldDatabase();return;}setSelectedDatabaseRecordId(r.id);const recoveryKey=`umbra-v7-draft-${r.id}`;let source:any=r;try{const recovered=localStorage.getItem(recoveryKey);if(recovered&&confirm("A local recovery draft exists for this record. Restore it?"))source={...r,...JSON.parse(recovered)};}catch{}const sourceDetails=source.details||r.details||{};setRecordEditor({name:source.name??r.name,subtitle:source.subtitle??r.subtitle??"",summary:source.summary??r.summary??"",imageUrl:source.image_url??r.image_url??"",notes:source.notes??r.notes??"",workflowStatus:source.workflow_status??r.workflow_status??"draft",detailsText:JSON.stringify(sourceDetails,null,2)});setRecordVisualDetails(Object.entries(sourceDetails).map(([key,value])=>({key,value:typeof value==="string"?value:JSON.stringify(value,null,2)})));setRecordEditorMode("visual");setAutosaveStatus("");setAssignmentCollectionId("");setAssignmentTagId("");setRecordMediaId("");await loadWorldDatabase();}
-async function saveDatabaseRecord(){if(!selectedDatabaseRecordId||!session)return;let details:Record<string,any>={};try{details=recordEditor.detailsText.trim()?JSON.parse(recordEditor.detailsText):{};}catch{setDatabaseError("Details must be valid JSON before saving.");return;}setDatabaseBusy(true);setDatabaseError("");try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(selectedDatabaseRecordId)}`,{method:"PUT",body:JSON.stringify({name:recordEditor.name.trim(),subtitle:recordEditor.subtitle.trim()||null,summary:recordEditor.summary.trim()||null,image_url:recordEditor.imageUrl.trim()||null,notes:recordEditor.notes.trim()||null,workflow_status:recordEditor.workflowStatus,details})});await umbraCloudFetch(`/api/world-database/locks/${encodeURIComponent(selectedDatabaseRecordId)}`,{method:"DELETE"});localStorage.removeItem(`umbra-v7-draft-${selectedDatabaseRecordId}`);await loadWorldDatabase();setSelectedDatabaseRecordId(null);}catch(f){setDatabaseError(f instanceof Error?f.message:"Record could not be saved.");}finally{setDatabaseBusy(false);}}
+async function createDatabaseRecord(){if(!session||!recordForm.typeId||!recordForm.name.trim())return;setDatabaseBusy(true);const {error}=await supabase.from("studio_database_records").insert({created_by:session.user.id,updated_by:session.user.id,record_type_id:recordForm.typeId,name:recordForm.name.trim(),subtitle:recordForm.subtitle.trim()||null,summary:recordForm.summary.trim()||null});if(error)setDatabaseError(error.message);else{setRecordForm(x=>({...x,name:"",subtitle:"",summary:""}));await loadWorldDatabase();}setDatabaseBusy(false);}
+async function createCollection(){if(!session||!collectionForm.name.trim())return;const {error}=await supabase.from("studio_collections").insert({name:collectionForm.name.trim(),description:collectionForm.description.trim()||null,created_by:session.user.id});if(error)setDatabaseError(error.message);else{setCollectionForm({name:"",description:""});await loadWorldDatabase();}}
+async function createTag(){if(!session||!tagName.trim())return;const {error}=await supabase.from("studio_tags").insert({name:tagName.trim(),created_by:session.user.id});if(error)setDatabaseError(error.message);else{setTagName("");await loadWorldDatabase();}}
+async function createCustomType(){if(!session||adminRole!=="primary_admin"||!customTypeForm.name.trim()||!customTypeForm.slug.trim())return;const slug=customTypeForm.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");const {error}=await supabase.from("studio_record_types").insert({name:customTypeForm.name.trim(),slug,description:customTypeForm.description.trim()||null,created_by:session.user.id,is_system:false});if(error)setDatabaseError(error.message);else{setCustomTypeForm({name:"",slug:"",description:""});await loadWorldDatabase();}}
+async function archiveDatabaseRecord(id:string,restore=false){const {error}=await supabase.from("studio_database_records").update({archived_at:restore?null:new Date().toISOString()}).eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function openDatabaseRecord(r:StudioDatabaseRecord){const {data,error}=await supabase.rpc("studio_acquire_record_lock",{target_record_id:r.id});if(error){setDatabaseError(error.message);return;}if(data!==true){setDatabaseError("This record is currently being edited by another Studio admin.");await loadWorldDatabase();return;}setSelectedDatabaseRecordId(r.id);const recoveryKey=`umbra-v7-draft-${r.id}`;let source:any=r;try{const recovered=localStorage.getItem(recoveryKey);if(recovered&&confirm("A local recovery draft exists for this record. Restore it?"))source={...r,...JSON.parse(recovered)};}catch{}const sourceDetails=source.details||r.details||{};setRecordEditor({name:source.name??r.name,subtitle:source.subtitle??r.subtitle??"",summary:source.summary??r.summary??"",imageUrl:source.image_url??r.image_url??"",notes:source.notes??r.notes??"",workflowStatus:source.workflow_status??r.workflow_status??"draft",detailsText:JSON.stringify(sourceDetails,null,2)});setRecordVisualDetails(Object.entries(sourceDetails).map(([key,value])=>({key,value:typeof value==="string"?value:JSON.stringify(value,null,2)})));setRecordEditorMode("visual");setAutosaveStatus("");setAssignmentCollectionId("");setAssignmentTagId("");setRecordMediaId("");await loadWorldDatabase();}
+async function saveDatabaseRecord(){if(!selectedDatabaseRecordId||!session)return;let details:Record<string,any>={};try{details=recordEditor.detailsText.trim()?JSON.parse(recordEditor.detailsText):{};}catch{setDatabaseError("Details must be valid JSON before saving.");return;}setDatabaseBusy(true);const {error}=await supabase.from("studio_database_records").update({name:recordEditor.name.trim(),subtitle:recordEditor.subtitle.trim()||null,summary:recordEditor.summary.trim()||null,image_url:recordEditor.imageUrl.trim()||null,notes:recordEditor.notes.trim()||null,workflow_status:recordEditor.workflowStatus,details,updated_by:session.user.id}).eq("id",selectedDatabaseRecordId);if(error)setDatabaseError(error.message);else{await supabase.rpc("studio_release_record_lock",{target_record_id:selectedDatabaseRecordId});localStorage.removeItem(`umbra-v7-draft-${selectedDatabaseRecordId}`);await loadWorldDatabase();setSelectedDatabaseRecordId(null);}setDatabaseBusy(false);}
 function syncVisualDetails(next:Array<{key:string;value:string}>){setRecordVisualDetails(next);const obj:Record<string,any>={};for(const item of next){if(!item.key.trim())continue;let value:any=item.value;try{value=JSON.parse(item.value);}catch{}obj[item.key.trim()]=value;}setRecordEditor(x=>({...x,detailsText:JSON.stringify(obj,null,2)}));}
 function addVisualDetail(){const key=newDetailField.key.trim();if(!key)return;if(recordVisualDetails.some(x=>x.key.toLowerCase()===key.toLowerCase())){setDatabaseError("That lore field already exists on this record.");return;}syncVisualDetails([...recordVisualDetails,{key,value:newDetailField.value}]);setNewDetailField({key:"",value:""});}
 function removeVisualDetail(index:number){syncVisualDetails(recordVisualDetails.filter((_,i)=>i!==index));}
 function saveLocalRecoveryDraft(){if(!selectedDatabaseRecordId)return;let details:any={};try{details=JSON.parse(recordEditor.detailsText||"{}");}catch{}localStorage.setItem(`umbra-v7-draft-${selectedDatabaseRecordId}`,JSON.stringify({name:recordEditor.name,subtitle:recordEditor.subtitle,summary:recordEditor.summary,image_url:recordEditor.imageUrl,notes:recordEditor.notes,workflow_status:recordEditor.workflowStatus,details}));setAutosaveStatus(`Recovery draft saved ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`);}
-async function addRecordReference(recordId:string){if(!session||!referenceForm.label.trim())return;try{await umbraCloudFetch("/api/world-database/references",{method:"POST",body:JSON.stringify({record_id:recordId,label:referenceForm.label.trim(),reference_type:referenceForm.referenceType,url:referenceForm.url.trim()||null,citation:referenceForm.citation.trim()||null,notes:referenceForm.notes.trim()||null})});setReferenceForm({label:"",referenceType:"source",url:"",citation:"",notes:""});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Reference could not be added.");}}
-async function deleteRecordReference(id:string){try{await umbraCloudFetch(`/api/world-database/references/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Reference could not be deleted.");}}
-async function assignCollection(recordId:string){if(!assignmentCollectionId)return;try{await umbraCloudFetch("/api/world-database/collection-items",{method:"POST",body:JSON.stringify({collection_id:assignmentCollectionId,entity_type:"database",entity_id:recordId})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Collection could not be assigned.");}}
-async function removeCollectionAssignment(id:string){try{await umbraCloudFetch(`/api/world-database/collection-items/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Collection assignment could not be removed.");}}
-async function assignTag(recordId:string){if(!assignmentTagId)return;try{await umbraCloudFetch("/api/world-database/tag-assignments",{method:"POST",body:JSON.stringify({tag_id:assignmentTagId,entity_type:"database",entity_id:recordId})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Tag could not be assigned.");}}
-async function removeTagAssignment(id:string){try{await umbraCloudFetch(`/api/world-database/tag-assignments/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Tag assignment could not be removed.");}}
-async function createUniversalLink(){if(!session||!linkForm.sourceId||!linkForm.targetId||!linkForm.label.trim())return;try{await umbraCloudFetch("/api/world-database/links",{method:"POST",body:JSON.stringify({source_type:"database",source_id:linkForm.sourceId,target_type:linkForm.targetType,target_id:linkForm.targetId,relation_label:linkForm.label.trim(),notes:linkForm.notes.trim()||null})});setLinkForm({sourceId:"",targetType:"database",targetId:"",label:"",notes:""});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Link could not be created.");}}
-async function deleteUniversalLink(id:string){try{await umbraCloudFetch(`/api/world-database/links/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Link could not be deleted.");}}
+async function addRecordReference(recordId:string){if(!session||!referenceForm.label.trim())return;const {error}=await supabase.from("studio_record_references").insert({record_id:recordId,label:referenceForm.label.trim(),reference_type:referenceForm.referenceType,url:referenceForm.url.trim()||null,citation:referenceForm.citation.trim()||null,notes:referenceForm.notes.trim()||null,created_by:session.user.id});if(error)setDatabaseError(error.message);else{setReferenceForm({label:"",referenceType:"source",url:"",citation:"",notes:""});await loadWorldDatabase();}}
+async function deleteRecordReference(id:string){const {error}=await supabase.from("studio_record_references").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function assignCollection(recordId:string){if(!assignmentCollectionId)return;const {error}=await supabase.from("studio_collection_items").upsert({collection_id:assignmentCollectionId,entity_type:"database",entity_id:recordId},{onConflict:"collection_id,entity_type,entity_id"});if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function removeCollectionAssignment(id:string){const {error}=await supabase.from("studio_collection_items").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function assignTag(recordId:string){if(!assignmentTagId)return;const {error}=await supabase.from("studio_tag_assignments").upsert({tag_id:assignmentTagId,entity_type:"database",entity_id:recordId},{onConflict:"tag_id,entity_type,entity_id"});if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function removeTagAssignment(id:string){const {error}=await supabase.from("studio_tag_assignments").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function createUniversalLink(){if(!session||!linkForm.sourceId||!linkForm.targetId||!linkForm.label.trim())return;const {error}=await supabase.from("studio_universal_links").insert({source_type:"database",source_id:linkForm.sourceId,target_type:linkForm.targetType,target_id:linkForm.targetId,relation_label:linkForm.label.trim(),notes:linkForm.notes.trim()||null,created_by:session.user.id});if(error)setDatabaseError(error.message);else{setLinkForm({sourceId:"",targetType:"database",targetId:"",label:"",notes:""});await loadWorldDatabase();}}
+async function deleteUniversalLink(id:string){const {error}=await supabase.from("studio_universal_links").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);try{localStorage.setItem("umbra-studio-guidance",enabled?"on":"off");}catch{}}
 function StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>{title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips for me</button></div>:null;}
 const adminGuide:Record<string,string>={overview:"See the Studio workflow at a glance: review queue, team activity, and work needing attention.",content:"Review and move characters, Codex entries, locations, and timeline records through Draft, Review, Approved, and Published.",activity:"Audit who changed Studio content and when. Use this for accountability and troubleshooting.",sessions:"See authorized collaborator sign-ins, last-seen activity, and recorded sign-outs.",revisions:"Review automatic snapshots captured before tracked content changes or deletion.",notes:"Keep private production notes for the admin team. These are not public lore.",team:"Manage Studio collaborators, display names, access roles, and permissions."};
@@ -613,8 +587,9 @@ async function uploadCatalogFile(file:File){
  const imageKinds=["image","map","reference"]; if(imageKinds.includes(mediaForm.mediaType)&&!file.type.startsWith("image/"))throw new Error("Choose an image file for this media type.");
  if(mediaForm.mediaType==="document"&&!(file.type.includes("pdf")||file.type.includes("document")||file.type.startsWith("text/")))throw new Error("Choose a document, PDF, or text file.");
  if(file.size>20*1024*1024)throw new Error("Media files must be 20 MB or smaller.");
- const uploaded=await uploadUmbraCloudMedia(file,`catalog/${mediaForm.mediaType}`,session.user.id);
- return uploaded.url;
+ const path=`${session.user.id}/catalog/${mediaForm.mediaType}/${Date.now()}-${safeFileName(file.name)}`;
+ const {error}=await supabase.storage.from("studio-world-media").upload(path,file,{cacheControl:"3600",upsert:false});if(error)throw error;
+ return supabase.storage.from("studio-world-media").getPublicUrl(path).data.publicUrl;
 }
 async function uploadRecordHeroImage(file:File){
  if(!session)return;
@@ -622,26 +597,35 @@ async function uploadRecordHeroImage(file:File){
  if(file.size>20*1024*1024){setDatabaseError("Images must be 20 MB or smaller.");return;}
  setDatabaseError("");
  try{
-  const uploaded=await uploadUmbraCloudMedia(file,"database-heroes",session.user.id);
-  setRecordEditor(x=>({...x,imageUrl:uploaded.url}));
+  const path=`${session.user.id}/database-heroes/${Date.now()}-${safeFileName(file.name)}`;
+  const {error}=await supabase.storage.from("studio-world-media").upload(path,file,{cacheControl:"3600",upsert:false});if(error)throw error;
+  const url=supabase.storage.from("studio-world-media").getPublicUrl(path).data.publicUrl;
+  setRecordEditor(x=>({...x,imageUrl:url}));
  }catch(e){setDatabaseError(e instanceof Error?e.message:"Image could not be uploaded.");}
 }
-async function createMediaAsset(){if(!session||!mediaForm.title.trim()||!mediaFile)return;setMediaUploading(true);setDatabaseError("");try{const url=await uploadCatalogFile(mediaFile);await umbraCloudFetch("/api/world-database/media",{method:"POST",body:JSON.stringify({title:mediaForm.title.trim(),asset_url:url,media_type:mediaForm.mediaType,caption:mediaForm.caption.trim()||null,credit:mediaForm.credit.trim()||null,alt_text:mediaForm.altText.trim()||null,tags:mediaForm.tags.split(",").map(x=>x.trim()).filter(Boolean)})});setMediaForm({title:"",assetUrl:"",mediaType:"image",caption:"",credit:"",altText:"",tags:""});setMediaFile(null);await loadWorldDatabase();}catch(e){setDatabaseError(e instanceof Error?e.message:"Media could not be uploaded.");}finally{setMediaUploading(false);}}
-async function deleteMediaAsset(id:string,title:string){if(!confirm(`Delete media asset "${title}" from the catalog? This cannot be undone.`))return;try{await umbraCloudFetch(`/api/world-database/media/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Media asset could not be deleted.");}}
-async function bulkWorkflow(status:string){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;try{await umbraCloudFetch("/api/world-database/bulk",{method:"POST",body:JSON.stringify({ids,workflow_status:status})});setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Bulk workflow update failed.");}}
-async function bulkArchive(){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;try{await umbraCloudFetch("/api/world-database/bulk",{method:"POST",body:JSON.stringify({ids,archive:true})});setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Bulk archive failed.");}}
+async function createMediaAsset(){
+ if(!session||!mediaForm.title.trim()||!mediaFile)return;
+ setMediaUploading(true);setDatabaseError("");
+ try{const url=await uploadCatalogFile(mediaFile);
+ const {error}=await supabase.from("studio_media_assets").insert({uploaded_by:session.user.id,title:mediaForm.title.trim(),asset_url:url,media_type:mediaForm.mediaType,caption:mediaForm.caption.trim()||null,credit:mediaForm.credit.trim()||null,alt_text:mediaForm.altText.trim()||null,tags:mediaForm.tags.split(",").map(x=>x.trim()).filter(Boolean)});if(error)throw error;
+ setMediaForm({title:"",assetUrl:"",mediaType:"image",caption:"",credit:"",altText:"",tags:""});setMediaFile(null);await loadWorldDatabase();
+ }catch(e){setDatabaseError(e instanceof Error?e.message:"Media could not be uploaded.");}finally{setMediaUploading(false);}
+}
+async function deleteMediaAsset(id:string,title:string){if(!confirm(`Delete media asset "${title}" from the catalog? This cannot be undone.`))return;const {error}=await supabase.from("studio_media_assets").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function bulkWorkflow(status:string){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;const {error}=await supabase.from("studio_database_records").update({workflow_status:status}).in("id",ids);if(error)setDatabaseError(error.message);else{setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}}
+async function bulkArchive(){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;const {error}=await supabase.from("studio_database_records").update({archived_at:new Date().toISOString()}).in("id",ids);if(error)setDatabaseError(error.message);else{setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}}
 function toggleDatabaseSelection(id:string){setSelectedDatabaseRecordIds(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});}
-async function createStudioBackup(){const label=backupLabel.trim()||`Umbra Studio backup ${new Date().toLocaleString()}`;try{await umbraCloudFetch("/api/world-database/backup",{method:"POST",body:JSON.stringify({label})});setBackupLabel("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Backup could not be created.");}}
+async function createStudioBackup(){const label=backupLabel.trim()||`Umbra Studio backup ${new Date().toLocaleString()}`;const {error}=await supabase.rpc("studio_create_backup",{backup_label:label});if(error)setDatabaseError(error.message);else{setBackupLabel("");await loadWorldDatabase();}}
 function exportStudioData(){const payload={version:"v10-studio-1.0",exported_at:new Date().toISOString(),studio_settings:studioSettings,characters:studioCharacters,codex:worldRecords,locations:worldLocations,timeline:timelineEvents,record_types:recordTypes,expanded_records:databaseRecords,collections,collection_items:collectionItems,tags:studioTags,tag_assignments:tagAssignments,universal_links:universalLinks,media_assets:mediaAssets,record_references:recordReferences,canon_history:canonHistory,continuity_issues:continuityIssues,story_projects:storyProjects,story_arcs:storyArcs,story_scenes:storyScenes,story_beats:storyBeats,story_entity_links:storyLinks,review_comments:reviewComments,assignments:studioAssignments,character_journey:characterJourney,direct_messages:directMessages};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`umbra-studio-1.0-export-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
 function exportSelectedCsv(){const rows=databaseRecords.filter(r=>selectedDatabaseRecordIds.has(r.id));if(!rows.length)return;const esc=(v:any)=>`"${String(v??"").replace(/"/g,'""')}"`;const csv=["record_code,type,name,subtitle,workflow_status,summary",...rows.map(r=>[r.record_code,recordTypes.find(t=>t.id===r.record_type_id)?.name||"",r.name,r.subtitle,r.workflow_status,r.summary].map(esc).join(","))].join("\n");const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="umbra-studio-selected-records.csv";a.click();URL.revokeObjectURL(url);}
 function recordCompleteness(r:StudioDatabaseRecord){let score=20;if(r.subtitle)score+=10;if(r.summary)score+=25;if(r.image_url)score+=15;if(r.details&&Object.keys(r.details).length)score+=15;if(tagAssignments.some(x=>x.entity_type==="database"&&x.entity_id===r.id))score+=5;if(collectionItems.some(x=>x.entity_type==="database"&&x.entity_id===r.id))score+=5;if(universalLinks.some(x=>(x.source_type==="database"&&x.source_id===r.id)||(x.target_type==="database"&&x.target_id===r.id)))score+=5;return Math.min(100,score);}
 
-async function closeDatabaseRecord(){if(selectedDatabaseRecordId)try{await umbraCloudFetch(`/api/world-database/locks/${encodeURIComponent(selectedDatabaseRecordId)}`,{method:"DELETE"});}catch{}setSelectedDatabaseRecordId(null);await loadWorldDatabase();}
-async function restoreDatabaseRevision(revision:DatabaseRevision){if(!confirm(`Restore ${revision.record_name||revision.record_code||"this record"} to this saved version? A new revision will preserve the current state first.`))return;try{await umbraCloudFetch(`/api/world-database/revisions/${encodeURIComponent(revision.id)}/restore`,{method:"POST"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Revision could not be restored.");}}
-async function createFieldTemplate(){if(!session||!templateForm.recordTypeId||!templateForm.name.trim())return;let fields:any[]=[];try{fields=JSON.parse(templateForm.fieldsText);if(!Array.isArray(fields))throw new Error();}catch{setDatabaseError("Template fields must be a valid JSON array.");return;}try{await umbraCloudFetch("/api/world-database/templates",{method:"POST",body:JSON.stringify({record_type_id:templateForm.recordTypeId,name:templateForm.name.trim(),fields})});setTemplateForm({recordTypeId:"",name:"",fieldsText:'[{"key":"overview","label":"Overview"}]'});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Template could not be created.");}}
+async function closeDatabaseRecord(){if(selectedDatabaseRecordId) await supabase.rpc("studio_release_record_lock",{target_record_id:selectedDatabaseRecordId});setSelectedDatabaseRecordId(null);await loadWorldDatabase();}
+async function restoreDatabaseRevision(revision:DatabaseRevision){if(!confirm(`Restore ${revision.record_name||revision.record_code||"this record"} to this saved version? A new revision will preserve the current state first.`))return;const {error}=await supabase.rpc("studio_restore_database_revision",{revision_id:revision.id});if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function createFieldTemplate(){if(!session||!templateForm.recordTypeId||!templateForm.name.trim())return;let fields:any[]=[];try{fields=JSON.parse(templateForm.fieldsText);if(!Array.isArray(fields))throw new Error();}catch{setDatabaseError("Template fields must be a valid JSON array.");return;}const {error}=await supabase.from("studio_field_templates").insert({record_type_id:templateForm.recordTypeId,name:templateForm.name.trim(),fields,created_by:session.user.id});if(error)setDatabaseError(error.message);else{setTemplateForm({recordTypeId:"",name:"",fieldsText:'[{"key":"overview","label":"Overview"}]'});await loadWorldDatabase();}}
 function applyTemplate(t:FieldTemplate){const selectedRecord=databaseRecords.find(r=>r.id===selectedDatabaseRecordId);if(!selectedRecord)return;let details:Record<string,any>={};try{details=JSON.parse(recordEditor.detailsText||"{}");}catch{}for(const f of t.fields||[])if(!(f.key in details))details[f.key]="";setRecordEditor({...recordEditor,detailsText:JSON.stringify(details,null,2)});setRecordVisualDetails(Object.entries(details).map(([key,value])=>({key,value:typeof value==="string"?value:JSON.stringify(value,null,2)})));}
-async function attachMediaToRecord(recordId:string){if(!recordMediaId)return;try{await umbraCloudFetch("/api/world-database/attachments",{method:"POST",body:JSON.stringify({media_id:recordMediaId,entity_type:"database",entity_id:recordId})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Media could not be attached.");}}
-async function detachMedia(id:string){try{await umbraCloudFetch(`/api/world-database/attachments/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Media could not be detached.");}}
+async function attachMediaToRecord(recordId:string){if(!recordMediaId)return;const {error}=await supabase.from("studio_media_attachments").upsert({media_id:recordMediaId,entity_type:"database",entity_id:recordId},{onConflict:"media_id,entity_type,entity_id"});if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function detachMedia(id:string){const {error}=await supabase.from("studio_media_attachments").delete().eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
 function parseLabelledCharacterText(raw:string){
  const clean=raw.replace(/\r/g,"").replace(/\u00a0/g," ");
  const aliases:Record<string,string>={
@@ -736,29 +720,10 @@ if(looksLikeCharacter){
 }
 const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
 function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
-function importedNameList(value:any){return String(value??"").split(/[\n|]+/).map(x=>x.replace(/^[-*•\d.\s]+/,"").trim()).filter(Boolean);}
-function namedCharactersInText(options:StudioCharacterRow[],raw:string){
- const text=String(raw??"").toLowerCase();
- return options.map(character=>({character,index:text.indexOf(character.name.toLowerCase())})).filter(x=>x.index>=0).sort((a,b)=>a.index-b.index||b.character.name.length-a.character.name.length).map(x=>x.character);
-}
-function relationshipMeaning(raw:string,fallbackType:string,sourceId:string,options:StudioCharacterRow[]){
- const text=String(raw??"").trim();
- const people=namedCharactersInText(options,text);
- const first=people[0];
- const second=people[1];
- const lower=text.toLowerCase();
- const explicitParentOf=/\b(father|mother|parent|dad|mom)\s+of\b/.test(lower);
- const explicitChildOf=/\b(son|daughter|child)\s+of\b/.test(lower);
- const childWith=/\b(son|daughter|child)\s+with\b/.test(lower);
- if(explicitParentOf&&first&&second)return [{source:first.id,target:second.id,type:"parent"}];
- if(explicitChildOf&&first&&second)return [{source:first.id,target:second.id,type:"child"}];
- if(childWith&&first){
-   const links=[{source:sourceId,target:first.id,type:"child"}];
-   if(second&&second.id!==sourceId)links.push({source:second.id,target:first.id,type:"parent"});
-   return links;
- }
- if(first&&first.id!==sourceId)return [{source:sourceId,target:first.id,type:fallbackType}];
- return [];
+function importedNameList(value:any){return String(value??"").split(/[\n,;|]+/).map(x=>x.trim()).filter(Boolean);}
+function matchImportedCharacter(options:StudioCharacterRow[],raw:string){
+ const normalized=normalizeImportName(raw);
+ return options.find(x=>{const name=normalizeImportName(x.name);return normalized===name||normalized.startsWith(name)||normalized.endsWith(name)||normalized.includes(name+"the")||normalized.includes(name+"father")||normalized.includes(name+"mother")||normalized.includes(name+"sibling")||normalized.includes(name+"brother")||normalized.includes(name+"sister");});
 }
 async function stageImportedConnectedDrafts(imported:any){
  if(!session)return {locations:0,timeline:0,projects:0,scenes:0};
@@ -766,19 +731,19 @@ async function stageImportedConnectedDrafts(imported:any){
  let locations=0,timeline=0,projects=0,scenes=0;
  for(const name of names(imported.importLocations)){
   if(worldLocations.some(x=>normalizeImportName(x.name)===normalizeImportName(name)))continue;
-  try{await umbraCloudFetch("/api/locations",{method:"POST",body:JSON.stringify({name,location_type:"other",description:"Imported from a character profile. Review and classify this draft location.",map_x:50,map_y:50,tags:["imported-draft"],is_public:false})});locations++;}catch{}
+  const {error}=await supabase.from("studio_world_locations").insert({user_id:session.user.id,name,location_type:"other",description:"Imported from a character profile. Review and classify this draft location.",map_x:50,map_y:50,tags:["imported-draft"],is_public:false}); if(!error)locations++;
  }
  for(const title of names(imported.importTimeline)){
   if(timelineEvents.some(x=>normalizeImportName(x.title)===normalizeImportName(title)))continue;
-  try{await umbraCloudFetch("/api/timeline",{method:"POST",body:JSON.stringify({title,sort_order:0,description:"Imported from a character profile. Review this draft timeline event.",tags:["imported-draft"],is_public:false})});timeline++;}catch{}
+  const {error}=await supabase.from("studio_timeline_events").insert({user_id:session.user.id,title,sort_order:0,description:"Imported from a character profile. Review this draft timeline event.",tags:["imported-draft"],is_public:false}); if(!error)timeline++;
  }
  for(const title of names(imported.importStoryProjects)){
   if(storyProjects.some(x=>normalizeImportName(x.title)===normalizeImportName(title)))continue;
-  try{await umbraCloudFetch("/api/production/projects",{method:"POST",body:JSON.stringify({title,project_type:"story",summary:"Imported from a character profile. Review this draft story project.",status:"idea"})});projects++;}catch{}
+  const {error}=await supabase.from("studio_story_projects").insert({title,project_type:"story",summary:"Imported from a character profile. Review this draft story project.",status:"idea",canon_status:"draft",spoiler_level:"none",is_public:false,created_by:session.user.id,updated_by:session.user.id}); if(!error)projects++;
  }
  for(const title of names(imported.importScenes)){
   if(storyScenes.some(x=>normalizeImportName(x.title)===normalizeImportName(title)))continue;
-  try{await umbraCloudFetch("/api/production/scenes",{method:"POST",body:JSON.stringify({title,summary:"Imported from a character profile. Review this draft scene.",status:"idea"})});scenes++;}catch{}
+  const {error}=await supabase.from("studio_story_scenes").insert({title,summary:"Imported from a character profile. Review this draft scene.",status:"idea",created_by:session.user.id,updated_by:session.user.id}); if(!error)scenes++;
  }
  if(locations||timeline)await loadWorldExplorer(); if(projects||scenes)await loadV9Production();
  return {locations,timeline,projects,scenes};
@@ -787,9 +752,8 @@ async function applyCharacterImport(){
  if(!characterImportPreview)return;
  const imported={...characterImportPreview};
  openCreateCharacter();
- setPendingImportedRelationshipSync(imported);
  setCharacter(current=>({...current,...imported,galleryUrls:Array.isArray(imported.galleryUrls)?imported.galleryUrls:current.galleryUrls}));
- const availableWorld=worldRecords.length?worldRecords:((await umbraCloudFetch<any>("/api/world-records")).records??[]) as WorldRecord[];
+ const availableWorld=worldRecords.length?worldRecords:(await supabase.from("studio_world_records").select("id, user_id, record_type, name, subtype, description, emblem_url, cover_url, lore_details, is_public, created_at, updated_at").order("name")).data as WorldRecord[]||[];
  const findWorld=(type:"realm"|"race"|"faction"|"family",value:any)=>availableWorld.find(x=>x.record_type===type&&normalizeImportName(x.name)===normalizeImportName(value));
  const realm=findWorld("realm",imported.homeland)||findWorld("realm",imported.currentResidence);
  const race=findWorld("race",imported.race);
@@ -797,15 +761,11 @@ async function applyCharacterImport(){
  const family=findWorld("family",imported.lineage);
  if(realm)setLinkedRealmId(realm.id); if(race)setLinkedRaceId(race.id); if(faction)setLinkedFactionId(faction.id); if(family)setLinkedFamilyId(family.id);
  if(!worldRecords.length)setWorldRecords(availableWorld);
- const characterRows=((await umbraCloudFetch<any>("/api/characters")).characters??[]) as StudioCharacterRow[];
+ const {data:characterRows}=await supabase.from("studio_characters").select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at").order("name");
  const options=(characterRows??[]) as StudioCharacterRow[]; setRelationshipOptions(options);
- const existingCharacter=options.find(x=>normalizeImportName(x.name)===normalizeImportName(String(imported.name||"")));
- if(existingCharacter){ setStudioCharacterId(existingCharacter.id); setRelationshipError(`Updating existing character: ${existingCharacter.name}. Review the imported fields, then save to apply changes.`); }
  const relationGroups:[string,string][]=[["parents","parent"],["siblings","sibling"],["children","child"],["partner","partner"],["allies","ally"],["rivals","rival"],["enemies","enemy"],["mentors","mentor"]];
  const matched:string[]=[];
- const previewSource={id:"__importing__",name:String(imported.name||"")} as StudioCharacterRow;
- const previewOptions=[previewSource,...options];
- for(const [field,type] of relationGroups){for(const line of importedNameList(imported[field])){for(const link of relationshipMeaning(line,type,previewSource.id,previewOptions)){const target=previewOptions.find(x=>x.id===link.target);const source=previewOptions.find(x=>x.id===link.source);if(target&&source)matched.push(`${source.name} → ${target.name} (${link.type})`);}}}
+ for(const [field,type] of relationGroups){for(const name of importedNameList(imported[field])){const target=matchImportedCharacter(options,name);if(target)matched.push(`${type}: ${target.name}`);}}
  const staged=await stageImportedConnectedDrafts(imported);
  const notices:string[]=[];
  if(matched.length)notices.push(`Recognized relationships: ${matched.join(" • ")}. They will connect when this draft is saved.`);
@@ -815,44 +775,54 @@ async function applyCharacterImport(){
  if(notices.length)setRelationshipError(notices.join(" "));
  setImportText("");setCharacterImportPreview(null);setCreatorStep(1);setPage("create");window.scrollTo({top:0,behavior:"smooth"});
 }
-async function commitImport(){if(!session||!importPreview.length)return;setDatabaseBusy(true);setImportError("");try{const rows=importPreview.map(row=>{const type=recordTypes.find(t=>t.slug===row.record_type_slug||t.name.toLowerCase()===String(row.record_type_slug).toLowerCase());if(!type)throw new Error(`Unknown record type: ${row.record_type_slug}`);return {record_type_id:type.id,name:row.name,subtitle:row.subtitle,summary:row.summary,details:row.details,workflow_status:row.workflow_status};});await umbraCloudFetch("/api/world-database/import",{method:"POST",body:JSON.stringify({rows})});setImportText("");setImportPreview([]);await loadWorldDatabase();}catch(e){setImportError(e instanceof Error?e.message:"Import failed.");}finally{setDatabaseBusy(false);}}
-function similarNameKey(value:string){return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");}
-function sitewideDuplicateGroups(){
- const items=[
-  ...studioCharacters.map(x=>({id:x.id,name:x.name,type:"Character",table:"studio_characters"})),
-  ...worldRecords.map(x=>({id:x.id,name:x.name,type:`Codex • ${x.record_type}`,table:"studio_world_records"})),
-  ...worldLocations.filter(x=>!x.archived_at).map(x=>({id:x.id,name:x.name,type:"Location",table:"studio_world_locations"})),
-  ...databaseRecords.filter(x=>!x.archived_at).map(x=>({id:x.id,name:x.name,type:"Expanded Record",table:"studio_database_records"})),
-  ...storyProjects.map(x=>({id:x.id,name:x.title,type:"Story Project",table:"studio_story_projects"})),
-  ...storyArcs.map(x=>({id:x.id,name:x.title,type:"Story Arc",table:"studio_story_arcs"})),
-  ...storyScenes.map(x=>({id:x.id,name:x.title,type:"Story Scene",table:"studio_story_scenes"}))
- ];
- const groups=new Map<string,typeof items>(); for(const item of items){const k=similarNameKey(item.name);if(!k)continue;groups.set(k,[...(groups.get(k)||[]),item]);}
- return [...groups.values()].filter(g=>g.length>1);
-}
-async function deleteDuplicateEntity(table:string,id:string,label:string){if(!window.confirm(`Delete ${label}? This permanently deletes this record. Use this only after confirming it is a duplicate.`))return;try{await umbraCloudFetch("/api/duplicates",{method:"DELETE",body:JSON.stringify({table,id})});await Promise.all([loadWorldDatabase(),loadWorldRecords(),loadWorldExplorer(),loadV9Production(),loadMyCharacters()]);}catch(f){setDatabaseError(f instanceof Error?f.message:"Duplicate could not be deleted.");}}
+async function commitImport(){if(!session||!importPreview.length)return;setDatabaseBusy(true);setImportError("");try{for(const row of importPreview){const type=recordTypes.find(t=>t.slug===row.record_type_slug||t.name.toLowerCase()===String(row.record_type_slug).toLowerCase());if(!type)throw new Error(`Unknown record type: ${row.record_type_slug}`);const {error}=await supabase.from("studio_database_records").insert({created_by:session.user.id,updated_by:session.user.id,record_type_id:type.id,name:row.name,subtitle:row.subtitle,summary:row.summary,details:row.details,workflow_status:row.workflow_status});if(error)throw error;}setImportText("");setImportPreview([]);await loadWorldDatabase();}catch(e){setImportError(e instanceof Error?e.message:"Import failed.");}finally{setDatabaseBusy(false);}}
+function duplicateGroups(){const active=databaseRecords.filter(r=>!r.archived_at);const groups=new Map<string,StudioDatabaseRecord[]>();for(const r of active){const key=`${r.record_type_id}|${r.name.trim().toLowerCase().replace(/[^a-z0-9]/g,"")}`;groups.set(key,[...(groups.get(key)||[]),r]);}return [...groups.values()].filter(g=>g.length>1);}
 async function loadV9Production(){
- if(!session)return;setProductionBusy(true);setProductionError("");
- try{const data=await umbraCloudFetch<any>("/api/production");setStoryProjects((data.projects??[]) as StoryProject[]);setStoryArcs((data.arcs??[]) as StoryArc[]);setStoryScenes((data.scenes??[]) as StoryScene[]);setStoryBeats((data.beats??[]) as StoryBeat[]);setStoryLinks((data.links??[]) as StoryEntityLink[]);setReviewComments((data.comments??[]) as ReviewComment[]);setStudioAssignments((data.assignments??[]) as StudioAssignment[]);setStudioNotifications((data.notifications??[]) as StudioNotification[]);setCharacterJourney((data.journey??[]) as CharacterJourney[]);setChangesSinceVisit((data.changes??[]) as ChangeSinceVisit[]);if(data.health)setV9Health(data.health as V9Health);}catch(f){setProductionError(f instanceof Error?f.message:"Story Production could not be loaded.");}finally{setProductionBusy(false);}
+ if(!session)return; setProductionBusy(true); setProductionError("");
+ try{
+  const [projects,arcs,scenes,beats,links,comments,assignments,notifications,journey,changes,health]=await Promise.all([
+   supabase.from("studio_story_projects").select("*").order("updated_at",{ascending:false}),
+   supabase.from("studio_story_arcs").select("*").order("sort_order").order("updated_at",{ascending:false}),
+   supabase.from("studio_story_scenes").select("*").order("sort_order").order("updated_at",{ascending:false}),
+   supabase.from("studio_story_beats").select("*").order("sort_order").order("updated_at",{ascending:false}),
+   supabase.from("studio_story_entity_links").select("*").order("created_at",{ascending:false}),
+   supabase.from("studio_review_comments").select("*").order("created_at",{ascending:false}).limit(300),
+   supabase.from("studio_assignments").select("*").order("updated_at",{ascending:false}).limit(300),
+   supabase.from("studio_notifications").select("*").order("created_at",{ascending:false}).limit(300),
+   supabase.from("studio_character_journey").select("*").order("sort_order").order("created_at",{ascending:false}).limit(500),
+   supabase.rpc("studio_changes_since_last_visit"),
+   supabase.rpc("studio_v9_production_health")
+  ]);
+  for(const r of [projects,arcs,scenes,beats,links,comments,assignments,notifications,journey])if(r.error)throw r.error;
+  setStoryProjects((projects.data??[]) as StoryProject[]); setStoryArcs((arcs.data??[]) as StoryArc[]); setStoryScenes((scenes.data??[]) as StoryScene[]); setStoryBeats((beats.data??[]) as StoryBeat[]); setStoryLinks((links.data??[]) as StoryEntityLink[]); setReviewComments((comments.data??[]) as ReviewComment[]); setStudioAssignments((assignments.data??[]) as StudioAssignment[]); setStudioNotifications((notifications.data??[]) as StudioNotification[]); setCharacterJourney((journey.data??[]) as CharacterJourney[]);
+  if(!changes.error)setChangesSinceVisit((changes.data??[]) as ChangeSinceVisit[]); if(!health.error&&health.data)setV9Health(health.data as V9Health);
+ }catch(f){setProductionError(f instanceof Error?f.message:"Story Production could not be loaded.");}finally{setProductionBusy(false);}
 }
 async function openProduction(tab:typeof productionTab="overview"){setProductionTab(tab);setPage("production");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadV9Production(),loadAdminCenter(),loadWorldDatabase()]);}
-async function createStoryProject(){if(!session||!projectForm.title.trim())return;try{await umbraCloudFetch("/api/production/projects",{method:"POST",body:JSON.stringify({title:projectForm.title.trim(),project_type:projectForm.projectType,summary:projectForm.summary.trim()||null,status:projectForm.status})});setProjectForm({title:"",projectType:"story",summary:"",status:"planning"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Project could not be created.");}}
-async function createStoryArc(){if(!session||!arcForm.title.trim())return;try{await umbraCloudFetch("/api/production/arcs",{method:"POST",body:JSON.stringify({project_id:arcForm.projectId||null,title:arcForm.title.trim(),summary:arcForm.summary.trim()||null,status:arcForm.status})});setArcForm({projectId:"",title:"",summary:"",status:"planned"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Arc could not be created.");}}
-async function createStoryScene(){if(!session||!sceneForm.title.trim())return;try{await umbraCloudFetch("/api/production/scenes",{method:"POST",body:JSON.stringify({project_id:sceneForm.projectId||null,arc_id:sceneForm.arcId||null,title:sceneForm.title.trim(),summary:sceneForm.summary.trim()||null,pov_character_id:sceneForm.povId||null,location_id:sceneForm.locationId||null,era:sceneForm.era.trim()||null,story_date:sceneForm.storyDate.trim()||null,status:sceneForm.status})});setSceneForm({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Scene could not be created.");}}
-async function createStoryBeat(){if(!session||!beatForm.title.trim())return;try{await umbraCloudFetch("/api/production/beats",{method:"POST",body:JSON.stringify({project_id:beatForm.projectId||null,arc_id:beatForm.arcId||null,scene_id:beatForm.sceneId||null,title:beatForm.title.trim(),description:beatForm.description.trim()||null,beat_type:beatForm.beatType,status:beatForm.status})});setBeatForm({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Beat could not be created.");}}
-async function createStoryEntityLink(){if(!session||!storyLinkForm.storyId||!storyLinkForm.linkedId)return;try{await umbraCloudFetch("/api/production/links",{method:"POST",body:JSON.stringify({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null})});setStoryLinkForm(x=>({...x,linkedId:"",label:"",notes:""}));await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story link could not be created.");}}
-async function deleteStoryEntityLink(id:string){try{await umbraCloudFetch(`/api/production/links/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story link could not be deleted.");}}
-async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){if(!confirm(`Delete "${label}"? This cannot be undone.`))return;const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story item could not be deleted.");}}
-async function updateProductionStatus(table:string,id:string,status:string){const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({status})});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Status could not be updated.");}}
-async function addReviewCommentV9(){if(!commentForm.entityId||!commentForm.body.trim())return;try{await umbraCloudFetch("/api/production/reviews",{method:"POST",body:JSON.stringify({entity_type:commentForm.entityType,entity_id:commentForm.entityId,body:commentForm.body.trim(),notify_user_id:commentForm.notifyUserId||null})});setCommentForm(x=>({...x,body:"",notifyUserId:""}));await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Review comment could not be added.");}}
-async function resolveReviewComment(id:string){try{await umbraCloudFetch(`/api/production/reviews/${encodeURIComponent(id)}`,{method:"PATCH"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Review comment could not be resolved.");}}
-async function createAssignmentV9(){if(!assignmentForm.title.trim()||!assignmentForm.assignedTo)return;try{await umbraCloudFetch("/api/production/assignments",{method:"POST",body:JSON.stringify({title:assignmentForm.title.trim(),description:assignmentForm.description.trim(),entity_type:assignmentForm.entityType,entity_id:assignmentForm.entityId||null,assigned_to:assignmentForm.assignedTo,priority:assignmentForm.priority,due_at:assignmentForm.dueAt?new Date(assignmentForm.dueAt).toISOString():null})});setAssignmentForm({title:"",description:"",entityType:"story_project",entityId:"",assignedTo:"",priority:"normal",dueAt:""});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Assignment could not be created.");}}
-async function markNotificationRead(id:string){try{await umbraCloudFetch(`/api/production/notifications/${encodeURIComponent(id)}`,{method:"PATCH"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Notification could not be updated.");}}
-async function createJourneyEvent(){if(!session||!journeyForm.characterId||!journeyForm.title.trim())return;try{await umbraCloudFetch("/api/production/journey",{method:"POST",body:JSON.stringify({character_id:journeyForm.characterId,project_id:journeyForm.projectId||null,arc_id:journeyForm.arcId||null,scene_id:journeyForm.sceneId||null,journey_type:journeyForm.journeyType,title:journeyForm.title.trim(),description:journeyForm.description.trim()||null,before_value:journeyForm.beforeValue.trim()||null,after_value:journeyForm.afterValue.trim()||null})});setJourneyForm({characterId:"",projectId:"",arcId:"",sceneId:"",journeyType:"development",title:"",description:"",beforeValue:"",afterValue:""});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Journey event could not be created.");}}
-
+async function createStoryProject(){if(!session||!projectForm.title.trim())return;const {error}=await supabase.from("studio_story_projects").insert({title:projectForm.title.trim(),project_type:projectForm.projectType,summary:projectForm.summary.trim()||null,status:projectForm.status,created_by:session.user.id,updated_by:session.user.id});if(error)setProductionError(error.message);else{setProjectForm({title:"",projectType:"story",summary:"",status:"planning"});await loadV9Production();}}
+async function createStoryArc(){if(!session||!arcForm.title.trim())return;const {error}=await supabase.from("studio_story_arcs").insert({project_id:arcForm.projectId||null,title:arcForm.title.trim(),summary:arcForm.summary.trim()||null,status:arcForm.status,created_by:session.user.id,updated_by:session.user.id});if(error)setProductionError(error.message);else{setArcForm({projectId:"",title:"",summary:"",status:"planned"});await loadV9Production();}}
+async function createStoryScene(){if(!session||!sceneForm.title.trim())return;const {error}=await supabase.from("studio_story_scenes").insert({project_id:sceneForm.projectId||null,arc_id:sceneForm.arcId||null,title:sceneForm.title.trim(),summary:sceneForm.summary.trim()||null,pov_character_id:sceneForm.povId||null,location_id:sceneForm.locationId||null,era:sceneForm.era.trim()||null,story_date:sceneForm.storyDate.trim()||null,status:sceneForm.status,created_by:session.user.id,updated_by:session.user.id});if(error)setProductionError(error.message);else{setSceneForm({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});await loadV9Production();}}
+async function createStoryBeat(){if(!session||!beatForm.title.trim())return;const {error}=await supabase.from("studio_story_beats").insert({project_id:beatForm.projectId||null,arc_id:beatForm.arcId||null,scene_id:beatForm.sceneId||null,title:beatForm.title.trim(),description:beatForm.description.trim()||null,beat_type:beatForm.beatType,status:beatForm.status,created_by:session.user.id});if(error)setProductionError(error.message);else{setBeatForm({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});await loadV9Production();}}
+async function createStoryEntityLink(){
+ if(!session||!storyLinkForm.storyId||!storyLinkForm.linkedId)return;
+ setProductionError("");
+ const {error}=await supabase.from("studio_story_entity_links").insert({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null});
+ if(error)setProductionError(error.message);else{setStoryLinkForm(x=>({...x,linkedId:"",label:"",notes:""}));await loadV9Production();}
+}
+async function deleteStoryEntityLink(id:string){const {error}=await supabase.from("studio_story_entity_links").delete().eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
+async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){
+ if(!confirm(`Delete "${label}"? This cannot be undone.`))return;
+ const {error}=await supabase.from(table).delete().eq("id",id); if(error)setProductionError(error.message); else await loadV9Production();
+}
+async function updateProductionStatus(table:string,id:string,status:string){const {error}=await supabase.from(table).update({status,updated_at:new Date().toISOString()}).eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
+async function addReviewCommentV9(){if(!commentForm.entityId||!commentForm.body.trim())return;const {error}=await supabase.rpc("studio_add_review_comment",{target_entity_type:commentForm.entityType,target_entity_id:commentForm.entityId,comment_body:commentForm.body.trim(),notify_user_id:commentForm.notifyUserId||null});if(error)setProductionError(error.message);else{setCommentForm(x=>({...x,body:"",notifyUserId:""}));await loadV9Production();}}
+async function resolveReviewComment(id:string){const {error}=await supabase.from("studio_review_comments").update({status:"resolved",resolved_by:session?.user.id,resolved_at:new Date().toISOString()}).eq("id",id);if(error)setProductionError(error.message);else await loadV9Production();}
+async function createAssignmentV9(){if(!assignmentForm.title.trim()||!assignmentForm.assignedTo)return;const {error}=await supabase.rpc("studio_create_assignment",{assignment_title:assignmentForm.title.trim(),assignment_description:assignmentForm.description.trim(),target_entity_type:assignmentForm.entityType,target_entity_id:assignmentForm.entityId||null,target_user_id:assignmentForm.assignedTo,assignment_priority:assignmentForm.priority,assignment_due_at:assignmentForm.dueAt?new Date(assignmentForm.dueAt).toISOString():null});if(error)setProductionError(error.message);else{setAssignmentForm({title:"",description:"",entityType:"story_project",entityId:"",assignedTo:"",priority:"normal",dueAt:""});await loadV9Production();}}
+async function markNotificationRead(id:string){await supabase.from("studio_notifications").update({is_read:true}).eq("id",id);await loadV9Production();}
+async function createJourneyEvent(){if(!session||!journeyForm.characterId||!journeyForm.title.trim())return;const {error}=await supabase.from("studio_character_journey").insert({character_id:journeyForm.characterId,project_id:journeyForm.projectId||null,arc_id:journeyForm.arcId||null,scene_id:journeyForm.sceneId||null,journey_type:journeyForm.journeyType,title:journeyForm.title.trim(),description:journeyForm.description.trim()||null,before_value:journeyForm.beforeValue.trim()||null,after_value:journeyForm.afterValue.trim()||null,created_by:session.user.id});if(error)setProductionError(error.message);else{setJourneyForm({characterId:"",projectId:"",arcId:"",sceneId:"",journeyType:"development",title:"",description:"",beforeValue:"",afterValue:""});await loadV9Production();}}
 function productionEntityOptions(type:string){if(type==="story_project")return storyProjects.map(x=>({id:x.id,label:x.title}));if(type==="story_arc")return storyArcs.map(x=>({id:x.id,label:x.title}));if(type==="story_scene")return storyScenes.map(x=>({id:x.id,label:x.title}));if(type==="database")return databaseRecords.map(x=>({id:x.id,label:x.name}));if(type==="character")return studioCharacters.map(x=>({id:x.id,label:x.name}));if(type==="codex")return worldRecords.map(x=>({id:x.id,label:x.name}));if(type==="location")return worldLocations.map(x=>({id:x.id,label:x.name}));return timelineEvents.map(x=>({id:x.id,label:x.title}));}
 
-async function loadStudioSettings(){try{const data=await umbraCloudFetch<{ok:true;settings:StudioSettings|null}>("/api/settings");if(data.settings)setStudioSettings({...data.settings,autosave_enabled:Boolean((data.settings as any).autosave_enabled),show_dashboard_activity:Boolean((data.settings as any).show_dashboard_activity),show_help_descriptions:Boolean((data.settings as any).show_help_descriptions)} as StudioSettings);}catch(failure){setSettingsError(failure instanceof Error?failure.message:"Studio settings could not be loaded.");}}
+async function loadStudioSettings(){const {data,error}=await supabase.from("studio_settings").select("*").eq("id",true).maybeSingle();if(error){setSettingsError(error.message);return;}if(data)setStudioSettings(data as StudioSettings);}
 // Keep the global help preference in sync when another administrator changes it.
 useEffect(()=>{
   if(!session||page==="settings")return;
@@ -862,24 +832,24 @@ useEffect(()=>{
   return()=>{window.clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};
 },[session?.user.id,page]);
 async function openStudioSettings(){setPage("settings");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadStudioSettings(),loadAdminCenter(),loadV9Production()]);}
-async function loadDirectMessages(){if(!session)return;setMessagesBusy(true);setMessagesError("");try{const data=await umbraCloudFetch<any>("/api/messages");setDirectMessages((data.messages??[]) as StudioDirectMessage[]);}catch(f){setMessagesError(f instanceof Error?f.message:"Messages could not be loaded.");}finally{setMessagesBusy(false);}}
+async function loadDirectMessages(){if(!session)return;setMessagesBusy(true);setMessagesError("");try{const {data,error}=await supabase.from("studio_direct_messages").select("id,sender_user_id,recipient_user_id,body,entity_type,entity_id,read_at,created_at").or(`sender_user_id.eq.${session.user.id},recipient_user_id.eq.${session.user.id}`).order("created_at",{ascending:true}).limit(1000);if(error)throw error;setDirectMessages((data??[]) as StudioDirectMessage[]);}catch(f){setMessagesError(f instanceof Error?f.message:"Messages could not be loaded.");}finally{setMessagesBusy(false);}}
 async function openMessages(){setPage("messages");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadAdminCenter(),loadDirectMessages()]);}
-async function sendDirectMessage(){const targetUserId=messageRecipientId||adminMembers.find(m=>m.user_id!==session?.user.id)?.user_id||"";if(!session||!targetUserId||!messageBody.trim()||messagesBusy)return;const body=messageBody.trim();setMessagesBusy(true);setMessagesError("");try{await umbraCloudFetch("/api/messages",{method:"POST",body:JSON.stringify({recipient_user_id:targetUserId,body})});setMessageRecipientId(targetUserId);setMessageBody("");await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Message could not be sent.");}finally{setMessagesBusy(false);}}
-async function markConversationRead(otherUserId:string){if(!session)return;try{await umbraCloudFetch(`/api/messages/read/${encodeURIComponent(otherUserId)}`,{method:"PATCH"});await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Conversation could not be marked read.");}}
+async function sendDirectMessage(){const targetUserId=messageRecipientId||adminMembers.find(m=>m.user_id!==session?.user.id)?.user_id||"";if(!session||!targetUserId||!messageBody.trim()||messagesBusy)return;const body=messageBody.trim();setMessagesBusy(true);setMessagesError("");try{const {error}=await supabase.rpc("studio_send_direct_message",{target_user_id:targetUserId,message_body:body});if(error)throw error;setMessageRecipientId(targetUserId);setMessageBody("");await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Message could not be sent.");}finally{setMessagesBusy(false);}}
+async function markConversationRead(otherUserId:string){if(!session)return;const {error}=await supabase.rpc("studio_mark_conversation_read",{other_user_id:otherUserId});if(error){setMessagesError(error.message);return;}await loadDirectMessages();}
 async function openTransferCenter(){setPage("transfer");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadWorldDatabase(),loadAdminCenter(),loadV9Production(),loadStudioSettings(),loadDirectMessages()]);}
 function validateBackupFile(file:File|null){setBackupValidation(null);if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const payload=JSON.parse(String(reader.result||"{}"));if(!payload||typeof payload!=="object")throw new Error("This is not a Studio backup object.");const version=String(payload.version||"");if(!version.startsWith("v10"))throw new Error(`Unsupported backup version: ${version||"unknown"}.`);const counts=[['characters',payload.characters],['codex',payload.codex],['locations',payload.locations],['timeline',payload.timeline],['lore records',payload.expanded_records],['story projects',payload.story_projects],['story scenes',payload.story_scenes]].map(([label,rows]:any)=>`${Array.isArray(rows)?rows.length:0} ${label}`).join(" • ");setBackupValidation({ok:true,message:"Valid Umbra Studio 1.0 backup.",summary:counts});}catch(e){setBackupValidation({ok:false,message:e instanceof Error?e.message:"Backup could not be validated."});}};reader.readAsText(file);}
 
-async function saveStudioSettings(){if(!studioSettings||adminRole!=="primary_admin")return;setSettingsBusy(true);setSettingsError("");try{await umbraCloudFetch("/api/settings",{method:"PUT",body:JSON.stringify(studioSettings)});await loadStudioSettings();}catch(failure){setSettingsError(failure instanceof Error?failure.message:"Studio settings could not be saved.");}finally{setSettingsBusy(false);}}
-async function registerStudioSession(){if(!session?.user.id||activeStudioSessionId)return;try{const data=await umbraCloudFetch<{ok:true;id:string}>("/api/sessions",{method:"POST"});setActiveStudioSessionId(data.id);}catch(failure){console.error("Studio session registration failed:",failure);}}
-async function touchStudioSession(){if(!activeStudioSessionId)return;try{await umbraCloudFetch(`/api/sessions/${encodeURIComponent(activeStudioSessionId)}`,{method:"PATCH"});}catch(failure){console.error("Studio session heartbeat failed:",failure);}}
-async function setMyDisplayName(){if(!myStudioDisplayName.trim())return;try{await umbraCloudFetch("/api/me/display-name",{method:"PATCH",body:JSON.stringify({display_name:myStudioDisplayName.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
-async function setMemberDisplayName(userId:string,name:string){try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"PATCH",body:JSON.stringify({display_name:name.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
-async function changeCanonStatus(recordId:string,status:string){try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/canon`,{method:"PATCH",body:JSON.stringify({status,reason:canonReason.trim()||null})});setCanonReason("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Canon status could not be changed.");}}
-async function toggleRecordPublic(recordId:string,value:boolean){const record=databaseRecords.find(r=>r.id===recordId);if(!record)return;if(value&&record.workflow_status!=="published"){setDatabaseError("Publish the editorial workflow first, then enable encyclopedia visibility.");return;}if(value&&!['draft_canon','canon'].includes(record.canon_status||'concept')){setDatabaseError("Only Draft Canon or Canon records can be exposed to the encyclopedia.");return;}const slug=(record.public_slug||record.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+record.record_code.toLowerCase()).slice(0,120);try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/public`,{method:"PATCH",body:JSON.stringify({is_public:value,public_slug:slug})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Public visibility could not be changed.");}}
-async function runContinuityScan(){setDatabaseBusy(true);try{await umbraCloudFetch("/api/world-database/continuity/scan",{method:"POST"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Continuity scan failed.");}finally{setDatabaseBusy(false);}}
-async function setContinuityStatus(id:string,status:string){try{await umbraCloudFetch(`/api/world-database/continuity/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({status})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Continuity status could not be changed.");}}
-async function savePublicSettings(){if(!publicSettings)return;try{await umbraCloudFetch("/api/public-settings",{method:"PUT",body:JSON.stringify(publicSettings)});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Public settings could not be saved.");}}
-async function openPublicEncyclopedia(){setError("");try{const data=await umbraCloudFetch<any>("/api/public-encyclopedia");setPublicBrowseSettings(data.settings as PublicSettings);setPublicBrowseRecords((data.records??[]) as StudioDatabaseRecord[]);setPublicBrowseTypes((data.types??[]) as StudioRecordType[]);setPublicBrowseCharacters((data.characters??[]) as StudioCharacterRow[]);setPublicBrowseWorld((data.codex??[]) as WorldRecord[]);setPublicBrowseLocations((data.locations??[]) as WorldLocation[]);setPublicBrowseTimeline((data.timeline??[]) as TimelineEvent[]);setPublicBrowse(true);}catch(f){setError(f instanceof Error?f.message:"Public encyclopedia could not be loaded.");}}
+async function saveStudioSettings(){if(!studioSettings||adminRole!=="primary_admin")return;setSettingsBusy(true);setSettingsError("");const {error}=await supabase.from("studio_settings").update({...studioSettings,updated_by:session?.user.id,updated_at:new Date().toISOString()}).eq("id",true);if(error)setSettingsError(error.message);else await loadStudioSettings();setSettingsBusy(false);}
+async function registerStudioSession(){if(!session?.user.id||activeStudioSessionId)return;const {data,error}=await supabase.rpc("studio_record_login");if(!error&&data)setActiveStudioSessionId(String(data));}
+async function touchStudioSession(){if(activeStudioSessionId)await supabase.rpc("studio_touch_session",{target_session_id:activeStudioSessionId});}
+async function setMyDisplayName(){if(!myStudioDisplayName.trim())return;const {error}=await supabase.rpc("studio_set_my_display_name",{new_display_name:myStudioDisplayName.trim()});if(error)setAdminError(error.message);else await loadAdminCenter();}
+async function setMemberDisplayName(userId:string,name:string){const {error}=await supabase.rpc("studio_set_member_display_name",{member_user_id:userId,new_display_name:name.trim()});if(error)setAdminError(error.message);else await loadAdminCenter();}
+async function changeCanonStatus(recordId:string,status:string){const {error}=await supabase.rpc("studio_set_database_canon_status",{target_record_id:recordId,new_status:status,change_reason:canonReason.trim()||null});if(error)setDatabaseError(error.message);else{setCanonReason("");await loadWorldDatabase();}}
+async function toggleRecordPublic(recordId:string,value:boolean){const record=databaseRecords.find(r=>r.id===recordId);if(!record)return;if(value&&record.workflow_status!=="published"){setDatabaseError("Publish the editorial workflow first, then enable encyclopedia visibility.");return;}if(value&&!['draft_canon','canon'].includes(record.canon_status||'concept')){setDatabaseError("Only Draft Canon or Canon records can be exposed to the encyclopedia.");return;}const slug=(record.public_slug||record.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+record.record_code.toLowerCase()).slice(0,120);const {error}=await supabase.from("studio_database_records").update({is_public:value,public_slug:slug}).eq("id",recordId);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function runContinuityScan(){setDatabaseBusy(true);const {error}=await supabase.rpc("studio_run_continuity_scan");if(error)setDatabaseError(error.message);else await loadWorldDatabase();setDatabaseBusy(false);}
+async function setContinuityStatus(id:string,status:string){const patch:any={status,updated_at:new Date().toISOString()};if(status==='resolved'){patch.resolved_by=session?.user.id;patch.resolved_at=new Date().toISOString();}const {error}=await supabase.from("studio_continuity_issues").update(patch).eq("id",id);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function savePublicSettings(){if(!publicSettings)return;const {error}=await supabase.from("studio_public_settings").update({...publicSettings,updated_by:session?.user.id,updated_at:new Date().toISOString()}).eq("id",true);if(error)setDatabaseError(error.message);else await loadWorldDatabase();}
+async function openPublicEncyclopedia(){setError("");const [settings,records,types,characters,codex,locations,timeline]=await Promise.all([supabase.from("studio_public_settings").select("*").eq("id",true).maybeSingle(),supabase.from("studio_database_records").select("*").eq("is_public",true).eq("workflow_status","published").eq("spoiler_level","public").is("archived_at",null).order("name"),supabase.from("studio_record_types").select("id,slug,name,description,icon,is_system").order("name"),supabase.from("studio_characters").select("id,user_id,name,status,identity,appearance,origin_lore,abilities,relationships,media,portrait_url,current_step,is_complete,is_public,realm_record_id,race_record_id,faction_record_id,family_record_id,updated_at").eq("is_public",true).eq("is_complete",true).eq("spoiler_level","public").order("name"),supabase.from("studio_world_records").select("id,user_id,record_type,name,subtype,description,emblem_url,cover_url,lore_details,is_public,created_at,updated_at").eq("is_public",true).eq("spoiler_level","public").order("name"),supabase.from("studio_world_locations").select("id,user_id,name,location_type,description,parent_location_id,codex_record_id,map_x,map_y,image_url,tags,is_public,archived_at,created_at,updated_at").eq("is_public",true).eq("spoiler_level","public").is("archived_at",null).order("name"),supabase.from("studio_timeline_events").select("id,user_id,title,era,display_date,sort_order,description,location_id,codex_record_id,character_id,image_url,tags,is_public,archived_at,created_at,updated_at").eq("is_public",true).eq("spoiler_level","public").is("archived_at",null).order("sort_order")]);if(settings.error){setError(settings.error.message);return;}if(!settings.data?.is_enabled){setError("The public Umbra Encyclopedia is not enabled yet.");return;}if(records.error){setError(records.error.message);return;}setPublicBrowseSettings(settings.data as PublicSettings);setPublicBrowseRecords((records.data??[]) as StudioDatabaseRecord[]);setPublicBrowseTypes((types.data??[]) as StudioRecordType[]);if(!characters.error)setPublicBrowseCharacters((characters.data??[]) as StudioCharacterRow[]);if(!codex.error)setPublicBrowseWorld((codex.data??[]) as WorldRecord[]);if(!locations.error)setPublicBrowseLocations((locations.data??[]) as WorldLocation[]);if(!timeline.error)setPublicBrowseTimeline((timeline.data??[]) as TimelineEvent[]);setPublicBrowse(true);}
 async function handleSignIn(e: FormEvent<HTMLFormElement>) {
 e.preventDefault();
 
@@ -903,7 +873,7 @@ setSigningIn(false);
 async function handleSignOut() {
 setError("");
 setPage("dashboard");
-if(activeStudioSessionId) try{await umbraCloudFetch(`/api/sessions/${encodeURIComponent(activeStudioSessionId)}`,{method:"DELETE"});}catch{}
+if(activeStudioSessionId) await supabase.rpc("studio_record_logout",{target_session_id:activeStudioSessionId});
 setActiveStudioSessionId(null);
 await supabase.auth.signOut();
 }
@@ -913,29 +883,18 @@ setCharactersError("");
 setLoadingCharacters(true);
 
 try {
-  const response = await umbraCloudFetch<{ok:true;characters:any[]}>("/api/characters");
-  const parseJson = (value:any, fallback:any) => {
-    if (value == null) return fallback;
-    if (typeof value !== "string") return value;
-    try { return JSON.parse(value); } catch { return fallback; }
-  };
-  const rows = (response.characters ?? []).map((row:any) => ({
-    ...row,
-    identity: parseJson(row.identity, {}),
-    appearance: parseJson(row.appearance, {}),
-    origin_lore: parseJson(row.origin_lore, {}),
-    abilities: parseJson(row.abilities, {}),
-    relationships: parseJson(row.relationships, {}),
-    media: parseJson(row.media, {}),
-    is_complete: Boolean(row.is_complete),
-    is_public: Boolean(row.is_public),
-  }));
-  setStudioCharacters(rows as StudioCharacterRow[]);
+  const { data, error: loadError } = await supabase
+    .from("studio_characters")
+    .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
+    .order("updated_at", { ascending: false });
+
+  if (loadError) throw loadError;
+  setStudioCharacters((data ?? []) as StudioCharacterRow[]);
 } catch (loadFailure) {
   setCharactersError(
     loadFailure instanceof Error
       ? loadFailure.message
-      : "Your characters could not be loaded from Umbra Studio Cloud."
+      : "Your characters could not be loaded."
   );
 } finally {
   setLoadingCharacters(false);
@@ -948,7 +907,22 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 await loadMyCharacters();
 }
 
-async function openPublishedCharacters(){setPage("library");setLibraryError("");setLoadingLibrary(true);window.scrollTo({top:0,behavior:"smooth"});try{const data=await umbraCloudFetch<any>("/api/characters");setLibraryCharacters(((data.characters??[]) as StudioCharacterRow[]).filter(x=>Boolean(x.is_complete)&&Boolean(x.is_public)).sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||""))));}catch(error){setLibraryError(error instanceof Error?error.message:"Published characters could not be loaded.");}finally{setLoadingLibrary(false);}}
+async function openPublishedCharacters() {
+setPage("library");
+setLibraryError("");
+setLoadingLibrary(true);
+window.scrollTo({ top: 0, behavior: "smooth" });
+try {
+  const { data, error } = await supabase.from("studio_characters")
+    .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
+    .eq("is_complete", true).eq("is_public", true).order("updated_at", { ascending:false });
+  if(error) throw error;
+  setLibraryCharacters((data ?? []) as StudioCharacterRow[]);
+} catch(error) {
+  setLibraryError(error instanceof Error ? error.message : "Published characters could not be loaded.");
+} finally { setLoadingLibrary(false); }
+}
+
 function openCharacterProfile(saved: StudioCharacterRow, _from: "characters" | "library") {
 setSelectedCharacter(saved);
 setPage("profile");
@@ -1085,98 +1059,73 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 
 
 async function loadRelationshipOptions(currentId?: string | null) {
-  setRelationshipOptions(studioCharacters.filter((item) => item.id !== currentId));
+  if (!session) return;
+  const { data } = await supabase
+    .from("studio_characters")
+    .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
+    .order("name", { ascending: true });
+  setRelationshipOptions(((data ?? []) as StudioCharacterRow[]).filter((item) => item.id !== currentId));
 }
 
 async function loadConnectedRelationships(characterId: string) {
   setRelationshipError("");
-  try {
-    const response=await umbraCloudFetch<{ok:true;relationships:CharacterRelationship[]}>(`/api/relationships?sourceId=${encodeURIComponent(characterId)}`);
-    const rows=response.relationships??[];
-    const targetMap=new Map(studioCharacters.map(item=>[item.id,item]));
-    const uniqueRows=rows.filter((row,index,list)=>list.findIndex(x=>x.target_character_id===row.target_character_id&&x.relationship_type===row.relationship_type)===index);
-    setConnectedRelationships(uniqueRows.map(row=>({...row,target:targetMap.get(row.target_character_id)??null})));
-  } catch(failure) {
-    setRelationshipError(failure instanceof Error?failure.message:"Relationships could not be loaded.");
-  }
+  const { data, error: relationLoadError } = await supabase
+    .from("studio_character_relationships")
+    .select("id, source_character_id, target_character_id, relationship_type")
+    .eq("source_character_id", characterId)
+    .order("created_at", { ascending: true });
+  if (relationLoadError) { setRelationshipError(relationLoadError.message); return; }
+  const rows = (data ?? []) as CharacterRelationship[];
+  const targetIds = rows.map((row) => row.target_character_id);
+  if (!targetIds.length) { setConnectedRelationships([]); return; }
+  const { data: targets, error: targetError } = await supabase
+    .from("studio_characters")
+    .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
+    .in("id", targetIds);
+  if (targetError) { setRelationshipError(targetError.message); return; }
+  const targetMap = new Map(((targets ?? []) as StudioCharacterRow[]).map((item) => [item.id, item]));
+  setConnectedRelationships(rows.map((row) => ({ ...row, target: targetMap.get(row.target_character_id) ?? null })));
 }
 
 const reciprocalRelationship: Record<string, string> = {
-  mother: "child", father: "child", parent: "child", child: "parent", son: "parent", daughter: "parent",
-  sibling: "sibling", brother: "sibling", sister: "sibling", full_sibling: "full_sibling", half_sibling: "half_sibling",
-  twin: "twin", twin_brother: "twin", twin_sister: "twin",
-  spouse: "spouse", husband: "spouse", wife: "spouse", fiance: "fiance", partner: "partner", love_interest: "love_interest",
-  ex_spouse: "ex_spouse", ex_partner: "ex_partner",
-  grandparent: "grandchild", grandchild: "grandparent", aunt: "niece_nephew", uncle: "niece_nephew", niece: "aunt_uncle", nephew: "aunt_uncle", cousin: "cousin",
-  ally: "ally", friend: "friend", rival: "rival", enemy: "enemy", mentor: "student", student: "mentor",
-  king: "subject", queen: "subject", subject: "ruler", ruler: "subject", lord: "underling", underling: "lord",
-  master: "servant", servant: "master", captain: "lieutenant", lieutenant: "captain", commander: "subordinate", subordinate: "commander",
-  leader: "member", member: "leader", alter_ego: "true_identity", true_identity: "alter_ego", same_person: "same_person", persona: "true_identity",
+  parent: "child", child: "parent", sibling: "sibling", partner: "partner",
+  ally: "ally", rival: "rival", enemy: "enemy", mentor: "student", student: "mentor",
 };
-const genealogyType=(type:string)=>({mother:"parent",father:"parent",son:"child",daughter:"child",brother:"sibling",sister:"sibling",full_sibling:"sibling",half_sibling:"sibling",twin:"sibling",twin_brother:"sibling",twin_sister:"sibling",spouse:"partner",husband:"partner",wife:"partner",fiance:"partner"} as Record<string,string>)[type]||type;
-const relationshipDisplay=(type:string)=>type.split("_").map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" ");
 
 async function addConnectedRelationship() {
   if (!session || !relationshipTargetId || relationshipBusy) return;
   setRelationshipBusy(true); setRelationshipError("");
   try {
-    const sourceId=await ensureStudioCharacterId();
-    if(sourceId===relationshipTargetId) throw new Error("A character cannot be connected to themselves.");
-    const reverseType=reciprocalRelationship[relationshipType]||relationshipType;
-    await umbraCloudFetch("/api/relationships",{method:"POST",body:JSON.stringify({source_character_id:sourceId,target_character_id:relationshipTargetId,relationship_type:relationshipType})});
-    await umbraCloudFetch("/api/relationships",{method:"POST",body:JSON.stringify({source_character_id:relationshipTargetId,target_character_id:sourceId,relationship_type:reverseType})});
-    setRelationshipTargetId(""); setRelationshipCharacterSearch("");
+    const sourceId = await ensureStudioCharacterId();
+    if (sourceId === relationshipTargetId) throw new Error("A character cannot be connected to themselves.");
+    const reverseType = reciprocalRelationship[relationshipType] || relationshipType;
+    const { error: firstError } = await supabase.from("studio_character_relationships").upsert({
+      owner_user_id: session.user.id, source_character_id: sourceId, target_character_id: relationshipTargetId, relationship_type: relationshipType,
+    }, { onConflict: "source_character_id,target_character_id,relationship_type" });
+    if (firstError) throw firstError;
+    const { error: reverseError } = await supabase.from("studio_character_relationships").upsert({
+      owner_user_id: session.user.id, source_character_id: relationshipTargetId, target_character_id: sourceId, relationship_type: reverseType,
+    }, { onConflict: "source_character_id,target_character_id,relationship_type" });
+    if (reverseError) throw reverseError;
+    setRelationshipTargetId("");
     await loadConnectedRelationships(sourceId);
-  } catch(failure){setRelationshipError(failure instanceof Error?failure.message:"Relationship could not be saved.");}
-  finally{setRelationshipBusy(false);}
+  } catch (failure) { setRelationshipError(failure instanceof Error ? failure.message : "Relationship could not be saved."); }
+  finally { setRelationshipBusy(false); }
 }
 
 async function removeConnectedRelationship(link: CharacterRelationship) {
-  if(!session||relationshipBusy)return;
-  setRelationshipBusy(true);setRelationshipError("");
-  try{
-    const reverseType=reciprocalRelationship[link.relationship_type]||link.relationship_type;
-    await umbraCloudFetch(`/api/relationships/${encodeURIComponent(link.id)}`,{method:"DELETE"});
-    await umbraCloudFetch("/api/relationships/delete-pair",{method:"POST",body:JSON.stringify({source_character_id:link.target_character_id,target_character_id:link.source_character_id,relationship_type:reverseType})});
+  if (!session || relationshipBusy) return;
+  setRelationshipBusy(true); setRelationshipError("");
+  try {
+    const reverseType = reciprocalRelationship[link.relationship_type] || link.relationship_type;
+    const { error: firstError } = await supabase.from("studio_character_relationships").delete().eq("id", link.id);
+    if (firstError) throw firstError;
+    await supabase.from("studio_character_relationships").delete()
+      .eq("source_character_id", link.target_character_id)
+      .eq("target_character_id", link.source_character_id).eq("relationship_type", reverseType);
     await loadConnectedRelationships(link.source_character_id);
-  }catch(failure){setRelationshipError(failure instanceof Error?failure.message:"Relationship could not be removed.");}
-  finally{setRelationshipBusy(false);}
-}
-
-function downloadRelationshipBackup() {
-  const current = selectedCharacter || studioCharacters.find((item) => item.id === studioCharacterId) || null;
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    character: current ? { id: current.id, name: current.name } : { id: studioCharacterId, name: character.name },
-    relationships: connectedRelationships.map((link) => ({
-      targetCharacterId: link.target_character_id,
-      targetCharacterName: link.target?.name || "",
-      relationshipType: link.relationship_type,
-    })),
-    note: "Manual Connected Characters are the Family Tree source of truth. Written Relationship notes do not overwrite these links."
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${(current?.name || character.name || "character").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}-relationship-backup.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function clearCurrentCharacterFamilyLinks() {
-  if(!session||relationshipBusy)return;
-  const sourceId=studioCharacterId||selectedCharacter?.id;
-  if(!sourceId){setRelationshipError("Save the character before clearing family links.");return;}
-  const confirmed=window.confirm("Clear this character’s Parent, Child, Sibling, and Partner links? Written Relationship text will NOT be deleted. You can reconnect the correct family members immediately afterward.");
-  if(!confirmed)return;
-  setRelationshipBusy(true);setRelationshipError("");
-  try{
-    await umbraCloudFetch("/api/relationships/clear-family",{method:"POST",body:JSON.stringify({character_id:sourceId})});
-    await loadConnectedRelationships(sourceId);
-    setRelationshipError("Family links cleared. Written Relationship notes were preserved. Reconnect only the correct family members above.");
-  }catch(failure){setRelationshipError(failure instanceof Error?failure.message:"Family links could not be cleared.");}
-  finally{setRelationshipBusy(false);}
+  } catch (failure) { setRelationshipError(failure instanceof Error ? failure.message : "Relationship could not be removed."); }
+  finally { setRelationshipBusy(false); }
 }
 
 async function openConnectedCharacterProfile(target: StudioCharacterRow) {
@@ -1185,58 +1134,48 @@ async function openConnectedCharacterProfile(target: StudioCharacterRow) {
 }
 
 
-function downloadCharacterProfile(saved:StudioCharacterRow){
- const esc=(value:any)=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]||ch));
- const sections:[string,Record<string,any>|null][]=[["Identity",saved.identity],["Appearance",saved.appearance],["Origin & Lore",saved.origin_lore],["Abilities & Combat",saved.abilities],["Written Relationships",saved.relationships],["Production & Media",saved.media]];
- const rows=(data:Record<string,any>|null)=>Object.entries(data||{}).filter(([,v])=>Array.isArray(v)?v.length:String(v??"").trim()).map(([k,v])=>`<div class="row"><b>${esc(k.replace(/([A-Z])/g," $1").replace(/^./,c=>c.toUpperCase()))}</b><div>${esc(Array.isArray(v)?v.join("\n"):v).replace(/\n/g,"<br>")}</div></div>`).join("");
- const portrait=saved.portrait_url||saved.media?.portraitUrl||"";
- const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(saved.name)} — Umbra Studio</title><style>body{font-family:Georgia,serif;background:#0a0710;color:#eadfec;max-width:980px;margin:auto;padding:48px}h1,h2{color:#efd37d}header{display:grid;grid-template-columns:${portrait?"220px 1fr":"1fr"};gap:28px;align-items:center;margin-bottom:34px}img{width:220px;height:290px;object-fit:cover;border-radius:18px}.section{border:1px solid #3a2140;border-radius:18px;padding:22px;margin:18px 0;background:#120b16}.row{display:grid;grid-template-columns:210px 1fr;gap:18px;padding:10px 0;border-bottom:1px solid #29172e}.row:last-child{border:0}.row b{color:#c67bd3}small{color:#a58ca8}@media print{body{background:white;color:#222}.section{background:white;border-color:#ddd}h1,h2{color:#6a3b74}}</style></head><body><header>${portrait?`<img src="${esc(portrait)}" alt="${esc(saved.name)} portrait">`:""}<div><small>UMBRA STUDIO CHARACTER DOSSIER</small><h1>${esc(saved.name)}</h1><p>${esc(saved.identity?.summary||"")}</p></div></header>${sections.map(([title,data])=>`<section class="section"><h2>${title}</h2>${rows(data)}</section>`).join("")}<small>Exported from Umbra Studio • ${new Date().toLocaleString()}</small></body></html>`;
- const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${saved.name.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")||"character"}-Umbra-Profile.html`;a.click();URL.revokeObjectURL(url);
-}
-
 async function openConnections(saved: StudioCharacterRow) {
-  setConnectionCenter(saved);setSelectedCharacter(saved);setConnectionView("family");setPage("connections");
-  setLoadingConnections(true);setRelationshipError("");window.scrollTo({top:0,behavior:"smooth"});
-  try{
-    const [direct,graph,layoutResponse]=await Promise.all([
-      umbraCloudFetch<{ok:true;relationships:CharacterRelationship[]}>(`/api/relationships?sourceId=${encodeURIComponent(saved.id)}`),
-      umbraCloudFetch<{ok:true;relationships:CharacterRelationship[]}>("/api/relationships?family=1"),
-      umbraCloudFetch<{ok:true;layout:any|null}>(`/api/family-tree-layout/${encodeURIComponent(saved.id)}`),
-    ]);
-    const rows=direct.relationships??[];const graphRows=graph.relationships??[];
-    setFamilyGraphRows(graphRows);
-    const characterMap=new Map(studioCharacters.map(item=>[item.id,item]));
-    if(!characterMap.has(saved.id))characterMap.set(saved.id,saved);
-    setFamilyGraphCharacters(Array.from(characterMap.values()));
-    const uniqueRows=rows.filter((row,index,list)=>list.findIndex(x=>x.target_character_id===row.target_character_id&&x.relationship_type===row.relationship_type)===index);
-    setConnectionLinks(uniqueRows.map(row=>({...row,target:characterMap.get(row.target_character_id)??null})));
+  setConnectionCenter(saved);
+  setSelectedCharacter(saved);
+  setConnectionView("family");
+  setPage("connections");
+  setLoadingConnections(true);
+  setRelationshipError("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 
-    const savedLayout=layoutResponse.layout;
-    const parseLayout=(value:any,fallback:any)=>{
-      if(value==null)return fallback;
-      if(typeof value!=="string")return value;
-      try{return JSON.parse(value)}catch{return fallback}
-    };
-    if(savedLayout){
-      setTreePositions(parseLayout(savedLayout.positions,{}));
-      setTreeHiddenIds(parseLayout(savedLayout.hidden_ids,[]));
-      setTreeLockedIds(parseLayout(savedLayout.locked_ids,[]));
-    }else{
-      setTreePositions({});
-      setTreeHiddenIds([]);
-      setTreeLockedIds([]);
+  try {
+    const { data, error: linkError } = await supabase
+      .from("studio_character_relationships")
+      .select("id, source_character_id, target_character_id, relationship_type")
+      .eq("source_character_id", saved.id)
+      .order("created_at", { ascending: true });
+
+    if (linkError) throw linkError;
+    const rows = (data ?? []) as CharacterRelationship[];
+    const ids = rows.map((row) => row.target_character_id);
+
+    if (!ids.length) {
+      setConnectionLinks([]);
+      return;
     }
-  }catch(failure){setRelationshipError(failure instanceof Error?failure.message:"Connections could not be loaded.");}
-  finally{setLoadingConnections(false);}
+
+    const { data: targets, error: targetError } = await supabase
+      .from("studio_characters")
+      .select("id, user_id, name, status, identity, appearance, origin_lore, abilities, relationships, media, portrait_url, current_step, is_complete, is_public, realm_record_id, race_record_id, faction_record_id, family_record_id, updated_at")
+      .in("id", ids);
+
+    if (targetError) throw targetError;
+    const targetMap = new Map(((targets ?? []) as StudioCharacterRow[]).map((item) => [item.id, item]));
+    setConnectionLinks(rows.map((row) => ({ ...row, target: targetMap.get(row.target_character_id) ?? null })));
+  } catch (failure) {
+    setRelationshipError(failure instanceof Error ? failure.message : "Connections could not be loaded.");
+  } finally {
+    setLoadingConnections(false);
+  }
 }
 
 async function moveConnectionCenter(target: StudioCharacterRow) {
-  if(connectionCenter&&connectionCenter.id!==target.id)connectionHistory.current.push(connectionCenter);
   await openConnections(target);
-}
-async function goBackConnectionCenter(){
- const previous=connectionHistory.current.pop();
- if(previous)await openConnections(previous); else goBack();
 }
 
 async function loadWorldRecords() {
@@ -1244,21 +1183,14 @@ async function loadWorldRecords() {
   setLoadingWorld(true);
   setWorldError("");
   try {
-    const response = await umbraCloudFetch<{ok:true;records:any[]}>("/api/world-records");
-    const rows = (response.records ?? []).map((row:any) => {
-      let lore = row.lore_details;
-      if (typeof lore === "string") {
-        try { lore = JSON.parse(lore); } catch { lore = {}; }
-      }
-      return {
-        ...row,
-        lore_details: lore ?? {},
-        is_public: Boolean(row.is_public),
-      };
-    });
-    setWorldRecords(rows as WorldRecord[]);
+    const { data, error: loadError } = await supabase
+      .from("studio_world_records")
+      .select("id, user_id, record_type, name, subtype, description, emblem_url, cover_url, lore_details, is_public, created_at, updated_at")
+      .order("name", { ascending: true });
+    if (loadError) throw loadError;
+    setWorldRecords((data ?? []) as WorldRecord[]);
   } catch (failure) {
-    setWorldError(failure instanceof Error ? failure.message : "World records could not be loaded from Umbra Studio Cloud.");
+    setWorldError(failure instanceof Error ? failure.message : "World records could not be loaded.");
   } finally {
     setLoadingWorld(false);
   }
@@ -1323,11 +1255,11 @@ async function saveWorldDetails() {
       lore_details: worldEditLore,
       updated_at: new Date().toISOString(),
     };
-    await umbraCloudFetch(`/api/world-records/${encodeURIComponent(selectedWorldRecord.id)}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-    populateWorldEditor({ ...selectedWorldRecord, ...payload } as WorldRecord);
+    const { data, error: updateError } = await supabase.from("studio_world_records")
+      .update(payload).eq("id", selectedWorldRecord.id)
+      .select("id, user_id, record_type, name, subtype, description, emblem_url, cover_url, lore_details, is_public, created_at, updated_at").single();
+    if (updateError) throw updateError;
+    populateWorldEditor(data as WorldRecord);
     await loadWorldRecords();
   } catch (failure) { setWorldError(failure instanceof Error ? failure.message : "Codex details could not be saved."); }
   finally { setWorldDetailBusy(false); }
@@ -1339,21 +1271,80 @@ async function uploadWorldImage(file: File, kind: "cover" | "emblem") {
   if (file.size > 10 * 1024 * 1024) { setWorldError("Images must be 10 MB or smaller."); return; }
   setUploadingWorldMedia(kind); setWorldError("");
   try {
-    const uploaded = await uploadUmbraCloudMedia(file, `codex/${selectedWorldRecord.id}/${kind}`, session.user.id);
-    if (kind === "cover") setWorldEditCoverUrl(uploaded.url); else setWorldEditEmblemUrl(uploaded.url);
+    const path = `${session.user.id}/${selectedWorldRecord.id}/${kind}/${Date.now()}-${safeFileName(file.name)}`;
+    const { error: uploadError } = await supabase.storage.from("studio-codex-media").upload(path, file, { cacheControl:"3600", upsert:false });
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage.from("studio-codex-media").getPublicUrl(path);
+    if (kind === "cover") setWorldEditCoverUrl(data.publicUrl); else setWorldEditEmblemUrl(data.publicUrl);
   } catch (failure) { setWorldError(failure instanceof Error ? failure.message : "Codex image could not be uploaded."); }
   finally { setUploadingWorldMedia(null); }
 }
 
-async function addWorldRelation(){if(!session||!selectedWorldRecord||!worldRelatedTargetId||worldDetailBusy)return;if(worldRelatedTargetId===selectedWorldRecord.id){setWorldError("A Codex entry cannot be related to itself.");return;}setWorldDetailBusy(true);setWorldError("");try{await umbraCloudFetch("/api/world-relations",{method:"POST",body:JSON.stringify({source_record_id:selectedWorldRecord.id,target_record_id:worldRelatedTargetId,relation_label:worldRelatedLabel.trim()||null})});setWorldRelatedTargetId("");setWorldRelatedLabel("");await loadWorldRelations(selectedWorldRecord.id);}catch(failure){setWorldError(failure instanceof Error?failure.message:"Related Codex entry could not be added.");}finally{setWorldDetailBusy(false);}}
-async function removeWorldRelation(link:WorldRelation){if(!session||!selectedWorldRecord)return;try{await umbraCloudFetch("/api/world-relations/pair",{method:"DELETE",body:JSON.stringify({source_record_id:selectedWorldRecord.id,target_record_id:link.target_record_id})});await loadWorldRelations(selectedWorldRecord.id);}catch(failure){setWorldError(failure instanceof Error?failure.message:"Related Codex entry could not be removed.");}}
-async function loadWorldExplorer(){if(!session)return;setExplorerError("");try{const [explorer,locationsResponse,timelineResponse]=await Promise.all([umbraCloudFetch<any>("/api/explorer"),umbraCloudFetch<{ok:true;locations:any[]}>("/api/locations"),umbraCloudFetch<{ok:true;events:any[]}>("/api/timeline")]);const parseTags=(value:any)=>{if(Array.isArray(value))return value;if(typeof value!=="string")return [];try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed:[];}catch{return [];}};const locationRows=(locationsResponse.locations??[]).map((row:any)=>({...row,tags:parseTags(row.tags),is_public:Boolean(row.is_public)}));const timelineRows=(timelineResponse.events??[]).map((row:any)=>({...row,tags:parseTags(row.tags),is_public:Boolean(row.is_public),sort_order:Number(row.sort_order??0)}));setAtlas((explorer.atlas as WorldAtlas|null)??null);setWorldLocations(locationRows as WorldLocation[]);setTimelineEvents(timelineRows as TimelineEvent[]);setFavoriteKeys(new Set((explorer.favorites??[]).map((x:any)=>`${x.item_type}:${x.item_id}`)));}catch(failure){setExplorerError(failure instanceof Error?failure.message:"World Explorer could not be loaded.");}}
+async function addWorldRelation() {
+  if (!session || !selectedWorldRecord || !worldRelatedTargetId || worldDetailBusy) return;
+  if (worldRelatedTargetId === selectedWorldRecord.id) { setWorldError("A Codex entry cannot be related to itself."); return; }
+  setWorldDetailBusy(true); setWorldError("");
+  try {
+    const base = { owner_user_id: session.user.id, relation_label: worldRelatedLabel.trim() || null };
+    const { error: first } = await supabase.from("studio_world_relations").upsert({ ...base, source_record_id:selectedWorldRecord.id, target_record_id:worldRelatedTargetId }, { onConflict:"source_record_id,target_record_id" });
+    if (first) throw first;
+    const { error: reverse } = await supabase.from("studio_world_relations").upsert({ ...base, source_record_id:worldRelatedTargetId, target_record_id:selectedWorldRecord.id }, { onConflict:"source_record_id,target_record_id" });
+    if (reverse) throw reverse;
+    setWorldRelatedTargetId(""); setWorldRelatedLabel("");
+    await loadWorldRelations(selectedWorldRecord.id);
+  } catch (failure) { setWorldError(failure instanceof Error ? failure.message : "Related Codex entry could not be added."); }
+  finally { setWorldDetailBusy(false); }
+}
+
+async function removeWorldRelation(link: WorldRelation) {
+  if (!session || !selectedWorldRecord) return;
+  await supabase.from("studio_world_relations").delete().eq("id", link.id);
+  await supabase.from("studio_world_relations").delete().eq("source_record_id", link.target_record_id).eq("target_record_id", selectedWorldRecord.id);
+  await loadWorldRelations(selectedWorldRecord.id);
+}
+
+
+async function loadWorldExplorer() {
+  if (!session) return;
+  setExplorerError("");
+  try {
+    const [atlasResult, locationsResult, timelineResult, favoritesResult] = await Promise.all([
+      supabase.from("studio_world_atlases").select("id,user_id,title,map_url,description,is_public").limit(1).maybeSingle(),
+      supabase.from("studio_world_locations").select("id,user_id,name,location_type,description,parent_location_id,codex_record_id,map_x,map_y,image_url,tags,is_public,archived_at,created_at,updated_at").order("name"),
+      supabase.from("studio_timeline_events").select("id,user_id,title,era,display_date,sort_order,description,location_id,codex_record_id,character_id,image_url,tags,is_public,archived_at,created_at,updated_at").order("sort_order"),
+      supabase.from("studio_favorites").select("item_type,item_id").eq("user_id", session.user.id),
+    ]);
+    if (atlasResult.error) throw atlasResult.error;
+    if (locationsResult.error) throw locationsResult.error;
+    if (timelineResult.error) throw timelineResult.error;
+    if (favoritesResult.error) throw favoritesResult.error;
+    setAtlas((atlasResult.data as WorldAtlas | null) ?? null);
+    setWorldLocations((locationsResult.data ?? []) as WorldLocation[]);
+    setTimelineEvents((timelineResult.data ?? []) as TimelineEvent[]);
+    setFavoriteKeys(new Set((favoritesResult.data ?? []).map((x:any)=>`${x.item_type}:${x.item_id}`)));
+  } catch (failure) { setExplorerError(failure instanceof Error ? failure.message : "World Explorer could not be loaded."); }
+}
+
 async function openWorldExplorer(tab: "map" | "locations" | "timeline" | "favorites" | "archive" = "map") {
   setExplorerTab(tab); setPage("explorer"); window.scrollTo({top:0,behavior:"smooth"});
   await Promise.all([loadWorldRecords(), loadMyCharacters(), loadWorldExplorer()]);
 }
 
-async function uploadWorldMap(file:File){if(!session||uploadingMap)return;if(!file.type.startsWith("image/")){setExplorerError("Please choose an image file.");return;}if(file.size>15*1024*1024){setExplorerError("World maps must be 15 MB or smaller.");return;}setUploadingMap(true);setExplorerError("");try{const uploaded=await uploadUmbraCloudMedia(file,"world-map",session.user.id);const data=await umbraCloudFetch<any>("/api/explorer/atlas",{method:"PUT",body:JSON.stringify({title:atlas?.title||"The Umbral World",map_url:uploaded.url,description:atlas?.description||null,is_public:atlas?.is_public??false})});setAtlas(data.atlas as WorldAtlas);}catch(failure){setExplorerError(failure instanceof Error?failure.message:"World map could not be uploaded.");}finally{setUploadingMap(false);}}
+async function uploadWorldMap(file: File) {
+  if (!session || uploadingMap) return;
+  if (!file.type.startsWith("image/")) { setExplorerError("Please choose an image file."); return; }
+  if (file.size > 15*1024*1024) { setExplorerError("World maps must be 15 MB or smaller."); return; }
+  setUploadingMap(true); setExplorerError("");
+  try {
+    const path=`${session.user.id}/world-map/${Date.now()}-${safeFileName(file.name)}`;
+    const {error:up}=await supabase.storage.from("studio-world-media").upload(path,file,{cacheControl:"3600",upsert:false}); if(up) throw up;
+    const {data:urlData}=supabase.storage.from("studio-world-media").getPublicUrl(path);
+    const payload={user_id:session.user.id,title:atlas?.title||"The Umbral World",map_url:urlData.publicUrl,description:atlas?.description||null,is_public:atlas?.is_public??false};
+    const query=atlas ? supabase.from("studio_world_atlases").update(payload).eq("id",atlas.id).select().single() : supabase.from("studio_world_atlases").insert(payload).select().single();
+    const {data,error}=await query; if(error) throw error; setAtlas(data as WorldAtlas);
+  } catch(failure){setExplorerError(failure instanceof Error?failure.message:"World map could not be uploaded.");} finally{setUploadingMap(false);}
+}
+
 async function saveLocation() {
   if(!session||!locationForm.name.trim()||explorerBusy)return;
   setExplorerBusy(true); setExplorerError("");
@@ -1362,15 +1353,10 @@ async function saveLocation() {
     const duplicate=worldLocations.find(x=>!x.archived_at&&x.id!==editingLocationId&&x.name.trim().toLowerCase()===normalized&&x.parent_location_id===(locationForm.parentId||null));
     if(duplicate) throw new Error("A location with this name already exists at the same level.");
     const payload={name:locationForm.name.trim(),location_type:locationForm.locationType,description:locationForm.description.trim()||null,parent_location_id:locationForm.parentId||null,codex_record_id:locationForm.codexId||null,map_x:Math.max(0,Math.min(100,Number(locationForm.mapX)||50)),map_y:Math.max(0,Math.min(100,Number(locationForm.mapY)||50)),tags:locationForm.tags.split(",").map(x=>x.trim()).filter(Boolean),updated_at:new Date().toISOString()};
-    if (editingLocationId) {
-      await umbraCloudFetch(`/api/locations/${encodeURIComponent(editingLocationId)}`, {
-        method: "PUT", body: JSON.stringify(payload),
-      });
-    } else {
-      await umbraCloudFetch("/api/locations", {
-        method: "POST", body: JSON.stringify({...payload,is_public:false}),
-      });
-    }
+    const query=editingLocationId
+      ? supabase.from("studio_world_locations").update(payload).eq("id",editingLocationId)
+      : supabase.from("studio_world_locations").insert({...payload,user_id:session.user.id,is_public:false});
+    const {error}=await query; if(error)throw error;
     cancelLocationEdit(); await loadWorldExplorer();
   } catch(failure){setExplorerError(failure instanceof Error?failure.message:"Location could not be saved.");}
   finally{setExplorerBusy(false);}
@@ -1390,15 +1376,10 @@ async function saveTimelineEvent() {
     const normalized=eventForm.title.trim().toLowerCase();
     if(timelineEvents.some(x=>!x.archived_at&&x.id!==editingEventId&&x.title.trim().toLowerCase()===normalized&&String(x.display_date||"").toLowerCase()===eventForm.displayDate.trim().toLowerCase())) throw new Error("This timeline event already exists for that date label.");
     const payload={title:eventForm.title.trim(),era:eventForm.era.trim()||null,display_date:eventForm.displayDate.trim()||null,sort_order:Number(eventForm.sortOrder)||0,description:eventForm.description.trim()||null,location_id:eventForm.locationId||null,codex_record_id:eventForm.codexId||null,character_id:eventForm.characterId||null,tags:eventForm.tags.split(",").map(x=>x.trim()).filter(Boolean),updated_at:new Date().toISOString()};
-    if (editingEventId) {
-      await umbraCloudFetch(`/api/timeline/${encodeURIComponent(editingEventId)}`, {
-        method: "PUT", body: JSON.stringify(payload),
-      });
-    } else {
-      await umbraCloudFetch("/api/timeline", {
-        method: "POST", body: JSON.stringify({...payload,is_public:false}),
-      });
-    }
+    const query=editingEventId
+      ? supabase.from("studio_timeline_events").update(payload).eq("id",editingEventId)
+      : supabase.from("studio_timeline_events").insert({...payload,user_id:session.user.id,is_public:false});
+    const {error}=await query; if(error)throw error;
     cancelEventEdit(); await loadWorldExplorer();
   } catch(failure){setExplorerError(failure instanceof Error?failure.message:"Timeline event could not be saved.");}
   finally{setExplorerBusy(false);}
@@ -1406,29 +1387,30 @@ async function saveTimelineEvent() {
 function editTimelineEvent(ev: TimelineEvent){setEditingEventId(ev.id);setExplorerTab("timeline");setEventForm({title:ev.title,era:ev.era||"",displayDate:ev.display_date||"",sortOrder:String(ev.sort_order),description:ev.description||"",locationId:ev.location_id||"",codexId:ev.codex_record_id||"",characterId:ev.character_id||"",tags:(ev.tags||[]).join(", ")});window.scrollTo({top:0,behavior:"smooth"});}
 function cancelEventEdit(){setEditingEventId(null);setEventForm({title:"",era:"",displayDate:"",sortOrder:"0",description:"",locationId:"",codexId:"",characterId:"",tags:""});}
 
-async function toggleFavorite(itemType:string,itemId:string){if(!session)return;const key=`${itemType}:${itemId}`;try{await umbraCloudFetch("/api/explorer/favorite",{method:"PUT",body:JSON.stringify({item_type:itemType,item_id:itemId,enabled:!favoriteKeys.has(key)})});await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Favorite could not be changed.");}}
-async function archiveExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){if(!session)return;const path=table==="studio_world_locations"?`/api/locations/${encodeURIComponent(id)}`:`/api/timeline/${encodeURIComponent(id)}`;try{await umbraCloudFetch(path,{method:"PUT",body:JSON.stringify({archived_at:new Date().toISOString()})});if(selectedLocationId===id)setSelectedLocationId("");await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Item could not be archived.");}}
-async function restoreExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){if(!session)return;const path=table==="studio_world_locations"?`/api/locations/${encodeURIComponent(id)}`:`/api/timeline/${encodeURIComponent(id)}`;try{await umbraCloudFetch(path,{method:"PUT",body:JSON.stringify({archived_at:null})});await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Item could not be restored.");}}
-async function permanentlyDeleteExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string,label:string){if(!session||!confirm(`Permanently delete "${label}"? This cannot be undone.`))return;const path=table==="studio_world_locations"?`/api/locations/${encodeURIComponent(id)}`:`/api/timeline/${encodeURIComponent(id)}`;try{await umbraCloudFetch(path,{method:"DELETE"});await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Item could not be permanently deleted.");}}
+async function toggleFavorite(itemType:string,itemId:string){ if(!session)return; const key=`${itemType}:${itemId}`; if(favoriteKeys.has(key)){await supabase.from("studio_favorites").delete().eq("user_id",session.user.id).eq("item_type",itemType).eq("item_id",itemId);}else{await supabase.from("studio_favorites").upsert({user_id:session.user.id,item_type:itemType,item_id:itemId},{onConflict:"user_id,item_type,item_id"});} await loadWorldExplorer(); }
+
+async function archiveExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){if(!session)return;const {error}=await supabase.from(table).update({archived_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id);if(error)setExplorerError(error.message);else{if(selectedLocationId===id)setSelectedLocationId("");await loadWorldExplorer();}}
+async function restoreExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){if(!session)return;const {error}=await supabase.from(table).update({archived_at:null,updated_at:new Date().toISOString()}).eq("id",id);if(error)setExplorerError(error.message);else await loadWorldExplorer();}
+async function permanentlyDeleteExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string,label:string){if(!session||!confirm(`Permanently delete "${label}"? This cannot be undone.`))return;const {error}=await supabase.from(table).delete().eq("id",id);if(error)setExplorerError(error.message);else await loadWorldExplorer();}
+
 function markerPositionFromPointer(e:any){const stage=e.currentTarget.parentElement as HTMLElement|null;if(!stage)return null;const r=stage.getBoundingClientRect();return{x:Math.max(0,Math.min(100,((e.clientX-r.left)/r.width)*100)),y:Math.max(0,Math.min(100,((e.clientY-r.top)/r.height)*100))};}
 function dragMapMarker(e:any,loc:WorldLocation){if(!draggingLocationId||draggingLocationId!==loc.id)return;const pos=markerPositionFromPointer(e);if(!pos)return;setWorldLocations(items=>items.map(x=>x.id===loc.id?{...x,map_x:pos.x,map_y:pos.y}:x));}
-async function finishMapMarkerDrag(e:any,loc:WorldLocation){if(!session||draggingLocationId!==loc.id)return;const pos=markerPositionFromPointer(e);setDraggingLocationId(null);if(!pos)return;try{await umbraCloudFetch(`/api/locations/${encodeURIComponent(loc.id)}`,{method:"PUT",body:JSON.stringify({map_x:pos.x,map_y:pos.y})});setLocationForm(v=>editingLocationId===loc.id?{...v,mapX:pos.x.toFixed(2),mapY:pos.y.toFixed(2)}:v);}catch(failure){setExplorerError(failure instanceof Error?failure.message:"Map position could not be saved.");}}
+async function finishMapMarkerDrag(e:any,loc:WorldLocation){if(!session||draggingLocationId!==loc.id)return;const pos=markerPositionFromPointer(e);setDraggingLocationId(null);if(!pos)return;const {error}=await supabase.from("studio_world_locations").update({map_x:pos.x,map_y:pos.y,updated_at:new Date().toISOString()}).eq("id",loc.id);if(error)setExplorerError(error.message);else setLocationForm(v=>editingLocationId===loc.id?{...v,mapX:pos.x.toFixed(2),mapY:pos.y.toFixed(2)}:v);}
 
 async function createWorldRecord() {
   if (!session || !worldFormName.trim() || worldSaving) return;
   setWorldSaving(true);
   setWorldError("");
   try {
-    await umbraCloudFetch("/api/world-records", {
-      method: "POST",
-      body: JSON.stringify({
-        record_type: worldFormType,
-        name: worldFormName.trim(),
-        subtype: worldFormSubtype.trim() || null,
-        description: worldFormDescription.trim() || null,
-        is_public: false,
-      }),
+    const { error: createError } = await supabase.from("studio_world_records").insert({
+      user_id: session.user.id,
+      record_type: worldFormType,
+      name: worldFormName.trim(),
+      subtype: worldFormSubtype.trim() || null,
+      description: worldFormDescription.trim() || null,
+      is_public: false,
     });
+    if (createError) throw createError;
     setWorldFormName("");
     setWorldFormSubtype("");
     setWorldFormDescription("");
@@ -1443,27 +1425,22 @@ async function createWorldRecord() {
 async function deleteWorldRecord(record: WorldRecord) {
   if (!session || !window.confirm(`Delete "${record.name}"? Characters keep their written text, but the structured link will be cleared.`)) return;
   setWorldError("");
-  try {
-    await umbraCloudFetch(`/api/world-records/${encodeURIComponent(record.id)}`, { method: "DELETE" });
-  } catch (failure) {
-    setWorldError(failure instanceof Error ? failure.message : "The world record could not be deleted.");
-    return;
-  }
+  const { error: deleteError } = await supabase
+    .from("studio_world_records")
+    .delete()
+    .eq("id", record.id);
+  if (deleteError) { setWorldError(deleteError.message); return; }
   if (selectedWorldRecord?.id === record.id) setSelectedWorldRecord(null);
   await loadWorldRecords();
 }
 
 async function toggleWorldPublication(record: WorldRecord) {
   if (!session) return;
-  try {
-    await umbraCloudFetch(`/api/world-records/${encodeURIComponent(record.id)}`, {
-      method: "PUT",
-      body: JSON.stringify({ is_public: !record.is_public }),
-    });
-  } catch (failure) {
-    setWorldError(failure instanceof Error ? failure.message : "Publication status could not be changed.");
-    return;
-  }
+  const { error: updateError } = await supabase
+    .from("studio_world_records")
+    .update({ is_public: !record.is_public })
+    .eq("id", record.id);
+  if (updateError) { setWorldError(updateError.message); return; }
   await loadWorldRecords();
   if (selectedWorldRecord?.id === record.id) setSelectedWorldRecord({ ...record, is_public: !record.is_public });
 }
@@ -1506,7 +1483,9 @@ async function setCharacterPublication(saved: StudioCharacterRow, makePublic: bo
   }
 }
 
-
+function safeFileName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-+/g, "-");
+}
 
 async function ensureStudioCharacterId() {
   if (studioCharacterId) return studioCharacterId;
@@ -1543,8 +1522,17 @@ async function uploadCharacterImage(
 
   try {
     const characterId = await ensureStudioCharacterId();
-    const uploaded = await uploadUmbraCloudMedia(file, `characters/${characterId}/${kind}`, session.user.id);
-    const publicUrl = uploaded.url;
+    const extension = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+    const path = `${session.user.id}/${characterId}/${kind}/${Date.now()}-${safeFileName(file.name || `image.${extension}`)}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("studio-character-media")
+      .upload(path, file, { cacheControl: "3600", upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from("studio-character-media").getPublicUrl(path);
+    const publicUrl = data.publicUrl;
 
     setCharacter((current) => {
       if (kind === "portrait") return { ...current, portraitUrl: publicUrl };
@@ -1704,7 +1692,6 @@ window.scrollTo({ top: 0, behavior: "smooth" });
 
 const StudioTopNav = () => (
   <>
-    <StudioUpdateCenter mode="startup" />
     <header className="practical-topbar">
       <button className="practical-brand" onClick={()=>setPage("dashboard")}><span>☾</span><div><small>UMBRA CONNECT</small><strong>Umbra Studio</strong></div></button>
       <div className="practical-utilities">
@@ -1712,7 +1699,6 @@ const StudioTopNav = () => (
         <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
         <button onClick={()=>void openAdminCenter()}>Admin</button>
         <button onClick={()=>void openStudioSettings()}>Settings</button>
-        <button type="button" onClick={()=>void handleSignOut()}>Sign Out</button>
       </div>
     </header>
     <aside className="practical-sidebar">
@@ -1889,10 +1875,9 @@ async function ensureCharacterCodexLinks(){
   const normalized=normalizeImportName(item.name);
   let match=available.find(x=>x.record_type===item.kind&&normalizeImportName(x.name)===normalized);
   if(!match){
-   const created=await umbraCloudFetch<any>("/api/world-records",{method:"POST",body:JSON.stringify({record_type:item.kind,name:item.name,subtype:null,description:null,is_public:false})});
-   const refreshed=await umbraCloudFetch<any>("/api/world-records");
-   match=((refreshed.records??[]) as WorldRecord[]).find(x=>x.id===created.id)||((refreshed.records??[]) as WorldRecord[]).find(x=>x.record_type===item.kind&&normalizeImportName(x.name)===normalized);
-   if(!match)throw new Error(`Created ${item.kind} could not be reloaded.`); available.push(match);
+   const {data,error}=await supabase.from("studio_world_records").insert({user_id:session.user.id,record_type:item.kind,name:item.name,subtype:null,description:null,is_public:false}).select("id,user_id,record_type,name,subtype,description,emblem_url,cover_url,lore_details,is_public,created_at,updated_at").single();
+   if(error)throw error;
+   match=data as WorldRecord; available.push(match);
   }
   result[item.kind]=match.id;
  }
@@ -1901,24 +1886,28 @@ async function ensureCharacterCodexLinks(){
  return result as {realm:string;race:string;faction:string;family:string};
 }
 
-async function syncImportedRelationships(sourceId:string, imported:any){
- const data=await umbraCloudFetch<any>("/api/characters");
- const options=(data.characters??[]) as StudioCharacterRow[];
- const source=options.find(x=>x.id===sourceId); if(!source)return;
- const groups:[string,string][]=[["parents","parent"],["siblings","sibling"],["children","child"],["partner","partner"],["allies","ally"],["rivals","rival"],["enemies","enemy"],["mentors","mentor"]];
- for(const [field,type] of groups){
-  for(const line of importedNameList(imported[field])){
-   const links=relationshipMeaning(line,type,sourceId,options);
-   for(const link of links){
-    if(link.source===link.target)continue;
-    const reverse=reciprocalRelationship[link.type]||link.type;
-    await umbraCloudFetch("/api/relationships",{method:"POST",body:JSON.stringify({source_character_id:link.source,target_character_id:link.target,relationship_type:link.type})});
-    await umbraCloudFetch("/api/relationships",{method:"POST",body:JSON.stringify({source_character_id:link.target,target_character_id:link.source,relationship_type:reverse})});
-   }
+async function resolveWrittenCharacterRelationships(sourceId:string){
+ if(!session)return;
+ const {data,error}=await supabase.from("studio_characters").select("id,name").neq("id",sourceId);
+ if(error)throw error;
+ const candidates=(data??[]) as Array<{id:string;name:string}>;
+ const groups:{value:string;type:string}[]=[
+  {value:character.parents,type:"parent"},{value:character.siblings,type:"sibling"},{value:character.children,type:"child"},
+  {value:character.partner,type:"partner"},{value:character.allies,type:"ally"},{value:character.rivals,type:"rival"},
+  {value:character.enemies,type:"enemy"},{value:character.mentors,type:"mentor"}
+ ];
+ for(const group of groups){
+  for(const name of importedNameList(group.value)){
+   const target=matchImportedCharacter(candidates as StudioCharacterRow[],name);
+   if(!target)continue;
+   const reverseType=reciprocalRelationship[group.type]||group.type;
+   const {error:first}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:sourceId,target_character_id:target.id,relationship_type:group.type},{onConflict:"source_character_id,target_character_id,relationship_type"});
+   if(first)throw first;
+   const {error:reverse}=await supabase.from("studio_character_relationships").upsert({owner_user_id:session.user.id,source_character_id:target.id,target_character_id:sourceId,relationship_type:reverseType},{onConflict:"source_character_id,target_character_id,relationship_type"});
+   if(reverse)throw reverse;
   }
  }
 }
-
 async function saveCharacter(nextStep: number, complete = false) {
 if (!session || savingCharacter) return;
 
@@ -1931,18 +1920,14 @@ try {
 
   let savedCharacterId=studioCharacterId;
   if (studioCharacterId) {
-    await umbraCloudFetch(`/api/characters/${encodeURIComponent(studioCharacterId)}`, {
-      method: "PUT",
-      body: JSON.stringify(record),
-    });
+    const { error: updateError } = await supabase.from("studio_characters").update(record).eq("id", studioCharacterId);
+    if (updateError) throw updateError;
   } else {
-    const created = await umbraCloudFetch<{ok:true;id:string}>("/api/characters", {
-      method: "POST",
-      body: JSON.stringify(record),
-    });
-    savedCharacterId=created.id; setStudioCharacterId(created.id);
+    const { data, error: insertError } = await supabase.from("studio_characters").insert(record).select("id").single();
+    if (insertError) throw insertError;
+    savedCharacterId=data.id; setStudioCharacterId(data.id);
   }
-  if(savedCharacterId&&pendingImportedRelationshipSync){ await syncImportedRelationships(savedCharacterId,pendingImportedRelationshipSync); setPendingImportedRelationshipSync(null); }
+  if(savedCharacterId)await resolveWrittenCharacterRelationships(savedCharacterId);
 
   if (complete) {
     setPage("dashboard");
@@ -2459,66 +2444,88 @@ return (
 
 if (page === "connections" && connectionCenter) {
 const familyTypes = new Set(["parent", "child", "sibling", "partner"]);
-const visibleLinks = connectionView === "family" ? connectionLinks.filter(link=>familyTypes.has(genealogyType(link.relationship_type))) : connectionLinks;
-const familyCharacterMap = new Map(familyGraphCharacters.map(item=>[item.id,item]));
-familyCharacterMap.set(connectionCenter.id,connectionCenter);
-const parentIdsFor=(id:string):string[]=>Array.from(new Set<string>(familyGraphRows.filter(row=>row.source_character_id===id&&genealogyType(row.relationship_type)==="parent").map(row=>row.target_character_id)));
-const childIdsFor=(id:string):string[]=>Array.from(new Set<string>([
- ...familyGraphRows.filter(row=>row.source_character_id===id&&genealogyType(row.relationship_type)==="child").map(row=>row.target_character_id),
- ...familyGraphRows.filter(row=>row.target_character_id===id&&genealogyType(row.relationship_type)==="parent").map(row=>row.source_character_id)
-]));
-const partnerIdsFor=(id:string):string[]=>Array.from(new Set<string>([
- ...familyGraphRows.filter(row=>row.source_character_id===id&&genealogyType(row.relationship_type)==="partner").map(row=>row.target_character_id),
- ...childIdsFor(id).flatMap(childId=>parentIdsFor(childId).filter(parentId=>parentId!==id))
-]));
-const centerParents=parentIdsFor(connectionCenter.id).map(id=>familyCharacterMap.get(id)).filter(Boolean) as StudioCharacterRow[];
-const centerChildren=childIdsFor(connectionCenter.id).map(id=>familyCharacterMap.get(id)).filter(Boolean) as StudioCharacterRow[];
-const centerPartners=partnerIdsFor(connectionCenter.id).map(id=>familyCharacterMap.get(id)).filter(Boolean) as StudioCharacterRow[];
-const siblingCandidates:string[]=Array.from(new Set<string>(centerParents.flatMap(parent=>childIdsFor(parent.id)))).filter(id=>id!==connectionCenter.id);
-const centerParentIds=parentIdsFor(connectionCenter.id);
-const siblingInfo=siblingCandidates.map(id=>{
- const character=familyCharacterMap.get(id); if(!character)return null;
- const siblingParents=parentIdsFor(id); const shared=centerParentIds.filter(pid=>siblingParents.includes(pid));
- let label="Sibling";
- if(shared.length>=2) label="Full Sibling";
- else if(shared.length===1){
-   const p=familyCharacterMap.get(shared[0]); const g=`${p?.identity?.gender??""} ${p?.identity?.pronouns??""}`.toLowerCase();
-   label=/female|woman|mother|she|her/.test(g)?"Maternal Half-Sibling":/male|man|father|he|him/.test(g)?"Paternal Half-Sibling":"Half-Sibling";
- }
- return {character,label};
-}).filter(Boolean) as {character:StudioCharacterRow;label:string}[];
-const treeCharacters=Array.from(new Map<string,StudioCharacterRow>([...centerParents,...siblingInfo.map(x=>x.character),connectionCenter,...centerPartners,...centerChildren].map(c=>[c.id,c])).values());
-const treeLabelFor=(id:string)=>id===connectionCenter.id?"Current Character":centerParents.some(x=>x.id===id)?"Parent":centerPartners.some(x=>x.id===id)?"Partner":centerChildren.some(x=>x.id===id)?"Child":siblingInfo.find(x=>x.character.id===id)?.label||"Family";
-const defaultPositions=(()=>{const out:Record<string,{x:number;y:number}>={};const width=1400;const row=(items:StudioCharacterRow[],y:number)=>items.forEach((c,i)=>{out[c.id]={x:Math.max(30,(width-(items.length*190))/2+i*190),y}});row(centerParents,40);row([...siblingInfo.map(x=>x.character),connectionCenter],300);row(centerPartners,300);row(centerChildren,570);return out})();
-const loadTreeLayout=async()=>{try{const response=await umbraCloudFetch<{ok:true;layout:any|null}>(`/api/family-tree-layout/${encodeURIComponent(connectionCenter.id)}`);const saved=response.layout;if(!saved){setTreePositions(defaultPositions);setTreeHiddenIds([]);setTreeLockedIds([]);return}const parse=(v:any,f:any)=>{if(typeof v!=="string")return v??f;try{return JSON.parse(v)}catch{return f}};setTreePositions(parse(saved.positions,defaultPositions));setTreeHiddenIds(parse(saved.hidden_ids,[]));setTreeLockedIds(parse(saved.locked_ids,[]))}catch(failure){setRelationshipError(failure instanceof Error?failure.message:"Family Tree layout could not be loaded.");setTreePositions(defaultPositions);setTreeHiddenIds([]);setTreeLockedIds([])}};
-const saveTreeLayout=async()=>{try{const result=await umbraCloudFetch<{ok:true;id:string;action:string}>(`/api/family-tree-layout/${encodeURIComponent(connectionCenter.id)}`,{method:"PUT",body:JSON.stringify({positions:treePositions,hidden_ids:treeHiddenIds,locked_ids:treeLockedIds})});console.log("Family Tree layout save:",result);setRelationshipError(`Family Tree layout saved to Umbra Cloud (${result.action}).`)}catch(failure){console.error("Family Tree layout save failed:",failure);setRelationshipError(failure instanceof Error?failure.message:"Family Tree layout could not be saved.")}};
-const autoArrangeTree=()=>{setTreePositions(defaultPositions);setTreeHiddenIds([])};
-const resetTreeLayout=async()=>{try{await umbraCloudFetch(`/api/family-tree-layout/${encodeURIComponent(connectionCenter.id)}`,{method:"DELETE"});setTreePositions(defaultPositions);setTreeHiddenIds([]);setTreeLockedIds([]);setRelationshipError("Family Tree layout reset.")}catch(failure){setRelationshipError(failure instanceof Error?failure.message:"Family Tree layout could not be reset.")}};
-const pos=(id:string)=>treePositions[id]||defaultPositions[id]||{x:40,y:40};
-const shown=treeCharacters.filter(c=>treeShowHidden||!treeHiddenIds.includes(c.id));
-const edges:{a:string;b:string;kind:string}[]=[];
-for(const p of centerParents) edges.push({a:p.id,b:connectionCenter.id,kind:"parent"});
-for(const s of siblingInfo) for(const p of centerParents.filter(p=>parentIdsFor(s.character.id).includes(p.id))) edges.push({a:p.id,b:s.character.id,kind:"parent"});
-for(const p of centerPartners) edges.push({a:connectionCenter.id,b:p.id,kind:"partner"});
-for(const c of centerChildren){edges.push({a:connectionCenter.id,b:c.id,kind:"parent"});const other=parentIdsFor(c.id).find(id=>id!==connectionCenter.id);if(other&&familyCharacterMap.has(other))edges.push({a:other,b:c.id,kind:"parent"})}
-const uniqueEdges=Array.from(new Map(edges.map(e=>[[e.a,e.b,e.kind].join("|"),e])).values()).filter(e=>shown.some(c=>c.id===e.a)&&shown.some(c=>c.id===e.b));
-const relationLabel:Record<string,string>={};
-const LinkNode=({link}:{link:CharacterRelationship})=>link.target?<button type="button" className="gene-node" onClick={()=>void moveConnectionCenter(link.target!)}><div className="gene-image">{(link.target.portrait_url||link.target.media?.portraitUrl)?<img src={link.target.portrait_url||link.target.media?.portraitUrl||""} alt={`${link.target.name} portrait`}/>:<span>☾</span>}</div><strong>{link.target.name}</strong><small>{relationLabel[link.relationship_type]||relationshipDisplay(link.relationship_type)}</small></button>:null;
-return <main className="dashboard-shell connections-page">
-<style>{`
-.connections-page{min-height:100vh;background:#07050a;color:#eee}.connections-content{width:min(1500px,calc(100% - 30px));margin:0 auto;padding:42px 0 100px}.connections-heading{text-align:center;max-width:900px;margin:0 auto 18px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0}.connections-heading p{color:#aa94ae;line-height:1.6}.connection-character-picker{display:flex;gap:10px;justify-content:center;margin:18px auto 0;max-width:720px}.connection-character-picker input,.connection-character-picker select{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.28);background:#100914;color:#eadfec}.connection-tabs,.tree-toolbar{display:flex;justify-content:center;gap:9px;flex-wrap:wrap;margin:18px 0}.connection-tab,.tree-tool{padding:10px 15px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd}.connection-tab.active,.tree-tool.active{border-color:rgba(232,201,111,.55);color:#f0d481}.tree-tool.danger{border-color:rgba(202,75,86,.38);color:#e99}.tree-canvas-shell{border:1px solid rgba(185,92,209,.2);border-radius:28px;overflow:auto;background:radial-gradient(circle at 50% 35%,rgba(65,24,72,.2),rgba(8,5,11,.96));padding:18px}.tree-canvas{position:relative;width:1400px;height:820px;min-width:1400px}.tree-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.tree-line{stroke:rgba(224,190,111,.72);stroke-width:2;fill:none}.tree-line.partner{stroke:#b96ac6;stroke-dasharray:8 5}.tree-card{position:absolute;width:154px;transform:translate3d(0,0,0);padding:9px 8px 12px;border:1px solid rgba(185,92,209,.22);border-radius:18px;background:rgba(15,8,19,.96);color:#eee;text-align:center;user-select:none;touch-action:none;box-shadow:0 10px 28px rgba(0,0,0,.24)}.tree-card.unlocked{cursor:grab}.tree-card.dragging{cursor:grabbing;z-index:20;box-shadow:0 16px 40px rgba(0,0,0,.5)}.tree-card.selected{border-color:#f0d481;box-shadow:0 0 0 3px rgba(232,201,111,.12)}.tree-card.hidden-card{opacity:.38}.tree-portrait{width:92px;height:92px;margin:0 auto 7px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:32px}.tree-portrait img{width:100%;height:100%;object-fit:cover}.tree-card strong{display:block;color:#ead7ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tree-card small{display:block;color:#b66ec3;text-transform:uppercase;font-size:9px;letter-spacing:.08em;margin-top:3px}.tree-card-actions{display:flex;gap:4px;justify-content:center;margin-top:7px}.tree-card-actions button{padding:4px 7px;border-radius:7px;border:1px solid rgba(185,92,209,.22);background:#0c0710;color:#bfaec2;font-size:9px}.all-connections-map{display:flex;flex-wrap:wrap;gap:22px;justify-content:center;padding:38px;border:1px solid rgba(185,92,209,.18);border-radius:24px}.gene-node{width:150px;padding:0 0 11px;border:0;background:transparent;color:#eee;text-align:center;cursor:pointer}.gene-image{width:118px;height:118px;margin:0 auto 8px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:38px}.gene-image img{width:100%;height:100%;object-fit:cover}.gene-node strong{display:block}.gene-node small{color:#b66ec3}.connections-empty{text-align:center;padding:50px;color:#aa94ae}.connections-hint{text-align:center;color:#8e7b91;font-size:12px;margin-top:18px}@media(max-width:700px){.connections-content{width:calc(100% - 14px)}.connection-character-picker{flex-direction:column}}
-`}</style>
-<header className="studio-header"><div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div><div className="account-area"><button type="button" className="sign-out-button" onClick={()=>void goBackConnectionCenter()}>← Back</button></div></header>
-<section className="connections-content"><div className="connections-heading"><p className="eyebrow">BONDS OF THE UMBRAL WORLD</p><h1>{connectionView==="family"?"Family Tree":"Relationship Map"}</h1><p>Canon relationships stay intact while you arrange the tree exactly how you want it.</p><div className="connection-character-picker"><input value={connectionCharacterSearch} onChange={e=>setConnectionCharacterSearch(e.target.value)} placeholder="Search any character..."/><select value={connectionCenter.id} onChange={e=>{const target=studioCharacters.find(x=>x.id===e.target.value);if(target){void moveConnectionCenter(target);setTimeout(()=>void loadTreeLayout(),0)}}}><option value={connectionCenter.id}>{connectionCenter.name}</option>{studioCharacters.filter(x=>x.id!==connectionCenter.id&&(!connectionCharacterSearch.trim()||x.name.toLowerCase().includes(connectionCharacterSearch.toLowerCase()))).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div></div>
-<div className="connection-tabs"><button type="button" className={`connection-tab ${connectionView==="family"?"active":""}`} onClick={()=>{setConnectionView("family");setTimeout(()=>void loadTreeLayout(),0)}}>Family Tree</button><button type="button" className={`connection-tab ${connectionView==="all"?"active":""}`} onClick={()=>setConnectionView("all")}>All Connections</button></div>
-{relationshipError&&<p className="login-error" role="alert">{relationshipError}</p>}
-{loadingConnections?<div className="connections-empty">Tracing connections...</div>:connectionView==="family"?<>
-<div className="tree-toolbar"><button className={`tree-tool ${treeLayoutUnlocked?"active":""}`} onClick={()=>setTreeLayoutUnlocked(v=>!v)}>{treeLayoutUnlocked?"✓ Layout Unlocked":"Unlock Layout"}</button><button className="tree-tool" onClick={autoArrangeTree}>Auto Arrange</button><button className="tree-tool" onClick={saveTreeLayout}>Save Layout</button><button className={`tree-tool ${treeShowHidden?"active":""}`} onClick={()=>setTreeShowHidden(v=>!v)}>{treeShowHidden?"Hide Hidden Cards":"Show Hidden"}</button><button className="tree-tool danger" onClick={resetTreeLayout}>Reset Layout</button></div>
-<div className="tree-canvas-shell"><div className="tree-canvas" onPointerMove={e=>{if(!treeDraggingId||!treeLayoutUnlocked||treeLockedIds.includes(treeDraggingId))return;const rect=e.currentTarget.getBoundingClientRect();setTreePositions(prev=>({...prev,[treeDraggingId]:{x:Math.max(0,Math.min(1240,e.clientX-rect.left-treeDragOffset.current.x)),y:Math.max(0,Math.min(650,e.clientY-rect.top-treeDragOffset.current.y))}}))}} onPointerUp={()=>setTreeDraggingId(null)} onPointerLeave={()=>setTreeDraggingId(null)}>
-<svg className="tree-lines" viewBox="0 0 1400 820" preserveAspectRatio="none">{uniqueEdges.map((edge,i)=>{const a=pos(edge.a),b=pos(edge.b);const ax=a.x+77,ay=a.y+80,bx=b.x+77,by=b.y+80;const mid=(ay+by)/2;return edge.kind==="partner"?<path key={`${edge.a}-${edge.b}-${i}`} className="tree-line partner" d={`M ${ax} ${ay} L ${bx} ${by}`}/>:<path key={`${edge.a}-${edge.b}-${i}`} className="tree-line" d={`M ${ax} ${ay} L ${ax} ${mid} L ${bx} ${mid} L ${bx} ${by}`}/>})}</svg>
-{shown.map(character=>{const p=pos(character.id),hidden=treeHiddenIds.includes(character.id),locked=treeLockedIds.includes(character.id),image=character.portrait_url||character.media?.portraitUrl||"";return <div key={character.id} className={`tree-card ${character.id===connectionCenter.id?"selected":""} ${treeLayoutUnlocked&&!locked?"unlocked":""} ${treeDraggingId===character.id?"dragging":""} ${hidden?"hidden-card":""}`} style={{left:p.x,top:p.y}} onPointerDown={e=>{if(!treeLayoutUnlocked||locked||(e.target as HTMLElement).closest("button"))return;const rect=e.currentTarget.getBoundingClientRect();treeDragOffset.current={x:e.clientX-rect.left,y:e.clientY-rect.top};setTreeDraggingId(character.id);e.currentTarget.setPointerCapture?.(e.pointerId)}}><button type="button" style={{all:"unset",cursor:"pointer",display:"block",width:"100%"}} onClick={()=>void moveConnectionCenter(character)}><div className="tree-portrait">{image?<img src={image} alt={`${character.name} portrait`}/>:<span>☾</span>}</div><strong>{character.name}</strong><small>{treeLabelFor(character.id)}</small></button><div className="tree-card-actions"><button type="button" onClick={()=>setTreeLockedIds(v=>v.includes(character.id)?v.filter(id=>id!==character.id):[...v,character.id])}>{locked?"Unlock":"Lock"}</button><button type="button" onClick={()=>setTreeHiddenIds(v=>v.includes(character.id)?v.filter(id=>id!==character.id):[...v,character.id])}>{hidden?"Restore":"Hide"}</button></div></div>})}
-{treeCharacters.length===0&&<div className="connections-empty">No family connections yet.</div>}</div></div></>:<div className="all-connections-map">{visibleLinks.map(link=><LinkNode key={link.id} link={link}/>)}</div>}
-<p className="connections-hint">Unlock Layout to drag cards. Lock protects individual positions. Hide only changes this tree view; it never deletes a character or canon relationship.</p></section></main>;
+const visibleLinks = connectionView === "family"
+  ? connectionLinks.filter((link) => familyTypes.has(link.relationship_type))
+  : connectionLinks;
+const grouped = {
+  parents: visibleLinks.filter((link) => link.relationship_type === "parent"),
+  partner: visibleLinks.filter((link) => link.relationship_type === "partner"),
+  siblings: visibleLinks.filter((link) => link.relationship_type === "sibling"),
+  children: visibleLinks.filter((link) => link.relationship_type === "child"),
+  others: visibleLinks.filter((link) => !familyTypes.has(link.relationship_type)),
+};
+const centerPortrait = connectionCenter.portrait_url || connectionCenter.media?.portraitUrl || "";
+const relationLabel: Record<string,string> = {
+  parent:"Parent", child:"Child", sibling:"Sibling", partner:"Partner",
+  ally:"Ally", rival:"Rival", enemy:"Enemy", mentor:"Mentor", student:"Student"
+};
+const ConnectionNode = ({ link }: { link: CharacterRelationship }) => {
+  const target = link.target;
+  if (!target) return null;
+  const image = target.portrait_url || target.media?.portraitUrl || "";
+  return (
+    <button type="button" className={`connection-node relation-${link.relationship_type}`} onClick={() => void moveConnectionCenter(target)}>
+      <div className="connection-node-image">{image ? <img src={image} alt={`${target.name} portrait`} /> : <span>☾</span>}</div>
+      <strong>{target.name || "Unnamed Character"}</strong>
+      <small>{relationLabel[link.relationship_type] || link.relationship_type}</small>
+    </button>
+  );
+};
+return (
+  <main className="dashboard-shell connections-page">
+    <style>{`
+      .connections-page{min-height:100vh;background:radial-gradient(circle at 50% 8%,rgba(91,31,101,.2),transparent 32%),#07050a;color:#eee}
+      .connections-content{width:min(1220px,calc(100% - 48px));margin:0 auto;padding:58px 0 100px}
+      .connections-heading{text-align:center;max-width:760px;margin:0 auto 28px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0 12px}.connections-heading p{color:#aa94ae;line-height:1.7}
+      .connection-tabs{display:flex;justify-content:center;gap:10px;margin:26px 0 42px;flex-wrap:wrap}.connection-tab{padding:11px 18px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd;cursor:pointer}.connection-tab.active{border-color:rgba(232,201,111,.55);color:#f0d481;background:rgba(92,52,23,.18)}
+      .family-tree{display:grid;gap:28px;padding:32px 14px;border:1px solid rgba(185,92,209,.2);border-radius:28px;background:radial-gradient(ellipse at center,rgba(92,44,112,.2),transparent 70%)}.tree-level{position:relative;text-align:center}.tree-level-title{display:block;margin-bottom:13px;color:#9e77a5;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.tree-row{display:flex;justify-content:center;align-items:flex-start;gap:18px;flex-wrap:wrap}.tree-connector{width:1px;height:28px;background:linear-gradient(#b55dc4,#e5bd57);margin:0 auto;opacity:.65}
+      .connection-center{width:min(560px,100%);margin:0 auto;padding:22px;border-radius:24px;border:1px solid rgba(232,201,111,.38);background:linear-gradient(180deg,rgba(54,24,58,.9),rgba(14,8,18,.96));box-shadow:0 24px 70px rgba(0,0,0,.34);display:flex;align-items:center;gap:18px;text-align:left}.connection-center-image{width:110px;height:130px;flex:0 0 auto;border-radius:16px;overflow:hidden;background:#100914;display:grid;place-items:center;color:#e5bd57;font-size:42px}.connection-center-image img{width:100%;height:100%;object-fit:cover}.connection-center>div:last-child{min-width:0;overflow-wrap:anywhere}.connection-center h2{margin:4px 0;font-family:Georgia,serif;color:#f0d481;font-size:30px}.connection-center p{margin:0;color:#a994ad}.connection-center .creator-kicker{font-size:10px}
+      .connection-node{width:180px;padding:0 0 14px;overflow:hidden;border-radius:18px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#ddd;cursor:pointer;transition:.18s transform,.18s border-color;text-align:center}.connection-node:hover{transform:translateY(-4px);border-color:rgba(232,201,111,.55)}.connection-node-image{height:190px;background:radial-gradient(circle,rgba(105,35,119,.3),#09060c);display:grid;place-items:center;color:#e5bd57;font-size:48px}.connection-node-image img{width:100%;height:100%;object-fit:cover}.connection-node strong{display:block;padding:12px 10px 2px;color:#ead7ec}.connection-node small{display:block;color:#b66ec3;text-transform:uppercase;font-size:10px;letter-spacing:.12em}.relation-parent,.relation-child{border-color:rgba(232,201,111,.28)}.relation-partner{border-color:rgba(197,91,143,.32)}
+      .all-connections-map{position:relative;min-height:620px;border:1px solid rgba(185,92,209,.14);border-radius:28px;background:radial-gradient(circle at center,rgba(75,26,84,.24),transparent 34%),rgba(10,6,14,.72);padding:44px 24px;overflow:hidden}.all-map-center{position:relative;z-index:2;margin:190px auto 0}.connection-orbit{position:absolute;inset:24px;display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start;gap:20px;z-index:1}.connection-orbit .connection-node{width:160px}.connection-orbit .connection-node-image{height:155px}
+      .connections-empty{text-align:center;padding:58px 24px;border:1px solid rgba(185,92,209,.16);border-radius:22px;background:rgba(18,8,21,.55)}.connections-empty strong{display:block;color:#e8c96f;font-family:Georgia,serif;font-size:25px;margin-bottom:10px}.connections-empty p{color:#a994ad}
+      .connections-hint{text-align:center;color:#8e7b91;font-size:12px;margin-top:22px}
+      @media(max-width:700px){.connections-content{width:min(100% - 28px,1220px)}.connection-center{flex-direction:column;text-align:center}.all-connections-map{min-height:auto}.all-map-center{margin:30px auto}.connection-orbit{position:relative;inset:auto}.connection-node{width:150px}.connection-node-image{height:155px}}
+    `}</style>
+    <header className="studio-header">
+      <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
+      <div className="account-area"><button type="button" className="sign-out-button" onClick={goBack}>← Back</button></div>
+    </header>
+    <section className="connections-content">
+      <div className="connections-heading">
+        <p className="eyebrow">BONDS OF THE UMBRAL WORLD</p>
+        <h1>{connectionView === "family" ? "Family Tree" : "Relationship Map"}</h1>
+        <p>Explore the people connected to <strong>{connectionCenter.name}</strong>. Select any portrait to recenter the map on that character.</p>
+      </div>
+      <div className="connection-tabs">
+        <button type="button" className={`connection-tab ${connectionView === "family" ? "active" : ""}`} onClick={() => setConnectionView("family")}>Family Tree</button>
+        <button type="button" className={`connection-tab ${connectionView === "all" ? "active" : ""}`} onClick={() => setConnectionView("all")}>All Connections</button>
+      </div>
+      {relationshipError && <p className="login-error" role="alert">{relationshipError}</p>}
+      {loadingConnections ? <div className="connections-empty"><strong>Tracing connections...</strong><p>Following the bonds surrounding this character.</p></div> : connectionView === "family" ? (
+        visibleLinks.length === 0 ? <div className="connections-empty"><strong>No family connections yet</strong><p>Add parents, children, siblings, or a partner from the Relationships step.</p></div> :
+        <div className="family-tree">
+          {grouped.parents.length > 0 && <div className="tree-level"><span className="tree-level-title">Parents</span><div className="tree-row">{grouped.parents.map((link) => <ConnectionNode key={link.id} link={link} />)}</div><div className="tree-connector" /></div>}
+          <div className="tree-level">
+            <span className="tree-level-title">Current Character</span>
+            <div className="tree-row">
+              {grouped.partner.map((link) => <ConnectionNode key={link.id} link={link} />)}
+              <div className="connection-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF TREE</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
+            </div>
+          </div>
+          {grouped.siblings.length > 0 && <div className="tree-level"><div className="tree-connector" /><span className="tree-level-title">Siblings</span><div className="tree-row">{grouped.siblings.map((link) => <ConnectionNode key={link.id} link={link} />)}</div></div>}
+          {grouped.children.length > 0 && <div className="tree-level"><div className="tree-connector" /><span className="tree-level-title">Children</span><div className="tree-row">{grouped.children.map((link) => <ConnectionNode key={link.id} link={link} />)}</div></div>}
+        </div>
+      ) : (
+        visibleLinks.length === 0 ? <div className="connections-empty"><strong>No connections yet</strong><p>Add connected characters from the Relationships step to build this map.</p></div> :
+        <div className="all-connections-map">
+          <div className="connection-orbit">{visibleLinks.map((link) => <ConnectionNode key={link.id} link={link} />)}</div>
+          <div className="connection-center all-map-center"><div className="connection-center-image">{centerPortrait ? <img src={centerPortrait} alt={`${connectionCenter.name} portrait`} /> : "☾"}</div><div><span className="creator-kicker">CENTER OF MAP</span><h2>{connectionCenter.name}</h2><p>{connectionCenter.identity?.race || "Umbral Character"}</p></div></div>
+        </div>
+      )}
+      <p className="connections-hint">Click a connected character to make them the center and continue exploring their relationships.</p>
+    </section>
+  </main>
+);
 }
 
 if (page === "profile" && selectedCharacter) {
@@ -2536,24 +2543,10 @@ const mediaItems = [
   { label: "Alternate / True Form", url: media.alternateFormUrl || "" },
 ].filter((item) => item.url);
 const galleryImages = Array.isArray(media.galleryUrls) ? media.galleryUrls : [];
-const displayProfileValue = (value: unknown): string => {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => typeof item === "string" ? item : item == null ? "" : String(item))
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .join("\n");
-  }
-  if (value == null) return "";
-  if (typeof value === "object") {
-    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
-  }
-  return String(value).trim();
-};
-const entries = (record: Record<string, unknown>, labels: Record<string, string>) =>
+const entries = (record: Record<string, string>, labels: Record<string, string>) =>
   Object.entries(labels)
-    .map(([key, label]) => ({ label, value: displayProfileValue(record?.[key]) }))
-    .filter((item) => item.value.length > 0);
+    .map(([key, label]) => ({ label, value: record[key] }))
+    .filter((item) => item.value && item.value.trim());
 const productionItems = entries(media, { visualAssets:"Visual Production Asset Checklist", productionNotes:"Blender / VRoid Production Notes", canonLocks:"Canon Locks", tbdFields:"Editable / TBD Fields" });
 const identityItems = entries(identity, { nicknames:"Nicknames", titles:"Titles", pronunciation:"Pronunciation", nameMeaning:"Name Meaning", birthDate:"Birth Date", elementalHeritage:"Elemental Heritage", canonStatus:"Canon Status", spoilerLevel:"Spoiler Level", era:"Era", age:"Age", apparentAge:"Apparent Age", gender:"Gender", pronouns:"Pronouns", race:"Race / Species", subrace:"Subrace / Variant", heritage:"Heritage / Ethnicity", nationality:"Nationality / People", homeland:"Homeland", currentResidence:"Current Residence", affiliation:"Affiliation", occupation:"Occupation / Role" });
 const appearanceItems = entries(appearance, { skinTone:"Skin Tone / Complexion", skinHex:"Skin HEX / Color Reference", faceDetails:"Face Details", eyeColor:"Eye Color", eyeHex:"Eye HEX / Color Reference", hairColor:"Hair Color", hairHex:"Hair HEX / Color Reference", hairTexture:"Hair Texture", hairStyle:"Hair Style", height:"Height", weight:"Weight", dominantHand:"Dominant Hand", build:"Build", postureMovement:"Posture / Movement", distinguishingFeatures:"Distinguishing Features", makeup:"Makeup / Face Paint", grooming:"Grooming", nails:"Nails", colorPalette:"Official Color Palette", clothingStyle:"Fashion Style", signatureOutfit:"Signature / Default Outfit", outfitColors:"Outfit Color Breakdown", outfitMaterials:"Outfit Materials / Construction", wardrobe:"Wardrobe / Alternate Outfits", accessories:"Accessories", alternateForm:"Alternate / True Form", appearanceNotes:"Appearance Notes" });
@@ -2612,7 +2605,6 @@ return (
           <div className="profile-actions">
             {saved.is_complete && saved.user_id === session.user.id && <button type="button" className="primary-action" onClick={() => setCharacterPublication(saved, !saved.is_public)}>{saved.is_public ? "Unpublish Character" : "Publish to Library"}</button>}
             <button type="button" className="secondary-action" onClick={() => void openConnections(saved)}>View Connections</button>
-            <button type="button" className="secondary-action" onClick={() => downloadCharacterProfile(saved)}>Download Profile</button>
             {saved.user_id === session.user.id && <button type="button" className="secondary-action" onClick={() => loadCharacterIntoEditor(saved)}>Edit Character</button>}
             <button type="button" className="secondary-action" onClick={goBack}>← Back</button>
           </div>
@@ -2662,7 +2654,7 @@ const navItems = [
 ];
 
 const RepeatableList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
-  const items = (Array.isArray(value) ? value : String(value ?? "").split(/\n+/)).flatMap((item:any) => typeof item === "string" ? item.split(/\n+/) : [String(item ?? "")]).map((item:string)=>item.trim()).filter(Boolean);
+  const items = value.split(/\n+/).map((item)=>item.trim()).filter(Boolean);
   const [draft, setDraft] = useState("");
   const saveItems = (next:string[]) => updateCharacter(field, next.join("\n") as never);
   return <div className="creator-field full-width repeatable-field">
@@ -2673,7 +2665,7 @@ const RepeatableList = ({ label, value, field, placeholder }: { label:string; va
 };
 
 const RepeatableColorList = ({ label, value, field, placeholder }: { label:string; value:string; field:keyof typeof character; placeholder:string }) => {
-  const items=(Array.isArray(value) ? value : String(value ?? "").split(/\n+/)).flatMap((item:any)=>typeof item==="string" ? item.split(/\n+/) : [String(item ?? "")]).map((item:string)=>item.trim()).filter(Boolean);
+  const items=value.split(/\n+/).map(item=>item.trim()).filter(Boolean);
   const [name,setName]=useState(""); const [hex,setHex]=useState("");
   const save=(next:string[])=>updateCharacter(field,next.join("\n") as never);
   const add=()=>{const n=name.trim(),h=hex.trim();if(!n&&!h)return;save([...items,[n,h].filter(Boolean).join(" — ")]);setName("");setHex("");};
@@ -3069,25 +3061,19 @@ const renderRelationshipsStep = () => (
     `}</style>
     <div className="connection-builder">
       <h4>Connected Characters</h4>
-      <p>These direct links are the source of truth for the Family Tree. Reciprocal links are created automatically, but Written Relationship notes will never overwrite your manual corrections.</p>
+      <p>Link this character directly to another character you created. Reciprocal family and relationship links are created automatically.</p>
       {relationshipError && <p className="login-error">{relationshipError}</p>}
       <div className="connection-controls">
         <select value={relationshipType} onChange={(e) => setRelationshipType(e.target.value)}>
-          <optgroup label="Immediate Family"><option value="mother">Mother</option><option value="father">Father</option><option value="parent">Parent</option><option value="son">Son</option><option value="daughter">Daughter</option><option value="child">Child</option><option value="brother">Brother</option><option value="sister">Sister</option><option value="sibling">Sibling</option><option value="full_sibling">Full Sibling</option><option value="half_sibling">Half-Sibling</option><option value="twin">Twin</option><option value="twin_brother">Twin Brother</option><option value="twin_sister">Twin Sister</option></optgroup>
-          <optgroup label="Extended Family"><option value="grandparent">Grandparent</option><option value="grandchild">Grandchild</option><option value="aunt">Aunt</option><option value="uncle">Uncle</option><option value="niece">Niece</option><option value="nephew">Nephew</option><option value="cousin">Cousin</option></optgroup>
-          <optgroup label="Romance"><option value="spouse">Spouse / Married</option><option value="husband">Husband</option><option value="wife">Wife</option><option value="fiance">Fiancé / Fiancée</option><option value="partner">Partner</option><option value="love_interest">Love Interest</option><option value="ex_spouse">Ex-Spouse</option><option value="ex_partner">Ex-Partner</option></optgroup>
-          <optgroup label="Social"><option value="friend">Friend</option><option value="ally">Ally</option><option value="rival">Rival</option><option value="enemy">Enemy</option><option value="mentor">Mentor</option><option value="student">Student / Protégé</option></optgroup>
-          <optgroup label="Rank & Service"><option value="king">King / Ruler</option><option value="subject">Subject</option><option value="lord">Lord</option><option value="underling">Underling</option><option value="master">Master</option><option value="servant">Servant</option><option value="captain">Captain</option><option value="lieutenant">Lieutenant</option><option value="commander">Commander</option><option value="subordinate">Subordinate</option><option value="leader">Leader</option><option value="member">Member</option></optgroup>
-          <optgroup label="Identity"><option value="same_person">Same Person</option><option value="alter_ego">Alter Ego / Persona</option><option value="true_identity">True Identity</option></optgroup>
+          <option value="parent">Parent</option><option value="child">Child</option><option value="sibling">Sibling</option><option value="partner">Partner / Love Interest</option><option value="ally">Friend / Ally</option><option value="rival">Rival</option><option value="enemy">Enemy</option><option value="mentor">Mentor</option><option value="student">Student / Protégé</option>
         </select>
-        <div><input list="relationship-character-options" value={relationshipCharacterSearch} onChange={(e)=>{const value=e.target.value;setRelationshipCharacterSearch(value);const match=relationshipOptions.find(x=>x.name===value||`${x.name}${x.identity?.alias?` — ${x.identity.alias}`:""}`===value);setRelationshipTargetId(match?.id||"");}} placeholder="Search characters by name or alias..."/><datalist id="relationship-character-options">{relationshipOptions.filter(item=>!relationshipCharacterSearch.trim()||`${item.name} ${item.identity?.alias||""}`.toLowerCase().includes(relationshipCharacterSearch.toLowerCase())).map(item=><option key={item.id} value={`${item.name}${item.identity?.alias?` — ${item.identity.alias}`:""}`}/>)}</datalist></div>
+        <select value={relationshipTargetId} onChange={(e) => setRelationshipTargetId(e.target.value)}>
+          <option value="">Choose one of your characters...</option>
+          {relationshipOptions.map((item) => <option key={item.id} value={item.id}>{item.name || "Unnamed Character"}{item.identity?.alias ? ` — ${item.identity.alias}` : ""}</option>)}
+        </select>
         <button type="button" className="primary-action" disabled={!relationshipTargetId || relationshipBusy} onClick={() => void addConnectedRelationship()}>{relationshipBusy ? "Saving..." : "Connect"}</button>
       </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:12,flexWrap:"wrap"}}>
-        <button type="button" className="secondary-action" disabled={!studioCharacterId} onClick={downloadRelationshipBackup}>Download Relationship Backup</button>
-        <button type="button" className="secondary-action" disabled={relationshipBusy || !studioCharacterId} onClick={() => void clearCurrentCharacterFamilyLinks()}>Clear Family Links</button>
-      </div>
-      {connectedRelationships.length > 0 && <div className="connection-list">{connectedRelationships.map((link) => { const target=link.target; const image=target?.portrait_url || target?.media?.portraitUrl || ""; return <div className="connection-chip" key={link.id}>{image ? <img src={image} alt="" /> : <div className="connection-avatar">☾</div>}<div className="connection-chip-copy"><strong>{target?.name || "Character"}</strong><span>{relationshipDisplay(link.relationship_type)}</span></div><button type="button" className="connection-remove" title="Remove connection" onClick={() => void removeConnectedRelationship(link)}>×</button></div>})}</div>}
+      {connectedRelationships.length > 0 && <div className="connection-list">{connectedRelationships.map((link) => { const target=link.target; const image=target?.portrait_url || target?.media?.portraitUrl || ""; return <div className="connection-chip" key={link.id}>{image ? <img src={image} alt="" /> : <div className="connection-avatar">☾</div>}<div className="connection-chip-copy"><strong>{target?.name || "Character"}</strong><span>{link.relationship_type}</span></div><button type="button" className="connection-remove" title="Remove connection" onClick={() => void removeConnectedRelationship(link)}>×</button></div>})}</div>}
     </div>
 
     <div className="creator-form-grid">
@@ -3413,7 +3399,7 @@ if(page==="transfer"){
 }
 
 if(page==="settings"){
- return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label><label className="v10-toggle"><input type="checkbox" checked={showStudioGuidance} onChange={e=>setGuidancePreference(e.target.checked)}/> Show help descriptions on this computer</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter mode="panel" /></section></main>;
+ return <main className="dashboard-shell v10-settings-page"><StudioTopNav /><section className="v10-settings-shell"><div className="production-v9-hero"><div><p className="eyebrow">{`UMBRA STUDIO ${appVersion}`}</p><h1>Studio Settings</h1><p>Control production defaults, autosave behavior, collaborator presence, and dashboard preferences without changing your lore.</p></div></div>{settingsError&&<p className="login-error">{settingsError}</p>}{studioSettings&&<section className="admin-panel"><div className="v10-settings-grid"><label>Studio Name<input value={studioSettings.studio_name} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_name:e.target.value})}/></label><label>Dashboard Subtitle<input value={studioSettings.studio_subtitle} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,studio_subtitle:e.target.value})}/></label><label>Default Canon Status<select value={studioSettings.default_canon_status} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_canon_status:e.target.value})}><option value="concept">Concept</option><option value="draft_canon">Draft Canon</option><option value="canon">Canon</option></select></label><label>Default Spoiler Level<select value={studioSettings.default_spoiler_level} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,default_spoiler_level:e.target.value})}><option value="private">Private</option><option value="public">Public</option><option value="spoiler">Spoiler</option><option value="major_spoiler">Major Spoiler</option></select></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.autosave_enabled} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_enabled:e.target.checked})}/> Automatic local recovery drafts</label><label>Autosave Delay (seconds)<input type="number" min="5" max="300" value={studioSettings.autosave_seconds} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,autosave_seconds:Number(e.target.value)})}/></label><label>Presence Timeout (minutes)<input type="number" min="2" max="120" value={studioSettings.stale_session_minutes} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,stale_session_minutes:Number(e.target.value)})}/></label><label className="v10-toggle"><input type="checkbox" checked={studioSettings.show_dashboard_activity} disabled={adminRole!=="primary_admin"} onChange={e=>setStudioSettings({...studioSettings,show_dashboard_activity:e.target.checked})}/> Show collaborator activity on dashboard</label><label className="v10-toggle"><input type="checkbox" checked={showStudioGuidance} onChange={e=>setGuidancePreference(e.target.checked)}/> Show help descriptions on this computer</label></div>{adminRole==="primary_admin"?<button className="primary-action" disabled={settingsBusy} onClick={()=>void saveStudioSettings()}>{settingsBusy?"Saving...":"Save Studio Settings"}</button>:<p className="admin-help">Studio-wide settings are read-only for your role. A Primary Admin can change them.</p>}</section>}<section className="admin-panel"><span className="card-label">STUDIO 1.0 SAFETY</span><h2>Recovery & Collaboration</h2><p className="admin-help">Database lore editing now creates automatic local recovery drafts while you work. Collaborator presence uses heartbeat freshness so abandoned browser sessions can be treated as stale instead of permanently active.</p></section><StudioUpdateCenter /></section></main>;
 }
 
 if(page==="production"){
@@ -3457,7 +3443,7 @@ if(page==="database"){
  {databaseTab==="bulk"&&<section className="admin-panel"><span className="card-label">BULK DATABASE MANAGER</span><h2>{selectedDatabaseRecordIds.size} Records Selected</h2><p className="admin-help">Select records from the Records tab, then manage them together here.</p><div className="bulk-actions"><button onClick={()=>void bulkWorkflow("draft")}>Mark Draft</button><button onClick={()=>void bulkWorkflow("in_review")}>Send to Review</button><button onClick={()=>void bulkWorkflow("approved")}>Approve</button><button onClick={()=>void bulkWorkflow("published")}>Mark Published</button><button onClick={exportSelectedCsv}>Export Selected CSV</button><button className="danger-action" onClick={()=>void bulkArchive()}>Archive Selected</button></div></section>}
  {databaseTab==="health"&&<section className="admin-panel"><span className="card-label">DATABASE HEALTH CENTER</span><h2>Structure & Completeness</h2><div className="health-grid"><div><strong>{databaseHealth?.active_records??activeRecords.length}</strong><span>Active</span></div><div><strong>{databaseHealth?.draft_records??0}</strong><span>Drafts</span></div><div><strong>{databaseHealth?.review_records??0}</strong><span>In Review</span></div><div><strong>{databaseHealth?.records_without_summary??0}</strong><span>Missing Summary</span></div><div><strong>{databaseHealth?.records_without_image??0}</strong><span>Missing Image</span></div><div><strong>{databaseHealth?.links??universalLinks.length}</strong><span>Universal Links</span></div></div><div className="health-list">{activeRecords.filter(r=>recordCompleteness(r)<100).sort((a,b)=>recordCompleteness(a)-recordCompleteness(b)).map(r=><button key={r.id} onClick={()=>{setDatabaseTab("records");openDatabaseRecord(r)}}><span>{r.record_code} • {r.name}</span><strong>{recordCompleteness(r)}%</strong></button>)}</div></section>}
  {databaseTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Database Record Revisions</h2><p className="admin-help">Every record update is captured automatically. Restore an older version without losing the current one.</p><div className="revision-list">{databaseRevisions.map(r=><article key={r.id}><div><strong>{r.record_code||"Record"} • {r.record_name||"Untitled"}</strong><span>{r.changed_by_email||"Studio admin"} • {new Date(r.created_at).toLocaleString()}</span></div><button onClick={()=>void restoreDatabaseRevision(r)}>Restore</button></article>)}</div></section>}
-{databaseTab==="duplicates"&&<section className="admin-panel"><span className="card-label">SITE-WIDE DATA QUALITY</span><h2>Duplicate & Similar Name Finder</h2><p className="admin-help">Scans Characters, Codex, Locations, Expanded Records, Projects, Arcs, and Scenes. Similar normalized names are review-only and are never merged or deleted automatically.</p><div className="duplicate-grid">{sitewideDuplicateGroups().length===0?<p className="admin-empty">No exact/similar normalized names found across the Studio.</p>:sitewideDuplicateGroups().map((group,i)=><article key={i}><strong>{group[0].name}</strong><span>{group.length} possible matches</span>{group.map(r=><div key={`${r.table}-${r.id}`} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"center",marginTop:8}}><span>{r.type} • {r.name}</span><button type="button" onClick={()=>void deleteDuplicateEntity(r.table,r.id,r.name)}>Delete</button></div>)}</article>)}</div></section>}
+{databaseTab==="duplicates"&&<section className="admin-panel"><span className="card-label">DATA QUALITY</span><h2>Duplicate Detection</h2><p className="admin-help">Potential duplicates are grouped by record type and normalized name. Nothing is merged automatically.</p><div className="duplicate-grid">{duplicateGroups().length===0?<p className="admin-empty">No likely duplicate expanded records found.</p>:duplicateGroups().map((group,i)=><article key={i}><strong>{group[0].name}</strong><span>{recordTypes.find(t=>t.id===group[0].record_type_id)?.name||"Record"}</span>{group.map(r=><button key={r.id} onClick={()=>{setDatabaseTab("records");void openDatabaseRecord(r)}}>{r.record_code} • {r.workflow_status.replace(/_/g," ")}</button>)}</article>)}</div></section>}
 {databaseTab==="templates"&&<section className="admin-panel"><span className="card-label">REUSABLE STRUCTURE</span><h2>Field Templates</h2><p className="admin-help">Templates suggest structured fields without locking your lore into a rigid schema.</p><div className="database-form-grid"><select value={templateForm.recordTypeId} onChange={e=>setTemplateForm({...templateForm,recordTypeId:e.target.value})}><option value="">Record type</option>{recordTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><input placeholder="Template name" value={templateForm.name} onChange={e=>setTemplateForm({...templateForm,name:e.target.value})}/><textarea className="json-editor" value={templateForm.fieldsText} onChange={e=>setTemplateForm({...templateForm,fieldsText:e.target.value})}/><button className="primary-action" onClick={()=>void createFieldTemplate()}>Create Template</button></div><div className="database-simple-grid">{fieldTemplates.map(t=><article key={t.id}><strong>{t.name}</strong><p>{recordTypes.find(x=>x.id===t.record_type_id)?.name||"Record"}</p><small>{t.fields?.length||0} suggested fields</small></article>)}</div></section>}
 {databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">No coding required. Paste a normal labeled character profile, upload a TXT, Markdown, JSON, or CSV file, or use JSON only when you need the advanced format. Studio analyzes it and opens the result in Character Creator for review before anything is saved.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Profile</button>{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
 {databaseTab==="backup"&&<section className="admin-panel"><span className="card-label">PORTABILITY & RECOVERY</span><h2>Export & Backup Center</h2><p className="admin-help">Export the current operational database locally or create a named server snapshot before a major editing session.</p><div className="database-backup-actions"><button className="secondary-action" onClick={exportStudioData}>Export Full JSON</button>{adminRole==="primary_admin"&&<><input placeholder="Backup label — e.g. Before Moonwood Import" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Named Snapshot</button></>}</div><div className="admin-feed">{backups.map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section>}

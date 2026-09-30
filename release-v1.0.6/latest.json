@@ -1,0 +1,11 @@
+{
+  "version": "1.0.6",
+  "notes": "Umbra Studio v1.0.6 adds the genealogy-style Family Tree, readable character profile downloads, automatic desktop update notifications, Sign Out access, and character import/profile stability improvements.",
+  "pub_date": "2026-09-25T09:16:04.577776Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUY3Z6VnNTK1pYWnUySTFaMnRWRzA5UTF4K2lkM1JZT3M3YWRVSndvdEdrREN3bkQzc3g0NFE4ZmpDVzhzVFpWTExMVy9RTWFSbGE3ek05VXQvaVAxZ1VPYVc2bldqdWd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI3Njc2CWZpbGU6VW1icmEgU3R1ZGlvXzEuMC42X3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuNgptVndxTUFhN2JZNTdLMXByMkExT2pDY05nVFo0NlBuN3RIL282MitVaHFGWkVPMmV5MmxjTHI3WUU4bC9uMXFUdURydGVvTzVwYUErdmNuMWx6QTdDdz09Cg==",
+      "url": "https://github.com/bryannaparker2521-spec/umbra-studio/releases/download/v1.0.6/Umbra.Studio_1.0.6_x64-setup.exe"
+    }
+  }
+}
