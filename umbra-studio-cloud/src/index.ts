@@ -433,6 +433,94 @@ export default {
 				});
 			}
 
+                        // ------------------------------------------------------------
+                        // MY PROFILE
+                        // ------------------------------------------------------------
+
+                        if (
+                                request.method === "GET" &&
+                                url.pathname === "/api/me/profile"
+                        ) {
+                                const profile = await env.umbra_studio_production
+                                        .prepare(`
+                                                SELECT user_id, profile_image_url, personal_notes, created_at, updated_at
+                                                FROM studio_user_profiles
+                                                WHERE user_id = ?
+                                                LIMIT 1
+                                        `)
+                                        .bind(user.id)
+                                        .first();
+
+                                return json({
+                                        ok: true,
+                                        profile: profile ?? {
+                                                user_id: user.id,
+                                                profile_image_url: null,
+                                                personal_notes: null,
+                                                created_at: null,
+                                                updated_at: null,
+                                        },
+                                });
+                        }
+
+                        if (
+                                request.method === "PATCH" &&
+                                url.pathname === "/api/me/profile"
+                        ) {
+                                const body = await readJsonBody(request);
+                                const now = new Date().toISOString();
+
+                                const existing = await env.umbra_studio_production
+                                        .prepare(`
+                                                SELECT user_id
+                                                FROM studio_user_profiles
+                                                WHERE user_id = ?
+                                                LIMIT 1
+                                        `)
+                                        .bind(user.id)
+                                        .first();
+
+                                if (existing) {
+                                        await env.umbra_studio_production
+                                                .prepare(`
+                                                        UPDATE studio_user_profiles
+                                                        SET profile_image_url = ?,
+                                                            personal_notes = ?,
+                                                            updated_at = ?
+                                                        WHERE user_id = ?
+                                                `)
+                                                .bind(
+                                                        nullableString(body.profile_image_url),
+                                                        nullableString(body.personal_notes),
+                                                        now,
+                                                        user.id,
+                                                )
+                                                .run();
+                                } else {
+                                        await env.umbra_studio_production
+                                                .prepare(`
+                                                        INSERT INTO studio_user_profiles (
+                                                                user_id,
+                                                                profile_image_url,
+                                                                personal_notes,
+                                                                created_at,
+                                                                updated_at
+                                                        )
+                                                        VALUES (?, ?, ?, ?, ?)
+                                                `)
+                                                .bind(
+                                                        user.id,
+                                                        nullableString(body.profile_image_url),
+                                                        nullableString(body.personal_notes),
+                                                        now,
+                                                        now,
+                                                )
+                                                .run();
+                                }
+
+                                return json({ ok: true });
+                        }
+
 			// ------------------------------------------------------------
 			// CHARACTERS
 			// ------------------------------------------------------------
