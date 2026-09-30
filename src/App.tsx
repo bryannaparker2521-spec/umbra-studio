@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "./lib/supabase";
-import { getUmbraCloudUser, umbraCloudFetch, uploadUmbraCloudMedia } from "./lib/umbraCloud";
+import { getStoredUmbraSession, getUmbraCloudUser, signInUmbraCloud, signOutUmbraCloud, umbraCloudFetch, uploadUmbraCloudMedia } from "./lib/umbraCloud";
+import type { UmbraCloudSession } from "./lib/umbraCloud";
 import StudioUpdateCenter from "./StudioUpdateCenter";
 import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
@@ -119,7 +118,7 @@ type StudioCharacterRow = {
 };
 
 function App() {
-const [session, setSession] = useState<Session | null>(null);
+const [session, setSession] = useState<UmbraCloudSession | null>(null);
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [loading, setLoading] = useState(true);
@@ -446,36 +445,8 @@ const [character, setCharacter] = useState({
 useEffect(()=>{ getVersion().then(setAppVersion).catch(()=>setAppVersion("Unknown")); },[]);
 
 useEffect(() => {
-let mounted = true;
-
-async function loadSession() {
-  const { data } = await supabase.auth.getSession();
-
-  if (mounted) {
-    setSession(data.session);
-    setLoading(false);
-  }
-}
-
-loadSession();
-
-const {
-  data: { subscription },
-} = supabase.auth.onAuthStateChange((_event, newSession) => {
-  if (mounted) {
-    setSession(newSession);
-
-    if (!newSession) {
-      setPage("dashboard");
-    }
-  }
-});
-
-return () => {
-  mounted = false;
-  subscription.unsubscribe();
-};
-
+  setSession(getStoredUmbraSession());
+  setLoading(false);
 }, []);
 
 useEffect(() => {
@@ -882,22 +853,17 @@ async function savePublicSettings(){if(!publicSettings)return;try{await umbraClo
 async function openPublicEncyclopedia(){setError("");try{const data=await umbraCloudFetch<any>("/api/public-encyclopedia");setPublicBrowseSettings(data.settings as PublicSettings);setPublicBrowseRecords((data.records??[]) as StudioDatabaseRecord[]);setPublicBrowseTypes((data.types??[]) as StudioRecordType[]);setPublicBrowseCharacters((data.characters??[]) as StudioCharacterRow[]);setPublicBrowseWorld((data.codex??[]) as WorldRecord[]);setPublicBrowseLocations((data.locations??[]) as WorldLocation[]);setPublicBrowseTimeline((data.timeline??[]) as TimelineEvent[]);setPublicBrowse(true);}catch(f){setError(f instanceof Error?f.message:"Public encyclopedia could not be loaded.");}}
 async function handleSignIn(e: FormEvent<HTMLFormElement>) {
 e.preventDefault();
-
 setError("");
 setSigningIn(true);
-
-const { error: signInError } =
-  await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-if (signInError) {
-  setError(signInError.message);
+try {
+  const newSession=await signInUmbraCloud(email,password);
+  setSession(newSession);
+  setPassword("");
+} catch (failure) {
+  setError(failure instanceof Error?failure.message:"Sign in failed.");
+} finally {
+  setSigningIn(false);
 }
-
-setSigningIn(false);
-
 }
 
 async function handleSignOut() {
@@ -905,7 +871,8 @@ setError("");
 setPage("dashboard");
 if(activeStudioSessionId) try{await umbraCloudFetch(`/api/sessions/${encodeURIComponent(activeStudioSessionId)}`,{method:"DELETE"});}catch{}
 setActiveStudioSessionId(null);
-await supabase.auth.signOut();
+await signOutUmbraCloud();
+setSession(null);
 }
 
 async function loadMyCharacters() {
