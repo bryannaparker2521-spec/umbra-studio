@@ -2122,3 +2122,64 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
 .my-characters-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))!important;gap:18px!important}.compact-character-card{display:grid!important;grid-template-columns:170px minmax(0,1fr);min-height:300px}.compact-character-card .saved-character-image{height:100%!important;min-height:300px}.compact-character-card .saved-character-image img{object-fit:cover!important;object-position:center top}.compact-character-card .saved-character-placeholder{min-height:300px}.compact-character-card .saved-character-body{padding:20px!important}.compact-character-card .saved-character-body h3{font-size:25px!important}.compact-character-card .character-card-summary{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;min-height:0!important;max-height:7em}.compact-character-card .saved-character-progress{margin:15px 0!important}.compact-character-card .saved-character-actions button{min-height:44px!important}
 .library-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))!important}.library-card{display:grid!important;grid-template-columns:180px minmax(0,1fr)}.library-card .library-image{height:100%!important;min-height:320px}.library-card .library-image img{object-position:center top}.library-card .library-body p{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
 @media(max-width:760px){.compact-character-card,.library-card{grid-template-columns:1fr!important}.compact-character-card .saved-character-image,.library-card .library-image{height:260px!important;min-height:260px}.my-characters-grid,.library-grid{grid-template-columns:1fr!important}.studio-tab-guide{flex-direction:column}}
+
+
+/* =========================================================
+   UMBRA STUDIO — DARK NATIVE CONTROLS
+   Keep Windows/WebView scrollbars and native form controls
+   inside the Studio visual system.
+   ========================================================= */
+:root {
+  color-scheme: dark;
+  scrollbar-color: #6f3d78 #120b15;
+  scrollbar-width: thin;
+}
+
+html,
+body,
+#root,
+* {
+  scrollbar-color: #6f3d78 #120b15;
+}
+
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #120b15;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #6f3d78;
+  border: 2px solid #120b15;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #9450a1;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #120b15;
+}
+
+select,
+textarea,
+input,
+button {
+  color-scheme: dark;
+}
+
+select {
+  background-color: #120b15;
+  color: #f4e9f4;
+}
+
+select option,
+select optgroup {
+  background: #120b15;
+  color: #f4e9f4;
+}
