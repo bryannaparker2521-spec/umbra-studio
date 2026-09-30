@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { getStoredUmbraSession, getUmbraCloudUser, signInUmbraCloud, signOutUmbraCloud, umbraCloudFetch, uploadUmbraCloudMedia } from "./lib/umbraCloud";
+import { activateUmbraCloudAccount, getStoredUmbraSession, getUmbraCloudUser, signInUmbraCloud, signOutUmbraCloud, umbraCloudFetch, uploadUmbraCloudMedia } from "./lib/umbraCloud";
 import type { UmbraCloudSession } from "./lib/umbraCloud";
 import StudioUpdateCenter from "./StudioUpdateCenter";
 import { getVersion } from "@tauri-apps/api/app";
@@ -124,6 +124,10 @@ const [password, setPassword] = useState("");
 const [loading, setLoading] = useState(true);
 const [signingIn, setSigningIn] = useState(false);
 const [error, setError] = useState("");
+const [firstTimeSetup,setFirstTimeSetup]=useState(false);
+const [setupCode,setSetupCode]=useState("");
+const [confirmPassword,setConfirmPassword]=useState("");
+const [memberSetupCodes,setMemberSetupCodes]=useState<Record<string,{code:string;expiresAt:string}>>({});
 const [page, changePage] = useState<StudioPage>("dashboard");
 const pageRef = useRef<StudioPage>("dashboard");
 const pageHistory = useRef<StudioPage[]>([]);
@@ -522,6 +526,7 @@ async function loadAdminCenter() {
 }
 async function openAdminCenter(tab:typeof adminTab="overview"){setAdminTab(tab);setPage("admin");window.scrollTo({top:0,behavior:"smooth"});await loadAdminCenter();}
 async function addStudioAdmin(){if(!adminMemberEmail.trim()||adminBusy)return;setAdminBusy(true);setAdminError("");try{await umbraCloudFetch("/api/collaborators",{method:"POST",body:JSON.stringify({email:adminMemberEmail.trim(),role:adminMemberRole})});setAdminMemberEmail("");await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Admin could not be added.");}finally{setAdminBusy(false);}}
+async function generateMemberSetupCode(userId:string){setAdminError("");try{const r=await umbraCloudFetch<{ok:true;code:string;expiresAt:string}>("/api/auth/setup-code",{method:"POST",body:JSON.stringify({userId})});setMemberSetupCodes(x=>({...x,[userId]:{code:r.code,expiresAt:r.expiresAt}}));}catch(f){setAdminError(f instanceof Error?f.message:"Setup code could not be generated.");}}
 async function changeAdminRole(userId:string,role:StudioAdminMember["role"]){setAdminError("");try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"PATCH",body:JSON.stringify({role})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Admin role could not be changed.");}}
 async function removeStudioAdmin(userId:string){if(!confirm("Remove this collaborator from Umbra Studio?"))return;try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"DELETE"});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Collaborator could not be removed.");}}
 async function setWorkflowStatus(row:AdminContentRow,status:string){
@@ -864,6 +869,21 @@ try {
 } finally {
   setSigningIn(false);
 }
+}
+
+async function handleFirstTimeSetup(e: FormEvent<HTMLFormElement>) {
+e.preventDefault();
+setError("");
+if(password.length<12){setError("Password must be at least 12 characters.");return;}
+if(password!==confirmPassword){setError("Passwords do not match.");return;}
+setSigningIn(true);
+try{
+  await activateUmbraCloudAccount(email,setupCode,password);
+  const newSession=await signInUmbraCloud(email,password);
+  setSession(newSession);
+  setPassword("");setConfirmPassword("");setSetupCode("");setFirstTimeSetup(false);
+}catch(failure){setError(failure instanceof Error?failure.message:"Account setup failed.");}
+finally{setSigningIn(false);}
 }
 
 async function handleSignOut() {
@@ -1955,53 +1975,21 @@ return ( <main className="studio-shell"> <div className="studio-card login-card"
 
       <h1>Umbra Studio</h1>
 
-      <p className="subtitle">
-        Sign in with your Umbra Connect account.
-      </p>
+      <p className="subtitle">{firstTimeSetup?"Activate your invited Umbra Studio account.":"Sign in with your Umbra Studio account."}</p>
 
       <div className="divider" />
 
-      <form
-        className="login-form"
-        onSubmit={handleSignIn}
-      >
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          required
-        />
-
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
-
-        {error && (
-          <p className="login-error">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={signingIn}
-        >
-          {signingIn
-            ? "Entering..."
-            : "Enter Umbra Studio"}
-        </button>
+      <form className="login-form" onSubmit={firstTimeSetup?handleFirstTimeSetup:handleSignIn}>
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+        {firstTimeSetup&&<input type="text" placeholder="One-time setup code" value={setupCode} onChange={e=>setSetupCode(e.target.value.toUpperCase())} autoComplete="one-time-code" required />}
+        <input type="password" placeholder={firstTimeSetup?"Create password (12+ characters)":"Password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={firstTimeSetup?"new-password":"current-password"} required />
+        {firstTimeSetup&&<input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" required />}
+        {error&&<p className="login-error">{error}</p>}
+        <button type="submit" disabled={signingIn}>{signingIn?(firstTimeSetup?"Activating...":"Entering..."):(firstTimeSetup?"Activate & Enter Umbra Studio":"Enter Umbra Studio")}</button>
       </form>
+      <button type="button" className="secondary-action" onClick={()=>{setFirstTimeSetup(x=>!x);setError("");setPassword("");setConfirmPassword("");setSetupCode("");}}>{firstTimeSetup?"Back to Sign In":"First time here? Set up account"}</button>
 
-      <p className="status">
-        Connected to Umbra Connect
-      </p>
+      <p className="status">{firstTimeSetup?"You need a one-time setup code from a Primary Admin.":"Connected to Umbra Studio Cloud"}</p>
     </div>
   </main>
 );
@@ -3410,7 +3398,7 @@ return <main className="dashboard-shell admin-center-page"><StudioTopNav /><sect
 {adminTab==="sessions"&&<section className="admin-panel"><span className="card-label">LOGIN & PRESENCE HISTORY</span><h2>Collaborator Sessions</h2><p className="admin-help">Every authorized Studio login is timestamped. Last seen updates while Studio remains open.</p><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Collaborator</th><th>Role</th><th>Signed In</th><th>Last Seen</th><th>Signed Out</th></tr></thead><tbody>{collaboratorSessions.map(x=><tr key={x.id}><td><strong>{x.display_name||adminMembers.find(m=>m.user_id===x.user_id)?.display_name||x.email||"Studio Member"}</strong></td><td>{x.role||"member"}</td><td>{new Date(x.signed_in_at).toLocaleString()}</td><td>{new Date(x.last_seen_at).toLocaleString()}</td><td>{x.signed_out_at?new Date(x.signed_out_at).toLocaleString():<span className="presence-live">● Active / no logout recorded</span>}</td></tr>)}</tbody></table></div></section>}
 {adminTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Recent Revisions</h2><p className="admin-help">A snapshot is captured before tracked records are changed or deleted, giving you a history independent of the live record.</p><div className="admin-feed">{adminRevisions.map(x=><details className="revision-row" key={x.id}><summary><strong>{x.entity_label||x.entity_type}</strong><span>{adminMembers.find(m=>m.user_id===x.changed_by)?.display_name||x.changed_by_email||"system"} • {new Date(x.created_at).toLocaleString()}</span></summary><pre>{JSON.stringify(x.snapshot,null,2)}</pre></details>)}</div></section>}
 {adminTab==="notes"&&<section className="admin-panel"><span className="card-label">PRIVATE PRODUCTION NOTES</span><h2>Admin Notes</h2><div className="admin-note-form"><select value={adminNoteEntityType} onChange={e=>setAdminNoteEntityType(e.target.value)}><option value="general">General Studio</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><input value={adminNoteEntityId} onChange={e=>setAdminNoteEntityId(e.target.value)} placeholder="Record ID or studio"/><textarea value={adminNoteText} onChange={e=>setAdminNoteText(e.target.value)} placeholder="Private note for the admin team..."/><button className="primary-action" onClick={()=>void addAdminNote()}>Add Private Note</button></div><div className="admin-feed">{adminNotes.map(n=><div className="admin-note-card" key={n.id}><div><span>{n.entity_type} • {n.entity_id}</span><small>{n.created_by_email||"admin"} • {new Date(n.updated_at).toLocaleString()}</small></div><p>{n.note}</p><button onClick={()=>void deleteAdminNote(n.id)}>Delete</button></div>)}</div></section>}
-{adminTab==="team"&&<section className="admin-panel"><span className="card-label">ACCESS & ROLES</span><h2>Studio Team</h2>{adminRole==="primary_admin"&&<div className="admin-add-member"><input type="email" value={adminMemberEmail} onChange={e=>setAdminMemberEmail(e.target.value)} placeholder="Existing Umbra Studio account email"/><select value={adminMemberRole} onChange={e=>setAdminMemberRole(e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button className="primary-action" onClick={()=>void addStudioAdmin()}>Add Collaborator</button></div>}<div className="admin-team-grid">{adminMembers.map(m=><article className="admin-member-card" key={m.user_id}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><span>{m.email}</span></div><span className="admin-role-pill">{m.role}</span><small>Last login: {m.last_login_at?new Date(m.last_login_at).toLocaleString():"Never recorded"}</small>{adminRole==="primary_admin"&&<div className="admin-member-actions"><button onClick={()=>{const n=prompt("Studio display name",m.display_name||"");if(n)void setMemberDisplayName(m.user_id,n)}}>Rename</button><select value={m.role} disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onChange={e=>void changeAdminRole(m.user_id,e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onClick={()=>void removeStudioAdmin(m.user_id)}>Remove</button></div>}</article>)}</div></section>}</section></main>;
+{adminTab==="team"&&<section className="admin-panel"><span className="card-label">ACCESS & ROLES</span><h2>Studio Team</h2>{adminRole==="primary_admin"&&<div className="admin-add-member"><input type="email" value={adminMemberEmail} onChange={e=>setAdminMemberEmail(e.target.value)} placeholder="Existing Umbra Studio account email"/><select value={adminMemberRole} onChange={e=>setAdminMemberRole(e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button className="primary-action" onClick={()=>void addStudioAdmin()}>Add Collaborator</button></div>}<div className="admin-team-grid">{adminMembers.map(m=><article className="admin-member-card" key={m.user_id}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><span>{m.email}</span></div><span className="admin-role-pill">{m.role}</span><small>Last login: {m.last_login_at?new Date(m.last_login_at).toLocaleString():"Never recorded"}</small>{adminRole==="primary_admin"&&<div className="admin-member-actions"><button onClick={()=>{const n=prompt("Studio display name",m.display_name||"");if(n)void setMemberDisplayName(m.user_id,n)}}>Rename</button><button onClick={()=>void generateMemberSetupCode(m.user_id)}>Generate Setup Code</button><select value={m.role} disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onChange={e=>void changeAdminRole(m.user_id,e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onClick={()=>void removeStudioAdmin(m.user_id)}>Remove</button></div>}{memberSetupCodes[m.user_id]&&<div className="admin-help"><strong>One-time setup code: {memberSetupCodes[m.user_id].code}</strong><br/><small>Expires {new Date(memberSetupCodes[m.user_id].expiresAt).toLocaleString()}. Share this code privately with this member.</small></div>}</article>)}</div></section>}</section></main>;
 }
 
 return ( <main className="dashboard-shell"> <StudioTopNav />
