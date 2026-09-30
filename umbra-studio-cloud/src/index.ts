@@ -992,7 +992,7 @@ export default {
 				requireRole(user,["primary_admin","admin","editor"]);const b=await readJsonBody(request),id=crypto.randomUUID(),now=new Date().toISOString();
 				await env.umbra_studio_production.prepare(`INSERT INTO studio_review_comments(id,entity_type,entity_id,body,status,created_by,created_at) VALUES(?,?,?,?,?,?,?)`)
 				.bind(id,String(b.entity_type),String(b.entity_id),String(b.body??""),"open",user.id,now).run();
-				if(b.notify_user_id){const nid=crypto.randomUUID();await env.umbra_studio_production.prepare(`INSERT INTO studio_notifications(id,recipient_user_id,title,body,entity_type,entity_id,is_read,created_at) VALUES(?,?,?,?,?,?,0,?)`).bind(nid,String(b.notify_user_id),"New review comment",String(b.body??""),String(b.entity_type),String(b.entity_id),now).run();}
+				if(b.notify_user_id){const nid=crypto.randomUUID();await env.umbra_studio_production.prepare(`INSERT INTO studio_notifications(id,recipient_user_id,title,message,entity_type,entity_id,is_read,created_at) VALUES(?,?,?,?,?,?,0,?)`).bind(nid,String(b.notify_user_id),"New review comment",String(b.body??""),String(b.entity_type),String(b.entity_id),now).run();}
 				return json({ok:true,id},201);
 			}
 			const reviewMatch=url.pathname.match(/^\/api\/production\/reviews\/([^/]+)$/);
