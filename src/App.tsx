@@ -351,6 +351,7 @@ const [importText,setImportText]=useState("");
 const [importPreview,setImportPreview]=useState<any[]>([]);
 const [importError,setImportError]=useState("");
 const [characterImportPreview,setCharacterImportPreview]=useState<any|null>(null);
+const [smartImportChunks,setSmartImportChunks]=useState<any[]>([]);
 
 const [recordMediaId,setRecordMediaId]=useState("");
 const [recordReferences,setRecordReferences]=useState<RecordReference[]>([]);
@@ -721,14 +722,2298 @@ function parseLabelledCharacterText(raw:string){
  for(const key of Object.keys(out))if(typeof out[key]==="string")out[key]=out[key].replace(/\n{3,}/g,"\n\n").trim();
  return out;
 }
+type SmartImportKind =
+ | "character"
+ | "cosmology"
+ | "power_magic"
+ | "realm"
+ | "location"
+ | "people_species"
+ | "religion_tradition"
+ | "history_event"
+ | "organization_faction"
+ | "artifact"
+ | "story_chronology"
+ | "general_lore";
+
+const smartImportReviewStyles={
+ card:{
+  border:"1px solid rgba(167,125,255,.24)",
+  borderRadius:14,
+  padding:"16px 18px",
+  background:"linear-gradient(145deg,rgba(22,10,30,.96),rgba(12,7,18,.97))",
+  display:"grid",
+  gap:13,
+  boxShadow:"0 8px 24px rgba(0,0,0,.18)",
+  overflow:"hidden"
+ },
+ header:{
+  display:"flex",
+  justifyContent:"space-between",
+  alignItems:"flex-start",
+  gap:14,
+  flexWrap:"wrap" as const
+ },
+ headerLeft:{
+  display:"flex",
+  alignItems:"flex-start",
+  gap:12,
+  minWidth:0,
+  flex:"1 1 300px"
+ },
+ number:{
+  color:"#aa8abb",
+  fontSize:12,
+  fontWeight:700,
+  whiteSpace:"nowrap" as const,
+  paddingTop:3
+ },
+ eyebrow:{
+  color:"#a98bbb",
+  fontSize:10,
+  letterSpacing:".08em",
+  textTransform:"uppercase" as const,
+  fontWeight:700
+ },
+ title:{
+  color:"#f2cb69",
+  fontSize:18,
+  lineHeight:1.25,
+  fontWeight:700,
+  margin:0,
+  overflowWrap:"anywhere" as const
+ },
+ badge:{
+  display:"inline-flex",
+  alignItems:"center",
+  width:"fit-content",
+  maxWidth:"100%",
+  border:"1px solid rgba(205,157,255,.32)",
+  background:"rgba(119,69,151,.14)",
+  borderRadius:999,
+  padding:"5px 9px",
+  color:"#d8b8e8",
+  fontSize:11,
+  fontWeight:700,
+  lineHeight:1.2,
+  whiteSpace:"nowrap" as const
+ },
+ sectionLabel:{
+  color:"#987aa9",
+  fontSize:10,
+  fontWeight:800,
+  letterSpacing:".1em",
+  textTransform:"uppercase" as const,
+  marginBottom:-4
+ },
+ infoGrid:{
+  display:"grid",
+  gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",
+  gap:9
+ },
+ infoBox:{
+  border:"1px solid rgba(167,125,255,.15)",
+  borderRadius:9,
+  padding:"9px 11px",
+  background:"rgba(255,255,255,.022)",
+  minWidth:0,
+  overflow:"hidden"
+ },
+ label:{
+  display:"block",
+  color:"#987aa9",
+  fontSize:10,
+  fontWeight:800,
+  letterSpacing:".07em",
+  textTransform:"uppercase" as const,
+  marginBottom:4,
+  whiteSpace:"nowrap" as const,
+  overflow:"hidden",
+  textOverflow:"ellipsis"
+ },
+ value:{
+  color:"#e6d8ec",
+  fontSize:13,
+  lineHeight:1.35,
+  overflowWrap:"anywhere" as const
+ },
+ conflict:{
+  border:"1px solid rgba(232,178,82,.34)",
+  borderRadius:9,
+  padding:"10px 12px",
+  background:"rgba(116,72,21,.11)",
+  color:"#e7c58c",
+  fontSize:13,
+  lineHeight:1.4
+ },
+ conflictTitle:{
+  color:"#f1cf86",
+  fontSize:11,
+  fontWeight:800,
+  letterSpacing:".07em",
+  marginBottom:4
+ },
+ controls:{
+  display:"flex",
+  flexWrap:"wrap" as const,
+  alignItems:"flex-end",
+  gap:10
+ },
+ field:{
+  display:"grid",
+  gap:5,
+  flex:"0 1 auto"
+ },
+ select:{
+  width:"100%",
+  maxWidth:"100%",
+  minWidth:0,
+  height:36,
+  padding:"6px 30px 6px 10px",
+  borderRadius:7,
+  border:"1px solid rgba(178,132,204,.38)",
+  background:"#160d1c",
+  color:"#f2e8f5",
+  fontSize:13,
+  outline:"none",
+  colorScheme:"dark" as const
+ },
+ smallSelect:{
+  width:"100%",
+  maxWidth:"100%",
+  minWidth:0,
+  height:36,
+  padding:"6px 28px 6px 10px",
+  borderRadius:7,
+  border:"1px solid rgba(178,132,204,.38)",
+  background:"#160d1c",
+  color:"#f2e8f5",
+  fontSize:13,
+  outline:"none",
+  colorScheme:"dark" as const
+ },
+ resolutionSelect:{
+  width:"100%",
+  maxWidth:"100%",
+  minWidth:0,
+  height:36,
+  padding:"6px 30px 6px 10px",
+  borderRadius:7,
+  border:"1px solid rgba(178,132,204,.38)",
+  background:"#160d1c",
+  color:"#f2e8f5",
+  fontSize:13,
+  outline:"none",
+  colorScheme:"dark" as const
+ },
+ success:{
+  border:"1px solid rgba(111,207,151,.28)",
+  background:"rgba(54,128,84,.09)",
+  borderRadius:8,
+  padding:"9px 11px",
+  color:"#bce5c9",
+  fontSize:12,
+  lineHeight:1.4
+ },
+ includeRow:{
+  display:"flex",
+  alignItems:"center",
+  gap:8,
+  minHeight:28,
+  color:"#eadff0",
+  fontSize:13
+ },
+ source:{
+  borderTop:"1px solid rgba(167,125,255,.13)",
+  paddingTop:10
+ },
+ sourceText:{
+  margin:"5px 0 0",
+  color:"#cdb8d4",
+  fontSize:13,
+  lineHeight:1.5,
+  whiteSpace:"pre-wrap" as const,
+  overflowWrap:"anywhere" as const
+ },
+ routingRow:{
+  display:"grid",
+  gridTemplateColumns:"repeat(2,minmax(0,1fr))",
+  gap:10,
+  width:"100%"
+ },
+ overrideRow:{
+  display:"flex",
+  flexWrap:"wrap" as const,
+  gap:12,
+  alignItems:"flex-end",
+  width:"100%"
+ },
+ overrideField:{
+  display:"grid",
+  gridTemplateRows:"auto 36px",
+  gap:5,
+  width:"220px",
+  maxWidth:"100%",
+  flex:"0 0 auto"
+ },
+ codexField:{
+  display:"grid",
+  gridTemplateRows:"auto 36px",
+  gap:5,
+  width:"155px",
+  maxWidth:"100%",
+  flex:"0 0 auto"
+ },
+ resolutionField:{
+  display:"grid",
+  gridTemplateRows:"auto 36px",
+  gap:5,
+  width:"210px",
+  maxWidth:"100%",
+  flex:"0 0 auto"
+ },
+ fullRow:{
+  width:"100%",
+  minWidth:0,
+  clear:"both" as const
+ },
+ includeWrap:{
+  display:"flex",
+  alignItems:"center",
+  gap:9,
+  width:"fit-content",
+  maxWidth:"100%",
+  minHeight:30,
+  whiteSpace:"nowrap" as const
+ },
+ sourceWrap:{
+  width:"100%",
+  minWidth:0,
+  borderTop:"1px solid rgba(167,125,255,.13)",
+  paddingTop:11,
+  marginTop:1
+ }, container:{
+  border:"1px dashed rgba(167,125,255,.22)",
+  borderRadius:11,
+  padding:"11px 14px",
+  background:"rgba(115,73,137,.055)",
+  display:"grid",
+  gap:5
+ }
+};
+function smartImportKindLabel(kind:SmartImportKind){
+ const labels:Record<SmartImportKind,string>={
+  character:"Character",
+  cosmology:"Cosmology / Foundation",
+  power_magic:"Power / Magic",
+  realm:"World / Realm / Civilization",
+  location:"Location / Place",
+  people_species:"People / Species",
+  religion_tradition:"Religion / Learned Tradition",
+  history_event:"History / Historical Event",
+  organization_faction:"Organization / Faction",
+  artifact:"Artifact / Item",
+  story_chronology:"Main-Story Chronology",
+  general_lore:"General Lore"
+ };
+ return labels[kind];
+}
+
+function splitSmartImportChunks(raw:string){
+ const clean=String(raw??"").replace(/\r/g,"").trim();
+ if(!clean)return [];
+
+ const lines=clean.split("\n");
+ const chunks:Array<{heading:string;content:string}>=[];
+ let heading="";
+ let body:string[]=[];
+
+ const flush=()=>{
+  const content=body.join("\n").trim();
+
+  if(content||heading){
+   chunks.push({
+    heading:heading.trim(),
+    content
+   });
+  }
+
+  body=[];
+ };
+
+ for(const original of lines){
+  const trimmed=original.trim();
+
+  const markdown=trimmed.match(/^#{1,6}\s+(.+)$/);
+  const bold=trimmed.match(/^\*\*([^*]{2,120})\*\*\s*:?\s*$/);
+  const numbered=trimmed.match(/^\d+\.\s+\*{0,2}(.+?)\*{0,2}\s*$/);
+
+  const foundationHeading=
+   trimmed.length>0 &&
+   trimmed.length<=120 &&
+   !/[.!?]$/.test(trimmed) &&
+   /^(cosmology|creation|chronoessence|soul reflection|spiritual ecology|umbra|lumina|light|darkness|shadow|four primordials|aethelgard|major realm|realm|civilization|people|species|religion|learned magical|magic|ancient|history|historical|organization|faction|artifact|character|main.story|story chronology)\b/i.test(
+    trimmed.replace(/^[-*•\d.\s]+/,"")
+   );
+
+  const detected=
+   markdown?.[1]||
+   bold?.[1]||
+   numbered?.[1]||
+   (foundationHeading?trimmed:"");
+
+  if(detected){
+   if(body.length||heading)flush();
+
+   heading=detected
+    .replace(/^[-*•\d.\s]+/,"")
+    .replace(/\*+/g,"")
+    .replace(/:$/,"")
+    .trim();
+  }else{
+   body.push(original);
+  }
+ }
+
+ flush();
+
+ if(chunks.length<=1){
+  const paragraphs=clean
+   .split(/\n{2,}/)
+   .map(x=>x.trim())
+   .filter(Boolean);
+
+  if(paragraphs.length>1){
+   return paragraphs.map((content,index)=>({
+    heading:index===0
+     ?"Imported Foundation / Lore"
+     :`Imported Section ${index+1}`,
+    content
+   }));
+  }
+ }
+
+ return chunks.length
+  ?chunks
+  :[{heading:"Imported Material",content:clean}];
+}
+
+function classifySmartImportChunk(heading:string,content:string){
+ const source=`${heading}\n${content}`.toLowerCase();
+
+ const scores:Record<SmartImportKind,number>={
+  character:0,
+  cosmology:0,
+  power_magic:0,
+  realm:0,
+  location:0,
+  people_species:0,
+  religion_tradition:0,
+  history_event:0,
+  organization_faction:0,
+  artifact:0,
+  story_chronology:0,
+  general_lore:0
+ };
+
+ const add=(
+  kind:SmartImportKind,
+  points:number,
+  ...patterns:RegExp[]
+ )=>{
+  for(const pattern of patterns){
+   if(pattern.test(source))scores[kind]+=points;
+  }
+ };
+
+ add("cosmology",5,
+  /\bcosmology\b/,
+  /\bcreation\b/,
+  /\bseventh world\b/,
+  /\bchronoessence\b/,
+  /\bsoul reflection\b/,
+  /\bspiritual ecology\b/,
+  /\bumbra\b.*\bconscious/,
+  /\blumina\b.*\bconscious/,
+  /\blight\b.*\bdarkness\b.*\bshadow\b/,
+  /\bfour primordials\b/
+ );
+
+ add("character",4,
+  /\bcharacter\b/,
+  /\bpersonality\b/,
+  /\bbackstory\b/,
+  /\bappearance\b/,
+  /\bparents?\b/,
+  /\bsiblings?\b/,
+  /\bchildren\b/,
+  /\bpronouns?\b/,
+  /\boccupation\b/,
+  /\bcurrent story role\b/
+ );
+
+ add("power_magic",4,
+  /\bpowers?\b/,
+  /\bmagic\b/,
+  /\babilities?\b/,
+  /\bspells?\b/,
+  /\btechniques?\b/,
+  /\btransformations?\b/,
+  /\bmagic system\b/,
+  /\bpower source\b/
+ );
+
+ add("realm",4,
+  /\brealms?\b/,
+  /\bkingdom\b/,
+  /\bempire\b/,
+  /\bcivilizations?\b/,
+  /\bcontinent\b/,
+  /\bnation\b/,
+  /\bterritor(y|ies)\b/,
+  /\baethelgard\b/
+ );
+
+ add("location",4,
+  /\blocations?\b/,
+  /\bcity\b/,
+  /\bvillage\b/,
+  /\bisland\b/,
+  /\bocean\b/,
+  /\bsea\b/,
+  /\bmountains?\b/,
+  /\bcaverns?\b/,
+  /\bforest\b/,
+  /\bvalley\b/,
+  /\blandmark\b/
+ );
+
+ add("people_species",5,
+  /\bpeoples?\b/,
+  /\bspecies\b/,
+  /\braces?\b/,
+  /\bethnic/,
+  /\btribe\b/
+ );
+
+ add("religion_tradition",5,
+  /\breligions?\b/,
+  /\bfaith\b/,
+  /\bworship\b/,
+  /\bdeit(y|ies)\b/,
+  /\btraditions?\b/,
+  /\blearned magical tradition/
+ );
+
+ add("history_event",5,
+  /\bhistory\b/,
+  /\bhistorical event/,
+  /\bancient\b/,
+  /\bwar\b/,
+  /\bcataclysm\b/,
+  /\bfounding\b/,
+  /\bfall of\b/,
+  /\brise of\b/,
+  /\bmansa\b/
+ );
+
+ add("organization_faction",5,
+  /\borganizations?\b/,
+  /\bfactions?\b/,
+  /\bclans?\b/,
+  /\bhouses?\b/,
+  /\bguild\b/,
+  /\border\b/
+ );
+
+ add("artifact",6,
+  /\bartifacts?\b/,
+  /\brelics?\b/,
+  /\bweapons?\b/,
+  /\blamp\b/,
+  /\bstaff\b/,
+  /\bsword\b/
+ );
+
+ add("story_chronology",6,
+  /\bmain[- ]story chronology\b/,
+  /\bstory chronology\b/,
+  /\bmain story\b/,
+  /\bepisode\b/,
+  /\bseason\b/,
+  /\bstory arc\b/,
+  /\bchapter\b/
+ );
+
+ const ranked=(Object.entries(scores) as Array<[SmartImportKind,number]>)
+  .filter(([kind])=>kind!=="general_lore")
+  .sort((a,b)=>b[1]-a[1]);
+
+ const top=ranked[0]?.[1]??0;
+ const second=ranked[1]?.[1]??0;
+
+ const kind:SmartImportKind=
+  top>0
+   ?ranked[0][0]
+   :"general_lore";
+
+ const confidence:"high"|"medium"|"low"=
+  top>=8&&top>=second+3
+   ?"high"
+   :top>=4&&top>=second+1
+    ?"medium"
+    :"low";
+
+ const normalizedHeading=heading
+  .replace(/^[\d.\s*-]+/,"")
+  .trim();
+
+ const candidates=[
+  ...studioCharacters.map(x=>({
+   id:x.id,
+   name:x.name,
+   area:"Character"
+  })),
+  ...worldRecords.map(x=>({
+   id:x.id,
+   name:x.name,
+   area:`Codex • ${x.record_type}`
+  })),
+  ...worldLocations
+   .filter(x=>!x.archived_at)
+   .map(x=>({
+    id:x.id,
+    name:x.name,
+    area:"Location"
+   })),
+  ...databaseRecords
+   .filter(x=>!x.archived_at)
+   .map(x=>({
+    id:x.id,
+    name:x.name,
+    area:"World Database"
+   })),
+  ...timelineEvents.map(x=>({
+   id:x.id,
+   name:x.title,
+   area:"Timeline"
+  }))
+ ];
+
+ const existing=candidates.find(
+  x=>
+   normalizeImportName(x.name)===
+   normalizeImportName(normalizedHeading)
+ );
+
+ return {
+  kind,
+  confidence,
+  score:top,
+  existing:existing||null
+ };
+}
+
+function isSmartImportContainerHeading(
+ heading:string,
+ _content:string
+){
+ const normalized=heading
+  .toLowerCase()
+  .replace(/[—–-]/g," ")
+  .replace(/[\/&]+/g," ")
+  .replace(/\s+/g," ")
+  .trim();
+
+ // These are organizational/category headings, not entities.
+ // Their body text is retained in the raw import source but the
+ // heading itself must never become a database record.
+ const containerHeadings=new Set([
+  "characters",
+  "people species",
+  "peoples species",
+  "religions and learned magical traditions",
+  "major historical events",
+  "organizations factions",
+  "organization factions",
+  "artifacts",
+  "major realms civilizations",
+  "major realms and civilizations",
+  "realms civilizations",
+  "main story chronology"
+ ]);
+
+ return containerHeadings.has(normalized);
+}
+function smartImportDestination(kind:SmartImportKind){
+ const destinations:Record<SmartImportKind,string>={
+  character:"Characters",
+  cosmology:"World Database • Cosmology / Foundation",
+  power_magic:"World Database • Powers / Magic",
+  realm:"Codex / Locations • Realm or Civilization",
+  location:"Locations",
+  people_species:"Codex • People / Species",
+  religion_tradition:"Codex / World Database • Religion / Tradition",
+  history_event:"Timeline / World Database • History",
+  organization_faction:"Codex • Organization / Faction",
+  artifact:"World Database • Artifact / Item",
+  story_chronology:"Timeline / Production • Story Chronology",
+  general_lore:"World Database • General Lore"
+ };
+
+ return destinations[kind];
+}
+
+function smartImportExpectedAreas(kind:SmartImportKind){
+ const areas:Record<SmartImportKind,string[]>={
+  character:["Character"],
+  cosmology:["World Database"],
+  power_magic:["World Database"],
+  realm:["Location","Codex"],
+  location:["Location"],
+  people_species:["Codex"],
+  religion_tradition:["Codex","World Database"],
+  history_event:["Timeline","World Database"],
+  organization_faction:["Codex"],
+  artifact:["World Database"],
+  story_chronology:["Timeline","World Database"],
+  general_lore:["World Database"]
+ };
+
+ return areas[kind];
+}
+
+function smartImportHasTypeConflict(
+ kind:SmartImportKind,
+ existing:any
+){
+ if(!existing)return false;
+
+ const area=String(existing.area||"").toLowerCase();
+
+ // First validate the broad Studio area.
+ const expected=smartImportExpectedAreas(kind);
+ const broadMatch=expected.some(expectedArea=>
+  area.startsWith(expectedArea.toLowerCase())
+ );
+
+ if(!broadMatch)return true;
+
+ // Then validate important Codex subtypes.
+ if(kind==="people_species" && area.startsWith("codex")){
+  const validPeopleTypes=[
+   "race",
+   "culture",
+   "people",
+   "species"
+  ];
+
+  return !validPeopleTypes.some(type=>
+   area.includes(type)
+  );
+ }
+
+ if(kind==="organization_faction" && area.startsWith("codex")){
+  const validOrganizationTypes=[
+   "faction",
+   "clan",
+   "house",
+   "organization",
+   "family",
+   "bloodline"
+  ];
+
+  return !validOrganizationTypes.some(type=>
+   area.includes(type)
+  );
+ }
+
+ if(kind==="religion_tradition" && area.startsWith("codex")){
+  return !area.includes("religion");
+ }
+
+ return false;
+}
+const smartImportKindOptions:Array<{
+ value:SmartImportKind;
+ label:string;
+}>=[
+ {value:"character",label:"Character"},
+ {value:"cosmology",label:"Cosmology / Foundation"},
+ {value:"power_magic",label:"Power / Magic"},
+ {value:"realm",label:"World / Realm / Civilization"},
+ {value:"location",label:"Location"},
+ {value:"people_species",label:"People / Species"},
+ {value:"religion_tradition",label:"Religion / Learned Tradition"},
+ {value:"history_event",label:"History / Historical Event"},
+ {value:"organization_faction",label:"Organization / Faction"},
+ {value:"artifact",label:"Artifact / Item"},
+ {value:"story_chronology",label:"Main-Story Chronology"},
+ {value:"general_lore",label:"General Lore"}
+];
+
+const smartImportCodexTypes=[
+ "realm",
+ "race",
+ "faction",
+ "clan",
+ "house",
+ "family",
+ "bloodline",
+ "culture",
+ "organization",
+ "religion"
+] as const;
+
+function smartImportCodexTypeForKind(
+ kind:SmartImportKind
+):string{
+ if(kind==="people_species")return "race";
+ if(kind==="organization_faction")return "organization";
+ if(kind==="religion_tradition")return "religion";
+ if(kind==="realm")return "realm";
+ return "";
+}
+
+function smartImportExistingCodexType(existing:any){
+ const area=String(existing?.area||"");
+ const match=area.match(/^Codex\s*•\s*(.+)$/i);
+ return match?match[1].trim().toLowerCase():"";
+}
+
+function smartImportTypeChangeLabel(chunk:any){
+ if(!chunk.existing)return "";
+
+ const current=smartImportExistingCodexType(chunk.existing);
+ const next=String(chunk.codexType||"").toLowerCase();
+
+ if(!current||!next||current===next)return "";
+
+ return `${current} → ${next}`;
+}
+
+function updateSmartImportChunk(
+ id:string,
+ patch:Record<string,any>
+){
+ setSmartImportChunks(current=>
+  current.map(chunk=>{
+   if(chunk.id!==id)return chunk;
+
+   const next={...chunk,...patch};
+
+   if(patch.kind){
+    next.label=smartImportKindLabel(patch.kind);
+    next.destination=smartImportDestination(patch.kind);
+
+    const defaultCodexType=
+     smartImportCodexTypeForKind(patch.kind);
+
+    next.codexType=defaultCodexType;
+
+    next.typeConflict=smartImportHasTypeConflict(
+     patch.kind,
+     next.existing
+    );
+   }
+
+   return next;
+  })
+ );
+}
+function analyzeSmartImportDocument(raw:string){
+ return splitSmartImportChunks(raw).map((chunk,index)=>{
+  const result=classifySmartImportChunk(
+   chunk.heading,
+   chunk.content
+  );
+
+  const isContainer=isSmartImportContainerHeading(
+   chunk.heading,
+   chunk.content
+  );
+
+  const typeConflict=
+   !isContainer &&
+   smartImportHasTypeConflict(
+    result.kind,
+    result.existing
+   );
+
+  return {
+   id:`smart-${index+1}`,
+   row:index+1,
+   heading:chunk.heading||`Imported Section ${index+1}`,
+   content:chunk.content,
+   kind:result.kind,
+   label:isContainer
+    ?"Section Heading"
+    :smartImportKindLabel(result.kind),
+   confidence:isContainer
+    ?"high"
+    :result.confidence,
+   score:result.score,
+   existing:result.existing,
+   destination:isContainer
+    ?"Do not save"
+    :smartImportDestination(result.kind),
+   isContainer,
+   typeConflict,
+   codexType:isContainer
+    ?""
+    :smartImportCodexTypeForKind(result.kind),
+   resolution:typeConflict
+    ?"imported"
+    :"auto",
+   routeStatus:"",
+   routeMessage:"",
+   selected:!isContainer
+  };
+ });
+}
 async function loadImportFile(file:File){
  setImportError("");
  const ext=file.name.split(".").pop()?.toLowerCase();
  if(!["txt","md","json","csv"].includes(ext||"")){setImportError("Choose a TXT, Markdown, JSON, or CSV file.");return;}
- try{const text=await file.text();setImportText(text);setCharacterImportPreview(null);setImportPreview([]);}
+ try{const text=await file.text();setImportText(text);setCharacterImportPreview(null);setImportPreview([]);setSmartImportChunks([]);}
  catch{setImportError("That file could not be read.");}
 }
-function previewImport(){setImportError("");setCharacterImportPreview(null);try{let parsed:any;try{parsed=JSON.parse(importText);}catch{parsed=parseLabelledCharacterText(importText);if(!parsed.name)throw new Error("Add a character name and labeled profile information, or choose a supported profile file.");}
+function toggleSmartImportChunk(
+ id:string,
+ selected:boolean
+){
+ setSmartImportChunks(current=>
+  current.map(chunk=>
+   chunk.id===id
+    ?{...chunk,selected}
+    :chunk
+  )
+ );
+}
+function smartImportIsCodexKind(kind:SmartImportKind){
+ return [
+  "people_species",
+  "organization_faction",
+  "religion_tradition",
+  "realm"
+ ].includes(kind);
+}
+
+function smartImportLocationType(
+ heading:string,
+ content:string
+){
+ const text=`${heading} ${content}`.toLowerCase();
+
+ const tests:Array<[string,string[]]>=[
+  ["continent",["continent"]],
+  ["region",["region","province"]],
+  ["city",["city","capital"]],
+  ["village",["village","settlement"]],
+  ["island",["island","isle"]],
+  ["ocean",["ocean","sea"]],
+  ["mountain",["mountain","peak","mountains"]],
+  ["forest",["forest","woods","woodland"]],
+  ["desert",["desert","dunes"]],
+  ["river",["river"]],
+  ["lake",["lake"]],
+  ["cave",["cave","cavern","caverns"]],
+  ["ruin",["ruin","ruins"]],
+  ["sanctuary",["sanctuary"]],
+  ["temple",["temple","shrine"]],
+  ["academy",["academy","school"]],
+  ["fortress",["fortress","citadel","stronghold","castle"]],
+  ["port",["port","harbor","harbour"]],
+  ["realm",["realm","kingdom","empire"]],
+  ["landmark",["landmark"]]
+ ];
+
+ for(const [type,words] of tests){
+  if(words.some(word=>text.includes(word)))return type;
+ }
+
+ return "other";
+}
+function smartImportDatabaseTypeForKind(
+ kind:SmartImportKind
+){
+ const aliases:Record<string,string[]>={
+  cosmology:[
+   "cosmology",
+   "foundation",
+   "world foundation",
+   "worldbuilding",
+   "lore"
+  ],
+  power_magic:[
+   "power",
+   "powers",
+   "magic",
+   "magic system",
+   "ability",
+   "abilities",
+   "lore"
+  ],
+  artifact:[
+   "artifact",
+   "artifacts",
+   "item",
+   "items",
+   "relic",
+   "relics",
+   "lore"
+  ],
+  religion_tradition:[
+   "tradition",
+   "traditions",
+   "magic",
+   "magic system",
+   "lore"
+  ],
+  general_lore:[
+   "lore",
+   "world lore",
+   "foundation",
+   "worldbuilding"
+  ]
+ };
+
+ const wanted=aliases[kind]||[];
+
+ function normalized(value:any){
+  return String(value||"")
+   .toLowerCase()
+   .replace(/[_-]+/g," ")
+   .replace(/\s+/g," ")
+   .trim();
+ }
+
+ /*
+  * Prefer exact slug/name matches first.
+  */
+ for(const alias of wanted){
+  const exact=recordTypes.find(type=>
+   normalized(type.slug)===normalized(alias)||
+   normalized(type.name)===normalized(alias)
+  );
+
+  if(exact)return exact;
+ }
+
+ /*
+  * Then allow a descriptive partial match.
+  */
+ for(const alias of wanted){
+  const partial=recordTypes.find(type=>{
+   const slug=normalized(type.slug);
+   const name=normalized(type.name);
+   const needle=normalized(alias);
+
+   return (
+    slug.includes(needle)||
+    name.includes(needle)||
+    needle.includes(slug)||
+    needle.includes(name)
+   );
+  });
+
+  if(partial)return partial;
+ }
+
+ return null;
+}
+
+function smartImportIsLearnedTradition(
+ heading:string,
+ content:string
+){
+ const text=`${heading} ${content}`.toLowerCase();
+
+ return [
+  "learned magic",
+  "learned magical",
+  "magical tradition",
+  "magic tradition",
+  "school of magic",
+  "discipline",
+  "spellcraft",
+  "sorcery tradition"
+ ].some(term=>text.includes(term));
+}
+
+function smartImportStoryProductionType(
+ heading:string,
+ content:string
+){
+ const headingText=String(heading||"").toLowerCase();
+ const text=`${heading} ${content}`.toLowerCase();
+
+ if(
+  /\bscene\b/.test(headingText)||
+  /\bscene\s+\d+\b/.test(text)
+ )return "scene";
+
+ if(
+  /\bchapter\b/.test(headingText)||
+  /\bepisode\b/.test(headingText)
+ )return "scene";
+
+ if(
+  /\bbeat\b/.test(headingText)||
+  /\bstory beat\b/.test(text)||
+  /\bplot beat\b/.test(text)
+ )return "beat";
+
+ if(
+  /\barc\b/.test(headingText)||
+  /\bstory arc\b/.test(text)
+ )return "arc";
+
+ if(
+  /\bproject\b/.test(headingText)||
+  /\bseries\b/.test(headingText)||
+  /\bseason\b/.test(headingText)
+ )return "project";
+
+ return "";
+}
+
+function smartImportDatabaseSubtitle(
+ kind:SmartImportKind
+){
+ const subtitles:Partial<Record<SmartImportKind,string>>={
+  cosmology:"Cosmology / Foundation",
+  power_magic:"Power / Magic",
+  artifact:"Artifact / Item",
+  religion_tradition:"Learned Magical Tradition",
+  general_lore:"General Lore"
+ };
+
+ return subtitles[kind]||"Imported Lore";
+}
+async function routeSmartImportSections(){
+ setImportError("");
+
+ const selected=smartImportChunks.filter(
+  chunk=>chunk.selected&&!chunk.isContainer
+ );
+
+ if(!selected.length){
+  setImportError("Select at least one Smart Ingest section to route.");
+  return;
+ }
+
+ let created=0;
+ let updated=0;
+ let kept=0;
+ let skipped=0;
+ let deferred=0;
+ let failed=0;
+
+ const nextChunks=[...smartImportChunks];
+
+ function setResult(
+  id:string,
+  routeStatus:string,
+  routeMessage:string,
+  patch:Record<string,any>={}
+ ){
+  const index=nextChunks.findIndex(chunk=>chunk.id===id);
+  if(index<0)return;
+
+  nextChunks[index]={
+   ...nextChunks[index],
+   ...patch,
+   routeStatus,
+   routeMessage
+  };
+ }
+
+ for(const chunk of smartImportChunks){
+  if(chunk.isContainer){
+   setResult(
+    chunk.id,
+    "section",
+    "Section heading — not saved."
+   );
+   continue;
+  }
+
+  if(!chunk.selected){
+   skipped++;
+   setResult(
+    chunk.id,
+    "skipped",
+    "Skipped — not selected for import."
+   );
+   continue;
+  }
+
+  if(chunk.resolution==="skip"){
+   skipped++;
+   setResult(
+    chunk.id,
+    "skipped",
+    "Skipped by import decision."
+   );
+   continue;
+  }
+
+  if(chunk.existing&&chunk.resolution==="existing"){
+   kept++;
+   setResult(
+    chunk.id,
+    "kept",
+    `Kept existing ${chunk.existing.area} record unchanged.`
+   );
+   continue;
+  }
+
+  const name=String(chunk.heading||"").trim();
+  const description=String(chunk.content||"").trim();
+
+  if(!name){
+   failed++;
+   setResult(
+    chunk.id,
+    "failed",
+    "This section has no record name."
+   );
+   continue;
+  }
+
+  /*
+   * PHASE 2B — PHYSICAL LOCATIONS
+   *
+   * Realms remain Codex during Phase 2.
+   * Only chunks explicitly classified as Location enter Explorer Locations.
+   */
+  if(chunk.kind==="location"){
+   try{
+    const normalizedName=normalizeImportName(name);
+
+    const matchedByClassifier=
+     chunk.existing&&
+     String(chunk.existing.area||"").toLowerCase().startsWith("location")
+      ?worldLocations.find(
+        location=>location.id===chunk.existing.id
+       )
+      :null;
+
+    const matchedByName=
+     matchedByClassifier||
+     worldLocations.find(
+      location=>
+       !location.archived_at&&
+       normalizeImportName(location.name)===normalizedName
+     );
+
+    if(matchedByName){
+     await umbraCloudFetch(
+      `/api/locations/${encodeURIComponent(matchedByName.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        name:matchedByName.name||name,
+        location_type:
+         matchedByName.location_type||
+         smartImportLocationType(name,description),
+        description:
+         description||
+         matchedByName.description||
+         null,
+        parent_location_id:
+         matchedByName.parent_location_id??null,
+        codex_record_id:
+         matchedByName.codex_record_id??null,
+        map_x:Number(matchedByName.map_x??50),
+        map_y:Number(matchedByName.map_y??50),
+        tags:Array.isArray(matchedByName.tags)
+         ?matchedByName.tags
+         :[],
+        updated_at:new Date().toISOString()
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      `Updated existing Location • ${matchedByName.location_type||"other"}.`,
+      {
+       existing:{
+        id:matchedByName.id,
+        area:"Location",
+        name:matchedByName.name||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }else{
+     const locationType=
+      smartImportLocationType(name,description);
+
+     const createdLocation:any=
+      await umbraCloudFetch(
+       "/api/locations",
+       {
+        method:"POST",
+        body:JSON.stringify({
+         name,
+         location_type:locationType,
+         description:description||null,
+         parent_location_id:null,
+         codex_record_id:null,
+         map_x:50,
+         map_y:50,
+         tags:[],
+         is_public:false
+        })
+       }
+      );
+
+     created++;
+
+     setResult(
+      chunk.id,
+      "created",
+      `Created Location • ${locationType}.`,
+      {
+       existing:{
+        id:
+         createdLocation?.location?.id||
+         createdLocation?.id||
+         "",
+        area:"Location",
+        name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "This Location could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * PHASE 2B — HISTORICAL EVENTS
+   *
+   * Story chronology remains deferred until Phase 2C.
+   * Only History / Historical Event routes directly to Timeline.
+   */
+  if(chunk.kind==="history_event"){
+   try{
+    const normalizedName=normalizeImportName(name);
+
+    const matchedByClassifier=
+     chunk.existing&&
+     String(chunk.existing.area||"").toLowerCase().startsWith("timeline")
+      ?timelineEvents.find(
+        event=>event.id===chunk.existing.id
+       )
+      :null;
+
+    const matchedByName=
+     matchedByClassifier||
+     timelineEvents.find(
+      event=>
+       !event.archived_at&&
+       normalizeImportName(event.title)===normalizedName
+     );
+
+    if(matchedByName){
+     await umbraCloudFetch(
+      `/api/timeline/${encodeURIComponent(matchedByName.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        title:matchedByName.title||name,
+        era:matchedByName.era??null,
+        display_date:
+         matchedByName.display_date??null,
+        sort_order:
+         Number(matchedByName.sort_order??0),
+        description:
+         description||
+         matchedByName.description||
+         null,
+        location_id:
+         matchedByName.location_id??null,
+        codex_record_id:
+         matchedByName.codex_record_id??null,
+        character_id:
+         matchedByName.character_id??null,
+        tags:Array.isArray(matchedByName.tags)
+         ?matchedByName.tags
+         :[],
+        updated_at:new Date().toISOString()
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      "Updated existing Timeline event.",
+      {
+       existing:{
+        id:matchedByName.id,
+        area:"Timeline",
+        name:matchedByName.title||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }else{
+     const createdEvent:any=
+      await umbraCloudFetch(
+       "/api/timeline",
+       {
+        method:"POST",
+        body:JSON.stringify({
+         title:name,
+         era:null,
+         display_date:null,
+         sort_order:0,
+         description:description||null,
+         location_id:null,
+         codex_record_id:null,
+         character_id:null,
+         tags:[],
+         is_public:false
+        })
+       }
+      );
+
+     created++;
+
+     setResult(
+      chunk.id,
+      "created",
+      "Created Timeline event.",
+      {
+       existing:{
+        id:
+         createdEvent?.event?.id||
+         createdEvent?.id||
+         "",
+        area:"Timeline",
+        name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "This Timeline event could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * PHASE 2C — CHARACTERS
+   *
+   * Characters intentionally do not use the old
+   * stageImportedConnectedDrafts() path.
+   *
+   * Smart Ingest keeps the source intact and places the character
+   * into review instead of creating junk Location / Timeline /
+   * Production placeholders.
+   */
+  if(chunk.kind==="character"){
+   const existingCharacter=
+    studioCharacters.find(character=>
+     normalizeImportName(character.name)===
+     normalizeImportName(name)
+    );
+
+   deferred++;
+
+   setResult(
+    chunk.id,
+    "deferred",
+    existingCharacter
+     ?`Character Review • "${existingCharacter.name}" already exists. Open this section in Character Creator to review imported changes before updating it.`
+     :`Character Review • "${name}" is ready for Character Creator. Review the imported profile before creating it.`,
+    {
+     existing:existingCharacter
+      ?{
+        id:existingCharacter.id,
+        area:"Character",
+        name:existingCharacter.name
+       }
+      :chunk.existing,
+     typeConflict:false
+    }
+   );
+
+   continue;
+  }
+
+  /*
+   * PHASE 2C — STORY CHRONOLOGY
+   *
+   * Explicit Project / Arc / Scene / Beat material routes to
+   * Production. General chronology routes to Timeline.
+   */
+  if(chunk.kind==="story_chronology"){
+   try{
+    const productionType=
+     smartImportStoryProductionType(
+      name,
+      description
+     );
+
+    if(productionType){
+     const normalizedName=
+      normalizeImportName(name);
+
+     if(productionType==="project"){
+      const existingProject=
+       storyProjects.find(project=>
+        normalizeImportName(project.title)===
+        normalizedName
+       );
+
+      if(existingProject){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Project "${existingProject.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingProject.id,
+          area:"Production • Project",
+          name:existingProject.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdProject:any=
+       await umbraCloudFetch(
+        "/api/production/projects",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          title:name,
+          project_type:"story",
+          summary:description||null,
+          status:"planning"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Project.",
+       {
+        existing:{
+         id:
+          createdProject?.project?.id||
+          createdProject?.id||
+          "",
+         area:"Production • Project",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+
+     if(productionType==="arc"){
+      const existingArc=
+       storyArcs.find(arc=>
+        normalizeImportName(arc.title)===
+        normalizedName
+       );
+
+      if(existingArc){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Arc "${existingArc.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingArc.id,
+          area:"Production • Arc",
+          name:existingArc.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdArc:any=
+       await umbraCloudFetch(
+        "/api/production/arcs",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          project_id:null,
+          title:name,
+          summary:description||null,
+          status:"planned"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Arc.",
+       {
+        existing:{
+         id:
+          createdArc?.arc?.id||
+          createdArc?.id||
+          "",
+         area:"Production • Arc",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+
+     if(productionType==="scene"){
+      const existingScene=
+       storyScenes.find(scene=>
+        normalizeImportName(scene.title)===
+        normalizedName
+       );
+
+      if(existingScene){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Scene "${existingScene.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingScene.id,
+          area:"Production • Scene",
+          name:existingScene.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdScene:any=
+       await umbraCloudFetch(
+        "/api/production/scenes",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          project_id:null,
+          arc_id:null,
+          title:name,
+          summary:description||null,
+          pov_character_id:null,
+          location_id:null,
+          era:null,
+          story_date:null,
+          status:"idea"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Scene.",
+       {
+        existing:{
+         id:
+          createdScene?.scene?.id||
+          createdScene?.id||
+          "",
+         area:"Production • Scene",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+
+     if(productionType==="beat"){
+      const existingBeat=
+       storyBeats.find(beat=>
+        normalizeImportName(beat.title)===
+        normalizedName
+       );
+
+      if(existingBeat){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Beat "${existingBeat.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingBeat.id,
+          area:"Production • Beat",
+          name:existingBeat.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdBeat:any=
+       await umbraCloudFetch(
+        "/api/production/beats",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          project_id:null,
+          arc_id:null,
+          scene_id:null,
+          title:name,
+          description:description||null,
+          beat_type:"plot",
+          status:"idea"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Beat.",
+       {
+        existing:{
+         id:
+          createdBeat?.beat?.id||
+          createdBeat?.id||
+          "",
+         area:"Production • Beat",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+    }
+
+    /*
+     * General chronology becomes Timeline rather than an
+     * unstructured Production placeholder.
+     */
+    const normalizedName=
+     normalizeImportName(name);
+
+    const existingTimeline=
+     timelineEvents.find(event=>
+      !event.archived_at&&
+      normalizeImportName(event.title)===
+      normalizedName
+     );
+
+    if(existingTimeline){
+     await umbraCloudFetch(
+      `/api/timeline/${encodeURIComponent(existingTimeline.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        title:existingTimeline.title||name,
+        era:existingTimeline.era??null,
+        display_date:
+         existingTimeline.display_date??null,
+        sort_order:
+         Number(existingTimeline.sort_order??0),
+        description:
+         description||
+         existingTimeline.description||
+         null,
+        location_id:
+         existingTimeline.location_id??null,
+        codex_record_id:
+         existingTimeline.codex_record_id??null,
+        character_id:
+         existingTimeline.character_id??null,
+        tags:Array.isArray(existingTimeline.tags)
+         ?existingTimeline.tags
+         :[],
+        updated_at:new Date().toISOString()
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      "Updated existing Timeline chronology entry.",
+      {
+       existing:{
+        id:existingTimeline.id,
+        area:"Timeline",
+        name:existingTimeline.title||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }else{
+     const createdTimeline:any=
+      await umbraCloudFetch(
+       "/api/timeline",
+       {
+        method:"POST",
+        body:JSON.stringify({
+         title:name,
+         era:null,
+         display_date:null,
+         sort_order:0,
+         description:description||null,
+         location_id:null,
+         codex_record_id:null,
+         character_id:null,
+         tags:[],
+         is_public:false
+        })
+       }
+      );
+
+     created++;
+
+     setResult(
+      chunk.id,
+      "created",
+      "Created Timeline • Story Chronology.",
+      {
+       existing:{
+        id:
+         createdTimeline?.event?.id||
+         createdTimeline?.id||
+         "",
+        area:"Timeline",
+        name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "Story chronology could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * PHASE 2C — LEARNED MAGICAL TRADITIONS
+   *
+   * A true religion remains Codex.
+   * A magical discipline/tradition belongs in Expanded Records.
+   */
+  const learnedTradition=
+   chunk.kind==="religion_tradition"&&
+   smartImportIsLearnedTradition(
+    name,
+    description
+   );
+
+  /*
+   * PHASE 2C — EXPANDED WORLD DATABASE
+   */
+  const databaseKind=
+   chunk.kind==="cosmology"||
+   chunk.kind==="power_magic"||
+   chunk.kind==="artifact"||
+   chunk.kind==="general_lore"||
+   learnedTradition;
+
+  if(databaseKind){
+   try{
+    const databaseType=
+     smartImportDatabaseTypeForKind(
+      chunk.kind
+     );
+
+    if(!databaseType){
+     deferred++;
+
+     setResult(
+      chunk.id,
+      "deferred",
+      `No compatible Expanded Record type currently exists for ${chunk.label}. Create or choose an appropriate World Database type before routing this section.`
+     );
+
+     continue;
+    }
+
+    const normalizedName=
+     normalizeImportName(name);
+
+    const existingDatabase=
+     databaseRecords.find(record=>
+      !record.archived_at&&
+      normalizeImportName(record.name)===
+      normalizedName
+     );
+
+    if(existingDatabase){
+     await umbraCloudFetch(
+      `/api/world-database/records/${encodeURIComponent(existingDatabase.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        name:existingDatabase.name||name,
+        subtitle:
+         existingDatabase.subtitle||
+         smartImportDatabaseSubtitle(chunk.kind),
+        summary:
+         description||
+         existingDatabase.summary||
+         null,
+        image_url:
+         existingDatabase.image_url??null,
+        notes:
+         existingDatabase.notes??null,
+        workflow_status:
+         existingDatabase.workflow_status||
+         "draft",
+        details:{
+         ...(existingDatabase.details||{}),
+         smart_ingest:{
+          classification:chunk.kind,
+          classification_label:chunk.label,
+          source_heading:name,
+          imported_source:description,
+          imported_at:new Date().toISOString()
+         }
+        }
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      `Updated Expanded Record • ${databaseType.name}.`,
+      {
+       existing:{
+        id:existingDatabase.id,
+        area:`World Database • ${databaseType.name}`,
+        name:existingDatabase.name||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+
+     continue;
+    }
+
+    const createdDatabase:any=
+     await umbraCloudFetch(
+      "/api/world-database/records",
+      {
+       method:"POST",
+       body:JSON.stringify({
+        record_type_id:databaseType.id,
+        name,
+        subtitle:
+         smartImportDatabaseSubtitle(
+          chunk.kind
+         ),
+        summary:description||null
+       })
+      }
+     );
+
+    const createdDatabaseId=
+     createdDatabase?.record?.id||
+     createdDatabase?.id||
+     "";
+
+    /*
+     * Creation endpoint accepts the core record first.
+     * Add Smart Ingest source metadata afterward when an ID is
+     * returned.
+     */
+    if(createdDatabaseId){
+     try{
+      await umbraCloudFetch(
+       `/api/world-database/records/${encodeURIComponent(createdDatabaseId)}`,
+       {
+        method:"PUT",
+        body:JSON.stringify({
+         name,
+         subtitle:
+          smartImportDatabaseSubtitle(
+           chunk.kind
+          ),
+         summary:description||null,
+         workflow_status:"draft",
+         details:{
+          smart_ingest:{
+           classification:chunk.kind,
+           classification_label:chunk.label,
+           source_heading:name,
+           imported_source:description,
+           imported_at:new Date().toISOString()
+          }
+         }
+        })
+       }
+      );
+     }catch{
+      /*
+       * The core record already exists. Metadata enrichment
+       * failure must not create a duplicate.
+       */
+     }
+    }
+
+    created++;
+
+    setResult(
+     chunk.id,
+     "created",
+     `Created Expanded Record • ${databaseType.name}.`,
+     {
+      existing:{
+       id:createdDatabaseId,
+       area:`World Database • ${databaseType.name}`,
+       name
+      },
+      typeConflict:false,
+      resolution:"auto"
+     }
+    );
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "Expanded World Database record could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * Codex routing remains responsible for:
+   * Realm / Civilization
+   * People / Species
+   * Religion
+   * Organization / Faction
+   */
+  if(!smartImportIsCodexKind(chunk.kind)){
+   deferred++;
+
+   setResult(
+    chunk.id,
+    "deferred",
+    `${chunk.label} remains classified but requires manual review because no safe destination was resolved.`
+   );
+
+   continue;
+  }
+
+  const codexType=String(
+   chunk.codexType||
+   smartImportCodexTypeForKind(chunk.kind)
+  ).trim().toLowerCase();
+
+  if(!(smartImportCodexTypes as readonly string[]).includes(codexType)){
+   failed++;
+   setResult(
+    chunk.id,
+    "failed",
+    "No valid Codex type is selected."
+   );
+   continue;
+  }
+
+
+  try{
+   const existingCodex=
+    chunk.existing&&
+    String(chunk.existing.area||"").toLowerCase().startsWith("codex")
+     ?worldRecords.find(
+       record=>record.id===chunk.existing.id
+      )
+     :null;
+
+   if(existingCodex){
+    const oldType=String(existingCodex.record_type||"").toLowerCase();
+
+    await umbraCloudFetch(
+     `/api/world-records/${encodeURIComponent(existingCodex.id)}`,
+     {
+      method:"PUT",
+      body:JSON.stringify({
+       record_type:codexType,
+       name:existingCodex.name||name,
+       subtype:existingCodex.subtype??null,
+       description:description||existingCodex.description||null,
+       cover_url:existingCodex.cover_url??null,
+       emblem_url:existingCodex.emblem_url??null,
+       lore_details:existingCodex.lore_details??{},
+       updated_at:new Date().toISOString()
+      })
+     }
+    );
+
+    updated++;
+
+    setResult(
+     chunk.id,
+     "updated",
+     oldType&&oldType!==codexType
+      ?`Updated existing Codex record: ${oldType} → ${codexType}.`
+      :`Updated existing Codex ${codexType} record.`,
+     {
+      existing:{
+       ...chunk.existing,
+       area:`Codex • ${codexType}`,
+       name:existingCodex.name||name
+      },
+      typeConflict:false,
+      resolution:"auto"
+     }
+    );
+
+    continue;
+   }
+
+   /*
+    * Duplicate guard:
+    * classification may have matched another Studio area,
+    * so independently check Codex before POSTing.
+    */
+   const normalizedName=normalizeImportName(name);
+
+   const duplicateCodex=worldRecords.find(
+    record=>
+     normalizeImportName(record.name)===normalizedName
+   );
+
+   if(duplicateCodex){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     `A Codex record named "${duplicateCodex.name}" already exists. Automatic duplicate creation was blocked.`
+    );
+
+    continue;
+   }
+
+   const createdRecord:any=await umbraCloudFetch(
+    "/api/world-records",
+    {
+     method:"POST",
+     body:JSON.stringify({
+      record_type:codexType,
+      name,
+      subtype:null,
+      description:description||null,
+      is_public:false
+     })
+    }
+   );
+
+   created++;
+
+   setResult(
+    chunk.id,
+    "created",
+    `Created Codex • ${codexType}.`,
+    {
+     existing:{
+      id:createdRecord?.id||createdRecord?.record?.id||"",
+      area:`Codex • ${codexType}`,
+      name
+     },
+     typeConflict:false,
+     resolution:"auto"
+    }
+   );
+  }catch(error:any){
+   failed++;
+
+   setResult(
+    chunk.id,
+    "failed",
+    error?.message||"This section could not be routed."
+   );
+  }
+ }
+
+ setSmartImportChunks(nextChunks);
+
+ /*
+  * Refresh the authoritative Codex list from Cloudflare.
+  * Do not depend on optimistic local records.
+  */
+ try{
+  const refreshed:any=await umbraCloudFetch<any>("/api/world-records");
+  const records=Array.isArray(refreshed)
+   ?refreshed
+   :Array.isArray(refreshed?.records)
+    ?refreshed.records
+    :null;
+
+  if(records){
+   setWorldRecords(records);
+  }
+ }catch{
+  // Routing results remain valid even if the follow-up refresh fails.
+ }
+
+ const summary=[
+  created?`${created} created`:"",
+  updated?`${updated} updated`:"",
+  kept?`${kept} kept existing`:"",
+  skipped?`${skipped} skipped`:"",
+  deferred?`${deferred} waiting for later Phase 2 routing`:"",
+  failed?`${failed} failed`:""
+ ].filter(Boolean).join(" • ");
+
+ setImportError(
+  failed
+   ?`Smart Ingest finished with issues: ${summary}.`
+   :`Smart Ingest routing complete: ${summary}.`
+ );
+}
+function previewImport(){
+ setImportError("");
+ setCharacterImportPreview(null);
+ setSmartImportChunks([]);
+
+ try{
+  let parsed:any;
+
+  try{
+   parsed=JSON.parse(importText);
+  }catch{
+   const smartChunks=analyzeSmartImportDocument(importText);
+
+   const meaningfulKinds=
+    new Set(smartChunks.map(x=>x.kind));
+
+   const looksLikeFoundationDocument=
+    smartChunks.length>1 &&
+    (
+     meaningfulKinds.size>1 ||
+     smartChunks.some(
+      x=>
+       x.kind!=="character" &&
+       x.kind!=="general_lore"
+     )
+    );
+
+   if(looksLikeFoundationDocument){
+    setSmartImportChunks(smartChunks);
+    setImportPreview([]);
+    return;
+   }
+
+   parsed=parseLabelledCharacterText(importText);
+
+   if(!parsed.name){
+    if(smartChunks.length){
+     setSmartImportChunks(smartChunks);
+     setImportPreview([]);
+     return;
+    }
+
+    throw new Error(
+     "Add labeled information or choose a supported import file."
+    );
+   }
+  }
 const looksLikeCharacter = !Array.isArray(parsed) && parsed && typeof parsed==="object" && (
   parsed.identity || parsed.appearance || parsed.abilities || parsed.relationships || parsed.media ||
   parsed.character || parsed.fullName || parsed.name
@@ -782,9 +3067,9 @@ if(looksLikeCharacter){
     mediaNotes:pick(c.mediaNotes,media.mediaNotes), importLocations:lines(c.importLocations), importTimeline:lines(c.importTimeline), importStoryProjects:lines(c.importStoryProjects), importScenes:lines(c.importScenes)
   };
   if(!preview.name)throw new Error("Character import needs at least a name.");
-  setCharacterImportPreview(preview);setImportPreview([]);return;
+  setCharacterImportPreview(preview);setImportPreview([]);setSmartImportChunks([]);return;
 }
-const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
+const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);setSmartImportChunks([]);}catch(e){setImportPreview([]);setSmartImportChunks([]);setImportError(e instanceof Error?e.message:"Import could not be analyzed.");}}
 function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
 function importedNameList(value:any){return String(value??"").split(/[\n|]+/).map(x=>x.replace(/^[-*•\d.\s]+/,"").trim()).filter(Boolean);}
 function namedCharactersInText(options:StudioCharacterRow[],raw:string){
@@ -1695,7 +3980,8 @@ function downloadCharacterProfile(saved:StudioCharacterRow){
  const sections:[string,Record<string,any>|null][]=[["Identity",saved.identity],["Appearance",saved.appearance],["Origin & Lore",saved.origin_lore],["Abilities & Combat",saved.abilities],["Written Relationships",saved.relationships],["Production & Media",saved.media]];
  const rows=(data:Record<string,any>|null)=>Object.entries(data||{}).filter(([,v])=>Array.isArray(v)?v.length:String(v??"").trim()).map(([k,v])=>`<div class="row"><b>${esc(k.replace(/([A-Z])/g," $1").replace(/^./,c=>c.toUpperCase()))}</b><div>${esc(Array.isArray(v)?v.join("\n"):v).replace(/\n/g,"<br>")}</div></div>`).join("");
  const portrait=saved.portrait_url||saved.media?.portraitUrl||"";
- const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(saved.name)} — Umbra Studio</title><style>body{font-family:Georgia,serif;background:#0a0710;color:#eadfec;max-width:980px;margin:auto;padding:48px}h1,h2{color:#efd37d}header{display:grid;grid-template-columns:${portrait?"220px 1fr":"1fr"};gap:28px;align-items:center;margin-bottom:34px}img{width:220px;height:290px;object-fit:cover;border-radius:18px}.section{border:1px solid #3a2140;border-radius:18px;padding:22px;margin:18px 0;background:#120b16}.row{display:grid;grid-template-columns:210px 1fr;gap:18px;padding:10px 0;border-bottom:1px solid #29172e}.row:last-child{border:0}.row b{color:#c67bd3}small{color:#a58ca8}@media print{body{background:white;color:#222}.section{background:white;border-color:#ddd}h1,h2{color:#6a3b74}}</style></head><body><header>${portrait?`<img src="${esc(portrait)}" alt="${esc(saved.name)} portrait">`:""}<div><small>UMBRA STUDIO CHARACTER DOSSIER</small><h1>${esc(saved.name)}</h1><p>${esc(saved.identity?.summary||"")}</p></div></header>${sections.map(([title,data])=>`<section class="section"><h2>${title}</h2>${rows(data)}</section>`).join("")}<small>Exported from Umbra Studio • ${new Date().toLocaleString()}</small></body></html>`;
+ const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(saved.name)} — Umbra Studio</title><style>body{font-family:Georgia,serif;background:#0a0710;color:#eadfec;max-width:980px;margin:auto;padding:48px}h1,h2{color:#efd37d}header{display:grid;grid-template-columns:${portrait?"220px 1fr":"1fr"};gap:28px;align-items:center;margin-bottom:34px}img{width:220px;height:290px;object-fit:cover;border-radius:18px}.section{border:1px solid #3a2140;border-radius:18px;padding:22px;margin:18px 0;background:#120b16}.row{display:grid;grid-template-columns:210px 1fr;gap:18px;padding:10px 0;border-bottom:1px solid #29172e}.row:last-child{border:0}.row b{color:#c67bd3}small{color:#a58ca8}@media print{body{background:white;color:#222}.section{background:white;border-color:#ddd}h1,h2{color:#6a3b74}}
+</style></head><body><header>${portrait?`<img src="${esc(portrait)}" alt="${esc(saved.name)} portrait">`:""}<div><small>UMBRA STUDIO CHARACTER DOSSIER</small><h1>${esc(saved.name)}</h1><p>${esc(saved.identity?.summary||"")}</p></div></header>${sections.map(([title,data])=>`<section class="section"><h2>${title}</h2>${rows(data)}</section>`).join("")}<small>Exported from Umbra Studio • ${new Date().toLocaleString()}</small></body></html>`;
  const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${saved.name.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")||"character"}-Umbra-Profile.html`;a.click();URL.revokeObjectURL(url);
 }
 
@@ -2622,7 +4908,8 @@ return (
         .my-characters-grid { grid-template-columns: 1fr; }
         .saved-character-actions { grid-template-columns: 1fr; }
       }
-    `}</style>
+    `}
+</style>
     <StudioTopNav />
 
     <section className="dashboard-content">
@@ -2771,7 +5058,8 @@ return (
       .library-results{margin-top:14px;color:#9f8ba2;font-size:13px}
       @media(max-width:900px){.library-controls{grid-template-columns:1fr 1fr}}
       @media(max-width:700px){.library-grid{grid-template-columns:1fr}.library-controls{grid-template-columns:1fr}}
-    `}</style>
+    `}
+</style>
     <StudioTopNav />
     <section className="dashboard-content">
       <div className="character-workspace-head">
@@ -2876,7 +5164,8 @@ return (
   <main className="dashboard-shell codex-page">
     <style>{`
       .world-layout{width:min(1240px,calc(100% - 48px));margin:0 auto;padding:52px 0 100px}.world-toolbar{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin:28px 0}.world-toolbar input,.world-toolbar select,.world-form input,.world-form select,.world-form textarea,.codex-editor input,.codex-editor textarea,.codex-editor select{width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.24);background:#110914;color:#e8dfea}.world-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}.world-card{padding:0;overflow:hidden;text-align:left;border:1px solid rgba(185,92,209,.22);border-radius:20px;background:linear-gradient(180deg,rgba(30,13,33,.96),rgba(10,6,14,.98));color:#ddd}.world-card-cover{height:130px;background:radial-gradient(circle,rgba(105,35,119,.3),#09060c);position:relative;overflow:hidden}.world-card-cover img{width:100%;height:100%;object-fit:cover}.world-card-emblem{position:absolute;left:16px;bottom:12px;width:54px;height:54px;border-radius:14px;object-fit:cover;border:1px solid rgba(232,201,111,.45);background:#0d0811}.world-card-body{padding:20px}.world-card h3{font-family:Georgia,serif;color:#f0d481;font-size:25px;margin:8px 0}.world-card p{color:#a991ad;line-height:1.6;min-height:50px}.world-type{color:#b96ac6;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.world-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.world-form{margin:34px 0;padding:24px;border:1px solid rgba(232,201,111,.2);border-radius:22px;background:rgba(18,8,21,.7)}.world-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.world-form textarea{grid-column:1/-1}.codex-hero{position:relative;min-height:360px;border-radius:28px;overflow:hidden;border:1px solid rgba(232,201,111,.25);margin-bottom:26px;background:radial-gradient(circle at 70% 20%,rgba(102,37,112,.4),#0a0710 70%)}.codex-hero-bg{position:absolute;inset:0}.codex-hero-bg img{width:100%;height:100%;object-fit:cover;opacity:.45}.codex-hero-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,5,10,.96),rgba(7,5,10,.5)),linear-gradient(0deg,rgba(7,5,10,.9),transparent 70%)}.codex-hero-content{position:relative;z-index:2;min-height:300px;padding:34px;display:flex;align-items:flex-end;gap:24px}.codex-emblem{width:120px;height:120px;border-radius:22px;border:1px solid rgba(232,201,111,.45);background:#0d0811;display:grid;place-items:center;overflow:hidden;color:#e5bd57;font-size:44px;flex:0 0 auto}.codex-emblem img{width:100%;height:100%;object-fit:cover}.codex-title h2{font-family:Georgia,serif;color:#f0d481;font-size:clamp(38px,6vw,64px);margin:5px 0}.codex-title p{max-width:760px;color:#c0afc2;line-height:1.7}.codex-editor{padding:26px;border:1px solid rgba(185,92,209,.18);border-radius:22px;background:rgba(16,9,20,.8);margin-bottom:26px}.codex-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.codex-editor-grid textarea{grid-column:1/-1}.codex-media-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}.codex-upload{padding:16px;border:1px dashed rgba(185,92,209,.3);border-radius:16px}.codex-upload strong{display:block;color:#e8c96f;margin-bottom:8px}.codex-section{padding:28px 0;border-top:1px solid rgba(185,92,209,.14)}.codex-section h3{font-family:Georgia,serif;color:#edd080;font-size:28px;margin:0 0 16px}.codex-lore-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.codex-lore-card{padding:20px;border:1px solid rgba(185,92,209,.16);border-radius:17px;background:rgba(20,9,23,.55)}.codex-lore-card strong{display:block;color:#b96ac6;font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}.codex-lore-card p{white-space:pre-wrap;color:#c5b5c7;line-height:1.75;margin:0}.world-character-strip,.related-codex-grid{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}.world-character-chip,.related-codex-card{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid rgba(185,92,209,.22);border-radius:14px;background:#0d0811;color:#ddd;cursor:pointer}.world-character-chip img,.related-codex-card img{width:46px;height:46px;border-radius:10px;object-fit:cover}.related-codex-card div{text-align:left}.related-codex-card small{display:block;color:#a978b0;text-transform:uppercase;font-size:9px;letter-spacing:.1em}.relation-builder{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-top:18px}.related-remove{margin-left:6px;color:#d79aa7}.codex-profile-links{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0 4px}.codex-profile-link{padding:7px 11px;border-radius:999px;border:1px solid rgba(232,201,111,.28);background:rgba(22,10,25,.72);color:#e7cc78;cursor:pointer}@media(max-width:700px){.world-layout{width:min(100% - 28px,1240px)}.world-toolbar,.world-form-grid,.codex-editor-grid,.codex-media-row,.codex-lore-grid,.relation-builder{grid-template-columns:1fr}.codex-hero-content{flex-direction:column;align-items:flex-start}.codex-emblem{width:90px;height:90px}}
-    `}</style>
+    `}
+</style>
     <StudioTopNav />
     <section className="world-layout">
       <div className="welcome-section"><p className="eyebrow">CONNECTED WORLD WORKSPACE</p><h1>World & Codex</h1><p>Build the peoples, bloodlines, factions, realms, places, artifacts, creatures, magic, history, and lore that shape your universe.</p><div className="v104-world-switcher"><button type="button" onClick={()=>{setSelectedWorldRecord(null);void loadWorldRecords()}}>Codex</button><button type="button" onClick={()=>void openWorldExplorer("locations")}>Places & Map</button><button type="button" onClick={()=>void openWorldExplorer("timeline")}>Timeline</button><button type="button" onClick={()=>void openWorldDatabase("records")}>Artifacts & Lore</button><button type="button" onClick={()=>void openWorldDatabase("canon")}>Canon</button></div></div>
@@ -2951,7 +5240,8 @@ const LinkNode=({link}:{link:CharacterRelationship})=>link.target?<button type="
 return <main className="dashboard-shell connections-page">
 <style>{`
 .connections-page{min-height:100vh;background:#07050a;color:#eee}.connections-content{width:min(1500px,calc(100% - 30px));margin:0 auto;padding:42px 0 100px}.connections-heading{text-align:center;max-width:900px;margin:0 auto 18px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0}.connections-heading p{color:#aa94ae;line-height:1.6}.connection-character-picker{display:flex;gap:10px;justify-content:center;margin:18px auto 0;max-width:720px}.connection-character-picker input,.connection-character-picker select{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.28);background:#100914;color:#eadfec}.connection-tabs,.tree-toolbar{display:flex;justify-content:center;gap:9px;flex-wrap:wrap;margin:18px 0}.connection-tab,.tree-tool{padding:10px 15px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd}.connection-tab.active,.tree-tool.active{border-color:rgba(232,201,111,.55);color:#f0d481}.tree-tool.danger{border-color:rgba(202,75,86,.38);color:#e99}.tree-canvas-shell{border:1px solid rgba(185,92,209,.2);border-radius:28px;overflow:auto;background:radial-gradient(circle at 50% 35%,rgba(65,24,72,.2),rgba(8,5,11,.96));padding:18px}.tree-canvas{position:relative;width:1400px;height:820px;min-width:1400px}.tree-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.tree-line{stroke:rgba(224,190,111,.72);stroke-width:2;fill:none}.tree-line.partner{stroke:#b96ac6;stroke-dasharray:8 5}.tree-card{position:absolute;width:154px;transform:translate3d(0,0,0);padding:9px 8px 12px;border:1px solid rgba(185,92,209,.22);border-radius:18px;background:rgba(15,8,19,.96);color:#eee;text-align:center;user-select:none;touch-action:none;box-shadow:0 10px 28px rgba(0,0,0,.24)}.tree-card.unlocked{cursor:grab}.tree-card.dragging{cursor:grabbing;z-index:20;box-shadow:0 16px 40px rgba(0,0,0,.5)}.tree-card.selected{border-color:#f0d481;box-shadow:0 0 0 3px rgba(232,201,111,.12)}.tree-card.hidden-card{opacity:.38}.tree-portrait{width:92px;height:92px;margin:0 auto 7px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:32px}.tree-portrait img{width:100%;height:100%;object-fit:cover}.tree-card strong{display:block;color:#ead7ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tree-card small{display:block;color:#b66ec3;text-transform:uppercase;font-size:9px;letter-spacing:.08em;margin-top:3px}.tree-card-actions{display:flex;gap:4px;justify-content:center;margin-top:7px}.tree-card-actions button{padding:4px 7px;border-radius:7px;border:1px solid rgba(185,92,209,.22);background:#0c0710;color:#bfaec2;font-size:9px}.all-connections-map{display:flex;flex-wrap:wrap;gap:22px;justify-content:center;padding:38px;border:1px solid rgba(185,92,209,.18);border-radius:24px}.gene-node{width:150px;padding:0 0 11px;border:0;background:transparent;color:#eee;text-align:center;cursor:pointer}.gene-image{width:118px;height:118px;margin:0 auto 8px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:38px}.gene-image img{width:100%;height:100%;object-fit:cover}.gene-node strong{display:block}.gene-node small{color:#b66ec3}.connections-empty{text-align:center;padding:50px;color:#aa94ae}.connections-hint{text-align:center;color:#8e7b91;font-size:12px;margin-top:18px}@media(max-width:700px){.connections-content{width:calc(100% - 14px)}.connection-character-picker{flex-direction:column}}
-`}</style>
+`}
+</style>
 <header className="studio-header"><div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div><div className="account-area"><button type="button" className="sign-out-button" onClick={()=>void goBackConnectionCenter()}>← Back</button></div></header>
 <section className="connections-content"><div className="connections-heading"><p className="eyebrow">BONDS OF THE UMBRAL WORLD</p><h1>{connectionView==="family"?"Family Tree":"Relationship Map"}</h1><p>Canon relationships stay intact while you arrange the tree exactly how you want it.</p><div className="connection-character-picker"><input value={connectionCharacterSearch} onChange={e=>setConnectionCharacterSearch(e.target.value)} placeholder="Search any character..."/><select value={connectionCenter.id} onChange={e=>{const target=studioCharacters.find(x=>x.id===e.target.value);if(target){void moveConnectionCenter(target);setTimeout(()=>void loadTreeLayout(),0)}}}><option value={connectionCenter.id}>{connectionCenter.name}</option>{studioCharacters.filter(x=>x.id!==connectionCenter.id&&(!connectionCharacterSearch.trim()||x.name.toLowerCase().includes(connectionCharacterSearch.toLowerCase()))).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div></div>
 <div className="connection-tabs"><button type="button" className={`connection-tab ${connectionView==="family"?"active":""}`} onClick={()=>{setConnectionView("family");setTimeout(()=>void loadTreeLayout(),0)}}>Family Tree</button><button type="button" className={`connection-tab ${connectionView==="all"?"active":""}`} onClick={()=>setConnectionView("all")}>All Connections</button></div>
@@ -3418,7 +5708,8 @@ return (
       .profile-media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}.profile-media-card{overflow:hidden;border-radius:18px;border:1px solid rgba(185,92,209,.18);background:#100914}.profile-media-card img{width:100%;height:300px;object-fit:cover;display:block}.profile-media-card span{display:block;padding:13px 15px;color:#d8c0db;font-weight:700}.profile-gallery-link{margin-top:18px;display:inline-block;color:#e8c96f;word-break:break-all}.profile-media-notes{margin-top:20px;color:#bbaabd;line-height:1.75;white-space:pre-wrap;}
       .library-profile-button{width:100%;margin-top:20px}.saved-character-actions{flex-wrap:wrap}.saved-character-actions .secondary-action{flex:1;min-width:120px}
       @media(max-width:760px){.profile-hero-content{grid-template-columns:1fr;padding-top:40px}.profile-portrait{height:min(70vh,650px);min-height:0;max-width:100%}.profile-detail-grid{grid-template-columns:1fr}.profile-content,.profile-hero-content{width:min(100% - 28px,1180px)}}
-    `}</style>
+    `}
+</style>
     <header className="studio-header">
       <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
       <div className="account-area"><button type="button" className="sign-out-button" onClick={goBack}>← Back</button></div>
@@ -3905,7 +6196,8 @@ const renderRelationshipsStep = () => (
       .connection-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:16px}.connection-chip{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid rgba(185,92,209,.18);border-radius:14px;background:#0d0811}.connection-chip img,.connection-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1b0c20;display:grid;place-items:center;color:#e5bd57}.connection-chip-copy{flex:1}.connection-chip-copy strong{display:block;color:#ead180}.connection-chip-copy span{font-size:12px;color:#b68abe;text-transform:capitalize}.connection-remove{border:0;background:transparent;color:#c98b99;cursor:pointer;font-size:18px}
       .written-relations-title{grid-column:1/-1;margin:8px 0 0;color:#d7bddb;font-family:Georgia,serif;font-size:20px}
       @media(max-width:700px){.connection-controls{grid-template-columns:1fr}}
-    `}</style>
+    `}
+</style>
     <div className="connection-builder">
       <h4>Connected Characters</h4>
       <p>These direct links are the source of truth for the Family Tree. Reciprocal links are created automatically, but Written Relationship notes will never overwrite your manual corrections.</p>
@@ -4021,7 +6313,8 @@ const renderMediaStep = () => (
       .media-gallery-item button{position:absolute;right:8px;top:8px;border:0;border-radius:999px;background:rgba(8,5,12,.88);color:#fff;width:30px;height:30px;cursor:pointer}
       .upload-help{color:#9f8ba2;font-size:12px;line-height:1.6;margin-top:8px}
       @media(max-width:1050px){.media-upload-grid{grid-template-columns:1fr}.media-thumb{height:min(320px,42vw)}}
-    `}</style>
+    `}
+</style>
     <div className="form-section-heading">
       <span className="form-section-icon">✦</span>
       <div>
@@ -4389,7 +6682,326 @@ if(page==="database"){
  {databaseTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Database Record Revisions</h2><p className="admin-help">Every record update is captured automatically. Restore an older version without losing the current one.</p><div className="revision-list">{databaseRevisions.map(r=><article key={r.id}><div><strong>{r.record_code||"Record"} • {r.record_name||"Untitled"}</strong><span>{r.changed_by_email||"Studio admin"} • {new Date(r.created_at).toLocaleString()}</span></div><button onClick={()=>void restoreDatabaseRevision(r)}>Restore</button></article>)}</div></section>}
 {databaseTab==="duplicates"&&<section className="admin-panel"><span className="card-label">SITE-WIDE DATA QUALITY</span><h2>Duplicate & Similar Name Finder</h2><p className="admin-help">Scans Characters, Codex, Locations, Expanded Records, Projects, Arcs, and Scenes. Similar normalized names are review-only and are never merged or deleted automatically.</p><div className="duplicate-grid">{sitewideDuplicateGroups().length===0?<p className="admin-empty">No exact/similar normalized names found across the Studio.</p>:sitewideDuplicateGroups().map((group,i)=><article key={i}><strong>{group[0].name}</strong><span>{group.length} possible matches</span>{group.map(r=><div key={`${r.table}-${r.id}`} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"center",marginTop:8}}><span>{r.type} • {r.name}</span><button type="button" onClick={()=>void deleteDuplicateEntity(r.table,r.id,r.name)}>Delete</button></div>)}</article>)}</div></section>}
 {databaseTab==="templates"&&<section className="admin-panel"><span className="card-label">REUSABLE STRUCTURE</span><h2>Field Templates</h2><p className="admin-help">Templates suggest structured fields without locking your lore into a rigid schema.</p><div className="database-form-grid"><select value={templateForm.recordTypeId} onChange={e=>setTemplateForm({...templateForm,recordTypeId:e.target.value})}><option value="">Record type</option>{recordTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><input placeholder="Template name" value={templateForm.name} onChange={e=>setTemplateForm({...templateForm,name:e.target.value})}/><textarea className="json-editor" value={templateForm.fieldsText} onChange={e=>setTemplateForm({...templateForm,fieldsText:e.target.value})}/><button className="primary-action" onClick={()=>void createFieldTemplate()}>Create Template</button></div><div className="database-simple-grid">{fieldTemplates.map(t=><article key={t.id}><strong>{t.name}</strong><p>{recordTypes.find(x=>x.id===t.record_type_id)?.name||"Record"}</p><small>{t.fields?.length||0} suggested fields</small></article>)}</div></section>}
-{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">No coding required. Paste a normal labeled character profile, upload a TXT, Markdown, JSON, or CSV file, or use JSON only when you need the advanced format. Studio analyzes it and opens the result in Character Creator for review before anything is saved.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Profile</button>{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
+{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">Paste or upload Umbral Genesis material in one chunk or many. Studio separates characters, cosmology, worlds, lore, powers, peoples, religions, history, factions, artifacts, and story chronology before anything is saved. Character profiles still open in Character Creator; mixed world material is classified for review first.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Import</button>{smartImportChunks.length>0&&<button className="primary-action" onClick={()=>void routeSmartImportSections()}>Route Selected Sections</button>}{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}
+{smartImportChunks.length>0&&
+ <div className="import-preview smart-ingest-preview">
+  <div>
+   <span>SMART INGEST • CLASSIFICATION REVIEW</span>
+   <strong>
+    {smartImportChunks.length} section(s) recognized
+   </strong>
+   <small>Nothing has been saved yet.</small>
+   <p>
+    Review classification, destination, existing matches,
+    conflicts, and which sections should be included.
+   </p>
+  </div>
+
+  {smartImportChunks.map((chunk:any)=>
+   <div
+    key={chunk.id}
+    style={
+     chunk.isContainer
+      ?smartImportReviewStyles.container
+      :smartImportReviewStyles.card
+    }
+   >
+    {/* HEADER */}
+    <div style={smartImportReviewStyles.header}>
+     <div style={smartImportReviewStyles.headerLeft}>
+      <span style={smartImportReviewStyles.number}>
+       #{chunk.row}
+      </span>
+
+      <div style={{display:"grid",gap:3,minWidth:0}}>
+       <span style={smartImportReviewStyles.eyebrow}>
+        {chunk.confidence.toUpperCase()} CONFIDENCE
+       </span>
+
+       <strong style={smartImportReviewStyles.title}>
+        {chunk.heading}
+       </strong>
+      </div>
+     </div>
+
+     <span style={smartImportReviewStyles.badge}>
+      {chunk.isContainer
+       ?"SECTION HEADING • DO NOT SAVE"
+       :chunk.label}
+     </span>
+    </div>
+
+    {/* CONTAINER HEADING */}
+    {chunk.isContainer&&chunk.content&&
+     <div style={smartImportReviewStyles.source}>
+      <span style={smartImportReviewStyles.label}>
+       Section Overview
+      </span>
+      <p style={smartImportReviewStyles.sourceText}>
+       {String(chunk.content).slice(0,260)}
+       {String(chunk.content).length>260?"…":""}
+      </p>
+     </div>
+    }
+
+    {/* ROUTING */}
+    {!chunk.isContainer&&
+     <>
+      <div style={smartImportReviewStyles.sectionLabel}>
+       Routing
+      </div>
+
+      <div style={smartImportReviewStyles.routingRow}>
+       <div style={smartImportReviewStyles.infoBox}>
+        <span style={smartImportReviewStyles.label}>
+         Destination
+        </span>
+        <div style={smartImportReviewStyles.value}>
+         {chunk.destination}
+        </div>
+       </div>
+
+       <div style={smartImportReviewStyles.infoBox}>
+        <span style={smartImportReviewStyles.label}>
+         Existing Record
+        </span>
+        <div style={smartImportReviewStyles.value}>
+         {chunk.existing
+          ?`${chunk.existing.area} — ${chunk.existing.name}`
+          :"NEW / UNMATCHED"}
+        </div>
+       </div>
+      </div>
+     </>
+    }
+
+    {/* CONFLICT */}
+    {chunk.typeConflict&&!chunk.isContainer&&
+     <div style={smartImportReviewStyles.conflict}>
+      <div style={smartImportReviewStyles.conflictTitle}>
+       ⚠ TYPE CONFLICT
+      </div>
+      <div>
+       Incoming classification differs from the existing record.
+       Review the proposed classification before routing.
+      </div>
+
+      {smartImportTypeChangeLabel(chunk)&&
+       <div style={{
+        marginTop:7,
+        fontWeight:700
+       }}>
+        Existing → Proposed:{" "}
+        {smartImportTypeChangeLabel(chunk)}
+       </div>
+      }
+     </div>
+    }
+
+    {/* OVERRIDES */}
+    {!chunk.isContainer&&
+     <>
+      <div style={smartImportReviewStyles.sectionLabel}>
+       Import Decision
+      </div>
+
+      <div style={smartImportReviewStyles.overrideRow}>
+       <label style={smartImportReviewStyles.overrideField}>
+        <small style={smartImportReviewStyles.label}>
+         Classification
+        </small>
+
+        <select
+         style={smartImportReviewStyles.select}
+         value={chunk.kind}
+         onChange={e=>
+          updateSmartImportChunk(
+           chunk.id,
+           {kind:e.target.value as SmartImportKind}
+          )
+         }
+        >
+         {smartImportKindOptions.map(option=>
+          <option
+           key={option.value}
+           value={option.value}
+          >
+           {option.label}
+          </option>
+         )}
+        </select>
+       </label>
+
+       {["people_species","organization_faction",
+         "religion_tradition","realm"].includes(chunk.kind)&&
+        <label style={smartImportReviewStyles.codexField}>
+         <small style={smartImportReviewStyles.label}>
+          Codex Type
+         </small>
+
+         <select
+          style={smartImportReviewStyles.smallSelect}
+          value={chunk.codexType||""}
+          onChange={e=>
+           updateSmartImportChunk(
+            chunk.id,
+            {
+             codexType:e.target.value,
+             resolution:"imported"
+            }
+           )
+          }
+         >
+          {smartImportCodexTypes.map(type=>
+           <option key={type} value={type}>
+            {type.charAt(0).toUpperCase()+type.slice(1)}
+           </option>
+          )}
+         </select>
+        </label>
+       }
+
+       {chunk.typeConflict&&
+        <label style={smartImportReviewStyles.resolutionField}>
+         <small style={smartImportReviewStyles.label}>
+          Resolution
+         </small>
+
+         <select
+          style={smartImportReviewStyles.resolutionSelect}
+          value={chunk.resolution||"imported"}
+          onChange={e=>
+           updateSmartImportChunk(
+            chunk.id,
+            {resolution:e.target.value}
+           )
+          }
+         >
+          <option value="imported">Use Imported</option>
+          <option value="existing">Keep Existing</option>
+          <option value="skip">Skip</option>
+         </select>
+        </label>
+       }
+      </div>
+     </>
+    }
+
+    {/* OPERATION PREVIEW */}
+    {chunk.typeConflict&&
+     !chunk.isContainer&&
+     chunk.resolution==="imported"&&
+     smartImportTypeChangeLabel(chunk)&&
+     <div style={smartImportReviewStyles.success}>
+      ✓ Update existing record — no duplicate.{" "}
+      <strong>
+       {smartImportTypeChangeLabel(chunk)}
+      </strong>
+     </div>
+    }
+
+    {/* INCLUDE */}
+    {!chunk.isContainer&&
+     <div style={smartImportReviewStyles.fullRow}>
+      <label style={smartImportReviewStyles.includeWrap}>
+       <input
+        type="checkbox"
+        checked={Boolean(chunk.selected)}
+        onChange={e=>
+         toggleSmartImportChunk(
+          chunk.id,
+          e.target.checked
+         )
+        }
+       />
+
+       <span>
+        {chunk.selected
+         ?"Include in future import"
+         :"Skip this section"}
+       </span>
+      </label>
+     </div>
+    }
+
+    {chunk.routeStatus&&
+     <div style={{
+      width:"100%",
+      boxSizing:"border-box",
+      padding:"10px 12px",
+      borderRadius:10,
+      marginTop:4,
+      border:
+       chunk.routeStatus==="failed"
+        ?"1px solid rgba(255,105,115,.42)"
+        :chunk.routeStatus==="created"||
+          chunk.routeStatus==="updated"
+         ?"1px solid rgba(110,220,155,.38)"
+         :"1px solid rgba(173,132,198,.30)",
+      background:
+       chunk.routeStatus==="failed"
+        ?"rgba(125,35,45,.18)"
+        :chunk.routeStatus==="created"||
+          chunk.routeStatus==="updated"
+         ?"rgba(40,105,70,.16)"
+         :"rgba(82,57,100,.18)"
+     }}>
+      <strong style={{
+       display:"block",
+       marginBottom:4,
+       fontSize:12,
+       letterSpacing:".08em",
+       textTransform:"uppercase",
+       color:
+        chunk.routeStatus==="failed"
+         ?"#ffaaaa"
+         :chunk.routeStatus==="created"||
+           chunk.routeStatus==="updated"
+          ?"#9be1b5"
+          :"#cdb0dc"
+      }}>
+       {chunk.routeStatus==="created"
+        ?"✓ CREATED"
+        :chunk.routeStatus==="updated"
+         ?"✓ UPDATED"
+         :chunk.routeStatus==="kept"
+          ?"— KEPT EXISTING"
+          :chunk.routeStatus==="skipped"
+           ?"— SKIPPED"
+           :chunk.routeStatus==="deferred"
+            ?"⏳ DEFERRED"
+            :chunk.routeStatus==="section"
+             ?"— SECTION HEADING"
+             :"✕ FAILED"}
+      </strong>
+
+      <span style={{
+       color:"#d9cddd",
+       fontSize:13,
+       lineHeight:1.5
+      }}>
+       {chunk.routeMessage}
+      </span>
+     </div>
+    }
+
+    {/* SOURCE */}
+    {!chunk.isContainer&&chunk.content&&
+     <div style={smartImportReviewStyles.sourceWrap}>
+      <span style={smartImportReviewStyles.label}>
+       Source Preview
+      </span>
+
+      <p style={smartImportReviewStyles.sourceText}>
+       {String(chunk.content).slice(0,260)}
+       {String(chunk.content).length>260?"…":""}
+      </p>
+     </div>
+    }
+   </div>
+  )}
+ </div>
+}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
 {databaseTab==="backup"&&<section className="admin-panel"><span className="card-label">PORTABILITY & RECOVERY</span><h2>Export & Backup Center</h2><p className="admin-help">Export the current operational database locally or create a named server snapshot before a major editing session.</p><div className="database-backup-actions"><button className="secondary-action" onClick={exportStudioData}>Export Full JSON</button>{adminRole==="primary_admin"&&<><input placeholder="Backup label — e.g. Before Moonwood Import" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Named Snapshot</button></>}</div><div className="admin-feed">{backups.map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section>}
  </section></main>;
 }

@@ -2782,3 +2782,55 @@ select optgroup {
     width:100%;
   }
 }
+/* SMART INGEST LAYOUT OVERRIDE */
+
+/* Kill the legacy 55px / 1fr / auto grid ONLY for Smart Ingest cards. */
+.import-preview.smart-ingest-preview > div {
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:stretch !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    gap:14px !important;
+    box-sizing:border-box !important;
+}
+
+/* Each major Smart Ingest section gets its own complete row. */
+.import-preview.smart-ingest-preview > div > * {
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    box-sizing:border-box !important;
+    grid-column:auto !important;
+    grid-row:auto !important;
+}
+
+/* Text must wrap normally, never letter-by-letter. */
+.import-preview.smart-ingest-preview p,
+.import-preview.smart-ingest-preview strong {
+    word-break:normal !important;
+    overflow-wrap:break-word !important;
+}
+
+/* Classification pill stays sized to its complete title. */
+.import-preview.smart-ingest-preview > div > div:first-child > span:last-child {
+    width:fit-content !important;
+    max-width:100% !important;
+    white-space:nowrap !important;
+}
+
+/* Source Preview is a full horizontal reading area. */
+.import-preview.smart-ingest-preview p {
+    width:100% !important;
+    white-space:pre-wrap !important;
+    line-height:1.6 !important;
+}
+
+/* Checkbox itself must not stretch. */
+.import-preview.smart-ingest-preview input[type="checkbox"] {
+    width:auto !important;
+    flex:none !important;
+}
+
+/* END SMART INGEST LAYOUT OVERRIDE */
