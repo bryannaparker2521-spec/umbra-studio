@@ -1212,52 +1212,386 @@ export default {
 			// STORY PRODUCTION (D1)
 			// ------------------------------------------------------------
 			if(request.method==="GET"&&url.pathname==="/api/production"){
-				const [projects,arcs,scenes,beats,links,comments,assignments,notifications,journey,changes]=await Promise.all([
-					getAll(env,`SELECT * FROM studio_story_projects ORDER BY updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_arcs ORDER BY sort_order ASC,updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_scenes ORDER BY sort_order ASC,updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_beats ORDER BY sort_order ASC,updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_entity_links ORDER BY created_at DESC`),
-					getAll(env,`SELECT * FROM studio_review_comments ORDER BY created_at DESC LIMIT 300`),
-					getAll(env,`SELECT * FROM studio_assignments ORDER BY updated_at DESC LIMIT 300`),
-					getAll(env,`SELECT * FROM studio_notifications WHERE recipient_user_id=? ORDER BY created_at DESC LIMIT 300`,[user.id]),
-					getAll(env,`SELECT * FROM studio_character_journey ORDER BY sort_order ASC,created_at DESC LIMIT 500`),
-					getAll(env,`SELECT id,actor_user_id,COALESCE(actor_name,actor_email,'Studio Member') actor_name,action,entity_type,entity_id,entity_label,created_at FROM studio_activity_log ORDER BY created_at DESC LIMIT 100`)
-				]);
-				const health={
-					projects:projects.length,scenes:scenes.length,
-					open_assignments:(assignments as any[]).filter(x=>!["done","completed","closed"].includes(String(x.status))).length,
-					my_unread_notifications:(notifications as any[]).filter(x=>!x.is_read).length,
-					continuity_open:Number((await env.umbra_studio_production.prepare(`SELECT COUNT(*) n FROM studio_continuity_issues WHERE status IN ('open','reviewing')`).first<any>())?.n??0)
-				};
-				return json({ok:true,projects,arcs,scenes,beats,links,comments,assignments,notifications,journey,changes,health});
-			}
-			const productionTables:Record<string,string>={
-				"projects":"studio_story_projects","arcs":"studio_story_arcs","scenes":"studio_story_scenes","beats":"studio_story_beats"
-			};
-			const prodMatch=url.pathname.match(/^\/api\/production\/(projects|arcs|scenes|beats)(?:\/([^/]+))?$/);
-			if(prodMatch&&request.method==="POST"&&!prodMatch[2]){
-				requireRole(user,["primary_admin","admin","editor"]);const b=await readJsonBody(request);const id=crypto.randomUUID(),now=new Date().toISOString();
-				const table=productionTables[prodMatch[1]];
-				const configs:any={
-					projects:{cols:["id","title","project_type","summary","status","created_by","updated_by","created_at","updated_at"],vals:[id,String(b.title??""),String(b.project_type??"story"),nullableString(b.summary),String(b.status??"planning"),user.id,user.id,now,now]},
-					arcs:{cols:["id","project_id","title","summary","status","created_by","updated_by","created_at","updated_at"],vals:[id,nullableString(b.project_id),String(b.title??""),nullableString(b.summary),String(b.status??"planned"),user.id,user.id,now,now]},
-					scenes:{cols:["id","project_id","arc_id","title","summary","pov_character_id","location_id","era","story_date","status","created_by","updated_by","created_at","updated_at"],vals:[id,nullableString(b.project_id),nullableString(b.arc_id),String(b.title??""),nullableString(b.summary),nullableString(b.pov_character_id),nullableString(b.location_id),nullableString(b.era),nullableString(b.story_date),String(b.status??"idea"),user.id,user.id,now,now]},
-					beats:{cols:["id","project_id","arc_id","scene_id","title","description","beat_type","status","created_by","created_at","updated_at"],vals:[id,nullableString(b.project_id),nullableString(b.arc_id),nullableString(b.scene_id),String(b.title??""),nullableString(b.description),String(b.beat_type??"plot"),String(b.status??"idea"),user.id,now,now]}
-				};
-				const c=configs[prodMatch[1]];await env.umbra_studio_production.prepare(`INSERT INTO ${table}(${c.cols.join(",")}) VALUES(${c.cols.map(()=>"?").join(",")})`).bind(...c.vals).run();
-				return json({ok:true,id},201);
-			}
-			if(prodMatch&&prodMatch[2]&&request.method==="PATCH"){
-				requireRole(user,["primary_admin","admin","editor"]);const id=decodeURIComponent(prodMatch[2]),b=await readJsonBody(request),table=productionTables[prodMatch[1]];
-				await env.umbra_studio_production.prepare(`UPDATE ${table} SET status=?,updated_at=? WHERE id=?`).bind(String(b.status??"idea"),new Date().toISOString(),id).run();
-				return json({ok:true,id});
-			}
-			if(prodMatch&&prodMatch[2]&&request.method==="DELETE"){
-				requireRole(user,["primary_admin","admin"]);const id=decodeURIComponent(prodMatch[2]),table=productionTables[prodMatch[1]];
-				await env.umbra_studio_production.prepare(`DELETE FROM ${table} WHERE id=?`).bind(id).run();return json({ok:true,id});
-			}
-			if(request.method==="POST"&&url.pathname==="/api/production/links"){
+const [projects,arcs,chapters,scenes,beats,links,comments,assignments,notifications,journey,changes]=await Promise.all([
+getAll(env,`SELECT * FROM studio_story_projects ORDER BY updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_arcs ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_chapters ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_scenes ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_beats ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_entity_links ORDER BY created_at DESC`),
+getAll(env,`SELECT * FROM studio_review_comments ORDER BY created_at DESC LIMIT 300`),
+getAll(env,`SELECT * FROM studio_assignments ORDER BY updated_at DESC LIMIT 300`),
+getAll(env,`SELECT * FROM studio_notifications WHERE recipient_user_id=? ORDER BY created_at DESC LIMIT 300`,[user.id]),
+getAll(env,`SELECT * FROM studio_character_journey ORDER BY sort_order ASC,created_at DESC LIMIT 500`),
+getAll(env,`SELECT id,actor_user_id,COALESCE(actor_name,actor_email,'Studio Member') actor_name,action,entity_type,entity_id,entity_label,created_at FROM studio_activity_log ORDER BY created_at DESC LIMIT 100`)
+]);
+
+const health={
+projects:projects.length,
+chapters:chapters.length,
+scenes:scenes.length,
+open_assignments:(assignments as any[]).filter(x=>!["done","completed","closed"].includes(String(x.status))).length,
+my_unread_notifications:(notifications as any[]).filter(x=>!x.is_read).length,
+continuity_open:Number((await env.umbra_studio_production.prepare(`SELECT COUNT(*) n FROM studio_continuity_issues WHERE status IN ('open','reviewing')`).first<any>())?.n??0)
+};
+
+return json({
+ok:true,
+projects,
+arcs,
+chapters,
+scenes,
+beats,
+links,
+comments,
+assignments,
+notifications,
+journey,
+changes,
+health
+});
+}
+
+const productionTables:Record<string,string>={
+projects:"studio_story_projects",
+arcs:"studio_story_arcs",
+chapters:"studio_story_chapters",
+scenes:"studio_story_scenes",
+beats:"studio_story_beats"
+};
+
+const prodMatch=url.pathname.match(/^\/api\/production\/(projects|arcs|chapters|scenes|beats)(?:\/([^/]+))?$/);
+
+if(prodMatch&&request.method==="POST"&&!prodMatch[2]){
+requireRole(user,["primary_admin","admin","editor"]);
+
+const b=await readJsonBody(request);
+const id=crypto.randomUUID();
+const now=new Date().toISOString();
+const table=productionTables[prodMatch[1]];
+
+const configs:any={
+projects:{
+cols:["id","title","project_type","summary","status","created_by","updated_by","created_at","updated_at"],
+vals:[
+id,
+String(b.title??""),
+String(b.project_type??"story"),
+nullableString(b.summary),
+String(b.status??"planning"),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+arcs:{
+cols:["id","project_id","title","arc_code","summary","sort_order","status","created_by","updated_by","created_at","updated_at"],
+vals:[
+id,
+nullableString(b.project_id),
+String(b.title??""),
+nullableString(b.arc_code),
+nullableString(b.summary),
+Number(b.sort_order??0),
+String(b.status??"planned"),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+chapters:{
+cols:[
+"id",
+"project_id",
+"arc_id",
+"title",
+"chapter_code",
+"chapter_type",
+"summary",
+"body_notes",
+"sort_order",
+"status",
+"canon_status",
+"spoiler_level",
+"source_label",
+"source_text",
+"created_by",
+"updated_by",
+"created_at",
+"updated_at"
+],
+vals:[
+id,
+nullableString(b.project_id),
+nullableString(b.arc_id),
+String(b.title??""),
+nullableString(b.chapter_code),
+String(b.chapter_type??"chapter"),
+nullableString(b.summary),
+nullableString(b.body_notes),
+Number(b.sort_order??0),
+String(b.status??"draft"),
+String(b.canon_status??"draft"),
+String(b.spoiler_level??"none"),
+nullableString(b.source_label),
+nullableString(b.source_text),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+scenes:{
+cols:[
+"id",
+"project_id",
+"arc_id",
+"chapter_id",
+"title",
+"scene_code",
+"summary",
+"body_notes",
+"pov_character_id",
+"location_id",
+"era",
+"story_date",
+"sort_order",
+"status",
+"created_by",
+"updated_by",
+"created_at",
+"updated_at"
+],
+vals:[
+id,
+nullableString(b.project_id),
+nullableString(b.arc_id),
+nullableString(b.chapter_id),
+String(b.title??""),
+nullableString(b.scene_code),
+nullableString(b.summary),
+nullableString(b.body_notes),
+nullableString(b.pov_character_id),
+nullableString(b.location_id),
+nullableString(b.era),
+nullableString(b.story_date),
+Number(b.sort_order??0),
+String(b.status??"idea"),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+beats:{
+cols:[
+"id",
+"project_id",
+"arc_id",
+"scene_id",
+"title",
+"description",
+"beat_type",
+"status",
+"sort_order",
+"created_by",
+"updated_by",
+"created_at",
+"updated_at"
+],
+vals:[
+id,
+nullableString(b.project_id),
+nullableString(b.arc_id),
+nullableString(b.scene_id),
+String(b.title??""),
+nullableString(b.description),
+String(b.beat_type??"plot"),
+String(b.status??"idea"),
+Number(b.sort_order??0),
+user.id,
+user.id,
+now,
+now
+]
+}
+};
+
+const c=configs[prodMatch[1]];
+
+await env.umbra_studio_production
+.prepare(`INSERT INTO ${table}(${c.cols.join(",")}) VALUES(${c.cols.map(()=>"?").join(",")})`)
+.bind(...c.vals)
+.run();
+
+return json({ok:true,id},201);
+}
+
+if(prodMatch&&prodMatch[2]&&request.method==="PATCH"){
+requireRole(user,["primary_admin","admin","editor"]);
+
+const id=decodeURIComponent(prodMatch[2]);
+const b=await readJsonBody(request);
+const table=productionTables[prodMatch[1]];
+const now=new Date().toISOString();
+
+if(Object.keys(b).length===1&&b.status!==undefined){
+await env.umbra_studio_production
+.prepare(`UPDATE ${table} SET status=?,updated_at=? WHERE id=?`)
+.bind(String(b.status),now,id)
+.run();
+
+return json({ok:true,id});
+}
+
+const writableByType:Record<string,string[]>={
+projects:[
+"title",
+"project_type",
+"summary",
+"status",
+"canon_status",
+"spoiler_level",
+"is_public",
+"cover_url"
+],
+
+arcs:[
+"project_id",
+"title",
+"arc_code",
+"summary",
+"sort_order",
+"status",
+"canon_status",
+"spoiler_level"
+],
+
+chapters:[
+"project_id",
+"arc_id",
+"title",
+"chapter_code",
+"chapter_type",
+"summary",
+"body_notes",
+"sort_order",
+"status",
+"canon_status",
+"spoiler_level",
+"source_label",
+"source_text"
+],
+
+scenes:[
+"project_id",
+"arc_id",
+"chapter_id",
+"title",
+"scene_code",
+"summary",
+"body_notes",
+"pov_character_id",
+"location_id",
+"timeline_event_id",
+"era",
+"story_date",
+"sort_order",
+"status",
+"spoiler_level"
+],
+
+beats:[
+"project_id",
+"arc_id",
+"scene_id",
+"title",
+"description",
+"beat_type",
+"status",
+"sort_order"
+]
+};
+
+const allowed=writableByType[prodMatch[1]]??[];
+const keys=allowed.filter(key=>Object.prototype.hasOwnProperty.call(b,key));
+
+if(!keys.length){
+return errorResponse(400,"No supported Production fields were provided.");
+}
+
+const nullableFields=new Set([
+"project_id",
+"arc_id",
+"chapter_id",
+"scene_id",
+"summary",
+"body_notes",
+"pov_character_id",
+"location_id",
+"timeline_event_id",
+"era",
+"story_date",
+"arc_code",
+"chapter_code",
+"scene_code",
+"source_label",
+"source_text",
+"description",
+"cover_url"
+]);
+
+const numericFields=new Set([
+"sort_order",
+"is_public"
+]);
+
+const values=keys.map(key=>{
+if(numericFields.has(key)){
+return Number(b[key]??0);
+}
+
+if(nullableFields.has(key)){
+return nullableString(b[key]);
+}
+
+return String(b[key]??"");
+});
+
+const sql=
+`UPDATE ${table} SET `+
+keys.map(key=>`${key}=?`).join(",")+
+`,updated_by=?,updated_at=? WHERE id=?`;
+
+await env.umbra_studio_production
+.prepare(sql)
+.bind(...values,user.id,now,id)
+.run();
+
+return json({ok:true,id});
+}
+
+if(prodMatch&&prodMatch[2]&&request.method==="DELETE"){
+requireRole(user,["primary_admin","admin"]);
+
+const id=decodeURIComponent(prodMatch[2]);
+const table=productionTables[prodMatch[1]];
+
+await env.umbra_studio_production
+.prepare(`DELETE FROM ${table} WHERE id=?`)
+.bind(id)
+.run();
+
+return json({ok:true,id});
+}
+
+if(request.method==="POST"&&url.pathname==="/api/production/links"){
 				requireRole(user,["primary_admin","admin","editor"]);const b=await readJsonBody(request),id=crypto.randomUUID();
 				await env.umbra_studio_production.prepare(`INSERT INTO studio_story_entity_links(id,story_entity_type,story_entity_id,linked_entity_type,linked_entity_id,relation_label,notes,created_at) VALUES(?,?,?,?,?,?,?,?)`)
 				.bind(id,String(b.story_entity_type),String(b.story_entity_id),String(b.linked_entity_type),String(b.linked_entity_id),nullableString(b.relation_label),nullableString(b.notes),new Date().toISOString()).run();return json({ok:true,id},201);
@@ -1409,7 +1743,7 @@ export default {
 				const b=await readJsonBody(request),rows=Array.isArray(b.rows)?b.rows:[];for(const raw of rows as any[]){const id=crypto.randomUUID(),now=new Date().toISOString(),code=`REC-${Date.now()}-${id.slice(0,6)}`;await env.umbra_studio_production.prepare(`INSERT INTO studio_database_records(id,created_by,updated_by,record_type_id,record_code,name,subtitle,summary,details,workflow_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id,user.id,user.id,String(raw.record_type_id),code,String(raw.name??""),nullableString(raw.subtitle),nullableString(raw.summary),jsonText(raw.details,{}),String(raw.workflow_status??"draft"),now,now).run();}return json({ok:true,count:rows.length},201);
 			}
 			if(request.method==="DELETE"&&url.pathname==="/api/duplicates"){
-				requireRole(user,["primary_admin","admin"]);const b=await readJsonBody(request),table=String(b.table??""),id=String(b.id??"");const allowed:Record<string,string>={studio_characters:"studio_characters",studio_world_records:"studio_world_records",studio_world_locations:"studio_world_locations",studio_database_records:"studio_database_records",studio_story_projects:"studio_story_projects",studio_story_arcs:"studio_story_arcs",studio_story_scenes:"studio_story_scenes"};if(!allowed[table]||!id)return errorResponse(400,"Unsupported duplicate type.");await env.umbra_studio_production.prepare(`DELETE FROM ${allowed[table]} WHERE id=?`).bind(id).run();return json({ok:true});
+				requireRole(user,["primary_admin","admin"]);const b=await readJsonBody(request),table=String(b.table??""),id=String(b.id??"");const allowed:Record<string,string>={studio_characters:"studio_characters",studio_world_records:"studio_world_records",studio_world_locations:"studio_world_locations",studio_database_records:"studio_database_records",studio_story_projects:"studio_story_projects",studio_story_arcs:"studio_story_arcs",studio_story_chapters:"studio_story_chapters",studio_story_scenes:"studio_story_scenes"};if(!allowed[table]||!id)return errorResponse(400,"Unsupported duplicate type.");await env.umbra_studio_production.prepare(`DELETE FROM ${allowed[table]} WHERE id=?`).bind(id).run();return json({ok:true});
 			}
 			const canonMatch=url.pathname.match(/^\/api\/world-database\/records\/([^/]+)\/canon$/);
 			if(canonMatch&&request.method==="PATCH"){

@@ -63,7 +63,8 @@ type ContinuityIssue = { id:string; issue_type:string; severity:"info"|"warning"
 type PublicSettings = { id:boolean; title:string; subtitle:string|null; introduction:string|null; hero_image_url:string|null; is_enabled:boolean; updated_at:string; };
 type StoryProject = { id:string; title:string; project_type:string; summary:string|null; status:string; canon_status:string; spoiler_level:string; is_public:boolean; cover_url:string|null; created_by:string|null; updated_at:string; };
 type StoryArc = { id:string; project_id:string|null; title:string; arc_code:string|null; summary:string|null; sort_order:number; status:string; canon_status:string; spoiler_level:string; updated_at:string; };
-type StoryScene = { id:string; project_id:string|null; arc_id:string|null; title:string; scene_code:string|null; summary:string|null; body_notes:string|null; pov_character_id:string|null; location_id:string|null; timeline_event_id:string|null; era:string|null; story_date:string|null; sort_order:number; status:string; spoiler_level:string; updated_at:string; };
+type StoryChapter = { id:string; project_id:string|null; arc_id:string|null; title:string; chapter_code:string|null; chapter_type:string; summary:string|null; body_notes:string|null; sort_order:number; status:string; canon_status:string; spoiler_level:string; source_label:string|null; source_text:string|null; updated_at:string; };
+type StoryScene = { id:string; project_id:string|null; arc_id:string|null; chapter_id:string|null; title:string; scene_code:string|null; summary:string|null; body_notes:string|null; pov_character_id:string|null; location_id:string|null; timeline_event_id:string|null; era:string|null; story_date:string|null; sort_order:number; status:string; spoiler_level:string; updated_at:string; };
 type StoryBeat = { id:string; project_id:string|null; arc_id:string|null; scene_id:string|null; title:string; description:string|null; beat_type:string; status:string; sort_order:number; updated_at:string; };
 type StoryEntityLink = { id:string; story_entity_type:string; story_entity_id:string; linked_entity_type:string; linked_entity_id:string; relation_label:string|null; notes:string|null; created_at:string; };
 type ReviewComment = { id:string; entity_type:string; entity_id:string; body:string; status:string; created_by:string|null; created_by_name:string|null; created_at:string; resolved_at:string|null; };
@@ -379,9 +380,10 @@ const [publicBrowseCharacters,setPublicBrowseCharacters]=useState<StudioCharacte
 const [publicBrowseWorld,setPublicBrowseWorld]=useState<WorldRecord[]>([]);
 const [publicBrowseLocations,setPublicBrowseLocations]=useState<WorldLocation[]>([]);
 const [publicBrowseTimeline,setPublicBrowseTimeline]=useState<TimelineEvent[]>([]);
-const [productionTab,setProductionTab]=useState<"overview"|"projects"|"arcs"|"scenes"|"plot"|"journeys"|"review"|"assignments"|"inbox"|"graph">("overview");
+const [productionTab,setProductionTab]=useState<"overview"|"projects"|"arcs"|"chapters"|"scenes"|"plot"|"journeys"|"review"|"assignments"|"inbox"|"graph">("overview");
 const [storyProjects,setStoryProjects]=useState<StoryProject[]>([]);
 const [storyArcs,setStoryArcs]=useState<StoryArc[]>([]);
+const [storyChapters,setStoryChapters]=useState<StoryChapter[]>([]);
 const [storyScenes,setStoryScenes]=useState<StoryScene[]>([]);
 const [storyBeats,setStoryBeats]=useState<StoryBeat[]>([]);
 const [storyLinks,setStoryLinks]=useState<StoryEntityLink[]>([]);
@@ -405,10 +407,17 @@ const [messageAttachmentFile,setMessageAttachmentFile]=useState<File|null>(null)
 const [messagesBusy,setMessagesBusy]=useState(false);
 const [messagesError,setMessagesError]=useState("");
 const [backupValidation,setBackupValidation]=useState<{ok:boolean;message:string;summary?:string}|null>(null);
-const [productionSearch,setProductionSearch]=useState("");
+const [productionSearch,setProductionSearch]=useState("");
+const [storyInspector,setStoryInspector]=useState<{type:"story_chapter"|"story_scene";id:string}|null>(null);
+const [graphZoom,setGraphZoom]=useState(1);
+const [graphPan,setGraphPan]=useState({x:30,y:30});
+const [graphPositions,setGraphPositions]=useState<Record<string,{x:number;y:number}>>({});
+const [graphDrag,setGraphDrag]=useState<{key:string;dx:number;dy:number}|null>(null);
+const [graphPanDrag,setGraphPanDrag]=useState<{x:number;y:number;px:number;py:number}|null>(null);
 const [projectForm,setProjectForm]=useState({title:"",projectType:"story",summary:"",status:"planning"});
 const [arcForm,setArcForm]=useState({projectId:"",title:"",summary:"",status:"planned"});
-const [sceneForm,setSceneForm]=useState({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});
+const [chapterForm,setChapterForm]=useState({projectId:"",arcId:"",title:"",chapterCode:"",chapterType:"chapter",summary:"",bodyNotes:"",sortOrder:"0",status:"draft"});
+const [sceneForm,setSceneForm]=useState({projectId:"",arcId:"",chapterId:"",title:"",summary:"",bodyNotes:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});
 const [beatForm,setBeatForm]=useState({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});
 const [commentForm,setCommentForm]=useState({entityType:"story_project",entityId:"",body:"",notifyUserId:""});
 const [assignmentForm,setAssignmentForm]=useState({title:"",description:"",entityType:"story_project",entityId:"",assignedTo:"",priority:"normal",dueAt:""});
@@ -658,7 +667,7 @@ function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);t
 function StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>{title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips for me</button></div>:null;}
 const adminGuide:Record<string,string>={overview:"See the Studio workflow at a glance: review queue, team activity, and work needing attention.",content:"Review and move characters, Codex entries, locations, and timeline records through Draft, Review, Approved, and Published.",activity:"Audit who changed Studio content and when. Use this for accountability and troubleshooting.",sessions:"See authorized collaborator sign-ins, last-seen activity, and recorded sign-outs.",revisions:"Review automatic snapshots captured before tracked content changes or deletion.",notes:"Keep private production notes for the admin team. These are not public lore.",team:"Manage Studio collaborators, display names, access roles, and permissions.",training:"Create training lessons, attach videos and resources, assign team members, and review individual progress."};
 const explorerGuide:Record<string,string>={map:"Place and move locations on the interactive world map.",locations:"Create, edit, organize, and archive places in the Umbral world.",timeline:"Build chronological world and story events and connect them to characters, locations, and Codex records.",favorites:"Keep frequently used world items together for faster access.",archive:"Review locations and timeline events removed from active work without permanently losing them."};
-const productionGuide:Record<string,string>={overview:"See current story-production activity, pending work, and recent collaborator changes.",projects:"Create major stories, books, seasons, campaigns, or other top-level productions.",arcs:"Organize story arcs inside projects and track their production status.",scenes:"Write and organize scenes, POV characters, locations, dates, and production notes.",plot:"Break stories into ordered beats and plot events.",journeys:"Track how characters change across projects, arcs, and scenes.",review:"Leave and resolve editorial comments without changing the underlying canon directly.",assignments:"Assign production work to Studio collaborators with priority, status, and due dates.",inbox:"Read Studio notifications and work that needs your attention.",graph:"View connections between story entities and linked world information."};
+const productionGuide:Record<string,string>={overview:"See current story-production activity, pending work, and recent collaborator changes.",projects:"Create major stories, books, seasons, campaigns, or other top-level productions.",arcs:"Organize story arcs inside projects and track their production status.",chapters:"Organize chapters and episodes inside projects and arcs, preserve full manuscript text, and review recognized story connections.",scenes:"Write and organize scenes, POV characters, locations, dates, and production notes.",plot:"Break stories into ordered beats and plot events.",journeys:"Track how characters change across projects, arcs, and scenes.",review:"Leave and resolve editorial comments without changing the underlying canon directly.",assignments:"Assign production work to Studio collaborators with priority, status, and due dates.",inbox:"Read Studio notifications and work that needs your attention.",graph:"View connections between story entities and linked world information."};
 async function uploadCatalogFile(file:File){
  if(!session)return "";
  const imageKinds=["image","map","reference"]; if(imageKinds.includes(mediaForm.mediaType)&&!file.type.startsWith("image/"))throw new Error("Choose an image file for this media type.");
@@ -683,7 +692,7 @@ async function bulkWorkflow(status:string){const ids=[...selectedDatabaseRecordI
 async function bulkArchive(){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;try{await umbraCloudFetch("/api/world-database/bulk",{method:"POST",body:JSON.stringify({ids,archive:true})});setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Bulk archive failed.");}}
 function toggleDatabaseSelection(id:string){setSelectedDatabaseRecordIds(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});}
 async function createStudioBackup(){const label=backupLabel.trim()||`Umbra Studio backup ${new Date().toLocaleString()}`;try{await umbraCloudFetch("/api/world-database/backup",{method:"POST",body:JSON.stringify({label})});setBackupLabel("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Backup could not be created.");}}
-function exportStudioData(){const payload={version:"v10-studio-1.0",exported_at:new Date().toISOString(),studio_settings:studioSettings,characters:studioCharacters,codex:worldRecords,locations:worldLocations,timeline:timelineEvents,record_types:recordTypes,expanded_records:databaseRecords,collections,collection_items:collectionItems,tags:studioTags,tag_assignments:tagAssignments,universal_links:universalLinks,media_assets:mediaAssets,record_references:recordReferences,canon_history:canonHistory,continuity_issues:continuityIssues,story_projects:storyProjects,story_arcs:storyArcs,story_scenes:storyScenes,story_beats:storyBeats,story_entity_links:storyLinks,review_comments:reviewComments,assignments:studioAssignments,character_journey:characterJourney,direct_messages:directMessages};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`umbra-studio-1.0-export-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
+function exportStudioData(){const payload={version:"v10-studio-1.0",exported_at:new Date().toISOString(),studio_settings:studioSettings,characters:studioCharacters,codex:worldRecords,locations:worldLocations,timeline:timelineEvents,record_types:recordTypes,expanded_records:databaseRecords,collections,collection_items:collectionItems,tags:studioTags,tag_assignments:tagAssignments,universal_links:universalLinks,media_assets:mediaAssets,record_references:recordReferences,canon_history:canonHistory,continuity_issues:continuityIssues,story_projects:storyProjects,story_arcs:storyArcs,story_chapters:storyChapters,story_scenes:storyScenes,story_beats:storyBeats,story_entity_links:storyLinks,review_comments:reviewComments,assignments:studioAssignments,character_journey:characterJourney,direct_messages:directMessages};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`umbra-studio-1.0-export-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
 function exportSelectedCsv(){const rows=databaseRecords.filter(r=>selectedDatabaseRecordIds.has(r.id));if(!rows.length)return;const esc=(v:any)=>`"${String(v??"").replace(/"/g,'""')}"`;const csv=["record_code,type,name,subtitle,workflow_status,summary",...rows.map(r=>[r.record_code,recordTypes.find(t=>t.id===r.record_type_id)?.name||"",r.name,r.subtitle,r.workflow_status,r.summary].map(esc).join(","))].join("\n");const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="umbra-studio-selected-records.csv";a.click();URL.revokeObjectURL(url);}
 function recordCompleteness(r:StudioDatabaseRecord){let score=20;if(r.subtitle)score+=10;if(r.summary)score+=25;if(r.image_url)score+=15;if(r.details&&Object.keys(r.details).length)score+=15;if(tagAssignments.some(x=>x.entity_type==="database"&&x.entity_id===r.id))score+=5;if(collectionItems.some(x=>x.entity_type==="database"&&x.entity_id===r.id))score+=5;if(universalLinks.some(x=>(x.source_type==="database"&&x.source_id===r.id)||(x.target_type==="database"&&x.target_id===r.id)))score+=5;return Math.min(100,score);}
 
@@ -1748,34 +1757,523 @@ function smartImportStoryProductionType(
  const headingText=String(heading||"").toLowerCase();
  const text=`${heading} ${content}`.toLowerCase();
 
- if(
-  /\bscene\b/.test(headingText)||
-  /\bscene\s+\d+\b/.test(text)
- )return "scene";
-
- if(
-  /\bchapter\b/.test(headingText)||
-  /\bepisode\b/.test(headingText)
- )return "scene";
-
- if(
-  /\bbeat\b/.test(headingText)||
-  /\bstory beat\b/.test(text)||
-  /\bplot beat\b/.test(text)
- )return "beat";
-
- if(
-  /\barc\b/.test(headingText)||
-  /\bstory arc\b/.test(text)
- )return "arc";
-
- if(
-  /\bproject\b/.test(headingText)||
-  /\bseries\b/.test(headingText)||
-  /\bseason\b/.test(headingText)
- )return "project";
-
+ if(/\bscene\b/.test(headingText)||/\bscene\s+\d+\b/.test(text))return "scene";
+ if(/\bchapter\b/.test(headingText)||/\bepisode\b/.test(headingText))return "chapter";
+ if(/\bbeat\b/.test(headingText)||/\bstory beat\b/.test(text)||/\bplot beat\b/.test(text))return "beat";
+ if(/\barc\b/.test(headingText)||/\bstory arc\b/.test(text))return "arc";
+ if(/\bproject\b/.test(headingText)||/\bbook\b/.test(headingText)||/\bvolume\b/.test(headingText)||/\bseries\b/.test(headingText)||/\bseason\b/.test(headingText))return "project";
  return "";
+}
+
+type SmartManuscriptKind="project"|"arc"|"chapter"|"scene"|"beat";
+type SmartManuscriptNode={
+ kind:SmartManuscriptKind;
+ title:string;
+ code:string|null;
+ subtype:string|null;
+ body:string;
+ sortOrder:number;
+ projectKey:string|null;
+ arcKey:string|null;
+ chapterKey:string|null;
+ sceneKey:string|null;
+};
+
+function smartImportCleanStoryHeading(raw:string){
+ return String(raw||"")
+  .replace(/^#{1,6}\s*/,"")
+  .replace(/^\*\*|\*\*$/g,"")
+  .trim();
+}
+
+function smartImportStoryHeading(raw:string){
+ const clean=smartImportCleanStoryHeading(raw);
+ const match=clean.match(/^(BOOK|PROJECT|SEASON|VOLUME|ARC|CHAPTER|EPISODE|SCENE|BEAT)\b\s*(?:[:#-]|—|–)?\s*(.*)$/i);
+ if(!match)return null;
+
+ const label=match[1].toUpperCase();
+ const rest=String(match[2]||"").trim();
+ const kind:SmartManuscriptKind=
+  ["BOOK","PROJECT","SEASON","VOLUME"].includes(label)?"project":
+  label==="ARC"?"arc":
+  ["CHAPTER","EPISODE"].includes(label)?"chapter":
+  label==="SCENE"?"scene":"beat";
+
+ const codeMatch=rest.match(/^([IVXLCDM]+|\d+(?:\.\d+)*)(?:\s*(?:[:#-]|—|–)\s*|\s+)(.*)$/i);
+ const code=codeMatch?.[1]||null;
+ const title=(codeMatch?.[2]||rest||`${label}${code?` ${code}`:""}`).trim();
+
+ return {
+  kind,
+  label,
+  code,
+  title,
+  subtype:label==="EPISODE"?"episode":label==="CHAPTER"?"chapter":label.toLowerCase()
+ };
+}
+
+function parseSmartImportManuscript(raw:string){
+ const clean=String(raw||"").replace(/\r/g,"").trim();
+ if(!clean)return [] as SmartManuscriptNode[];
+
+ const lines=clean.split("\n");
+ const nodes:SmartManuscriptNode[]=[];
+ let current:SmartManuscriptNode|null=null;
+ let body:string[]=[];
+ let projectKey:string|null=null;
+ let arcKey:string|null=null;
+ let chapterKey:string|null=null;
+ let sceneKey:string|null=null;
+ let order=0;
+
+ const flush=()=>{
+  if(!current)return;
+  current.body=body.join("\n").trim();
+  nodes.push(current);
+  body=[];
+ };
+
+ for(const line of lines){
+  const parsed=smartImportStoryHeading(line.trim());
+  if(!parsed){
+   if(current)body.push(line);
+   continue;
+  }
+
+  flush();
+  order++;
+  const key=`${parsed.kind}:${order}:${normalizeImportName(parsed.title)}`;
+
+  if(parsed.kind==="project"){
+   projectKey=key;arcKey=null;chapterKey=null;sceneKey=null;
+  }else if(parsed.kind==="arc"){
+   arcKey=key;chapterKey=null;sceneKey=null;
+  }else if(parsed.kind==="chapter"){
+   chapterKey=key;sceneKey=null;
+  }else if(parsed.kind==="scene"){
+   sceneKey=key;
+  }
+
+  current={
+   kind:parsed.kind,
+   title:parsed.title,
+   code:parsed.code,
+   subtype:parsed.subtype,
+   body:"",
+   sortOrder:order,
+   projectKey,
+   arcKey,
+   chapterKey,
+   sceneKey
+  };
+
+  if(parsed.kind==="project")current.projectKey=key;
+  if(parsed.kind==="arc")current.arcKey=key;
+  if(parsed.kind==="chapter")current.chapterKey=key;
+  if(parsed.kind==="scene")current.sceneKey=key;
+ }
+
+ flush();
+
+ const structuralKinds=new Set(nodes.map(node=>node.kind));
+ const hasManuscriptStructure=
+  nodes.some(node=>node.kind==="chapter"||node.kind==="scene")&&
+  (nodes.length>=2||structuralKinds.size>=2);
+
+ return hasManuscriptStructure?nodes:[];
+}
+
+function smartImportCharacterAliases(character:StudioCharacterRow){
+ const identity:any=character.identity||{};
+ const values=[
+  character.name,
+  identity.name,
+  identity.alias,
+  identity.nicknames
+ ];
+
+ return [...new Set(
+  values.flatMap(value=>
+   Array.isArray(value)
+    ?value
+    :String(value||"").split(/[\n,|;/]+/)
+  )
+  .map(value=>String(value||"").trim())
+  .filter(value=>value.length>=2)
+ )].sort((a,b)=>b.length-a.length);
+}
+
+function smartImportEscapeRegex(value:string){
+ return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+}
+
+function smartImportPhraseRegex(value:string){
+ const escaped=smartImportEscapeRegex(value);
+ return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`,"giu");
+}
+
+function smartImportCharacterMentions(raw:string){
+ const text=String(raw||"");
+ const results=new Map<string,{character:StudioCharacterRow;relation:"appears"|"mentioned";index:number}>();
+ const referenceContext=/\b(remembered|remembering|thought of|thinking of|spoke of|speaking of|mentioned|letter from|message from|told .{0,30} years ago|years ago)\b/i;
+
+ for(const character of studioCharacters){
+  for(const alias of smartImportCharacterAliases(character)){
+   const regex=smartImportPhraseRegex(alias);
+   let match:RegExpExecArray|null;
+
+   while((match=regex.exec(text))){
+    const index=match.index+String(match[1]||"").length;
+    const before=text.slice(Math.max(0,index-90),index);
+    const relation=referenceContext.test(before)?"mentioned":"appears";
+    const previous=results.get(character.id);
+
+    if(!previous||previous.relation==="mentioned"&&relation==="appears"){
+     results.set(character.id,{character,relation,index});
+    }
+
+    if(regex.lastIndex===match.index)regex.lastIndex++;
+   }
+  }
+ }
+
+ return [...results.values()].sort((a,b)=>a.index-b.index);
+}
+
+function smartImportPovCharacter(raw:string){
+ const match=String(raw||"").match(/^\s*POV\s*:\s*([^\n]+)$/im);
+ if(!match)return null;
+ const wanted=normalizeImportName(match[1]);
+
+ return studioCharacters.find(character=>
+  smartImportCharacterAliases(character).some(alias=>
+   normalizeImportName(alias)===wanted
+  )
+ )||null;
+}
+
+function smartImportLocationMatch(title:string,body:string){
+ const active=worldLocations.filter(location=>!location.archived_at);
+ const heading=normalizeImportName(title);
+ const exact=active.find(location=>normalizeImportName(location.name)===heading);
+ if(exact)return exact;
+
+ const text=String(body||"");
+ return active
+  .map(location=>({
+   location,
+   index:text.search(smartImportPhraseRegex(location.name))
+  }))
+  .filter(item=>item.index>=0)
+  .sort((a,b)=>a.index-b.index||b.location.name.length-a.location.name.length)[0]?.location||null;
+}
+
+function smartImportUnknownProperNames(raw:string,knownCharacterIds:Set<string>){
+ const knownAliases=new Set(
+  studioCharacters
+   .filter(character=>knownCharacterIds.has(character.id))
+   .flatMap(character=>smartImportCharacterAliases(character))
+   .map(normalizeImportName)
+ );
+ const ignored=new Set(["POV","BOOK","PROJECT","SEASON","VOLUME","ARC","CHAPTER","EPISODE","SCENE","BEAT"]);
+ const matches=String(raw||"").match(/\b[A-Z][A-Za-z'’.-]{2,}(?:\s+[A-Z][A-Za-z'’.-]{2,}){0,2}\b/g)||[];
+
+ return [...new Set(matches.filter(name=>
+  !ignored.has(name.toUpperCase())&&
+  !knownAliases.has(normalizeImportName(name))
+ ))].slice(0,12);
+}
+
+async function routeSmartImportManuscript(raw:string){
+ const nodes=parseSmartImportManuscript(raw);
+ if(!nodes.length)return null;
+
+ let created=0;
+ let updated=0;
+ let kept=0;
+ let failed=0;
+ const warnings:string[]=[];
+ const projectIds=new Map<string,string>();
+ const arcIds=new Map<string,string>();
+ const chapterIds=new Map<string,string>();
+ const sceneIds=new Map<string,string>();
+ const chapterCharacters=new Map<string,Map<string,"appears"|"mentioned"|"pov">>();
+ const chapterPovs=new Map<string,StudioCharacterRow>();
+ const chapterLocations=new Map<string,Set<string>>();
+ const knownLinks=new Set(
+  storyLinks.map(link=>
+   [link.story_entity_type,link.story_entity_id,link.linked_entity_type,link.linked_entity_id,link.relation_label||""].join("|")
+  )
+ );
+
+ const getCreatedId=(response:any,key:string)=>
+  String(response?.[key]?.id||response?.id||"");
+
+ const addLink=async(
+  storyType:"story_chapter"|"story_scene",
+  storyId:string,
+  linkedType:"character"|"location",
+  linkedId:string,
+  relation:string
+ )=>{
+  if(!storyId||!linkedId)return;
+  const key=[storyType,storyId,linkedType,linkedId,relation].join("|");
+  if(knownLinks.has(key))return;
+
+  await umbraCloudFetch("/api/production/links",{
+   method:"POST",
+   body:JSON.stringify({
+    story_entity_type:storyType,
+    story_entity_id:storyId,
+    linked_entity_type:linkedType,
+    linked_entity_id:linkedId,
+    relation_label:relation,
+    notes:"Smart Ingest manuscript recognition"
+   })
+  });
+  knownLinks.add(key);
+ };
+
+ const chapterFullBody=(chapterNode:SmartManuscriptNode)=>{
+  const start=nodes.indexOf(chapterNode);
+  const collected:string[]=[];
+  for(let index=start;index<nodes.length;index++){
+   const node=nodes[index];
+   if(index>start&&(node.kind==="chapter"||node.kind==="arc"||node.kind==="project"))break;
+   if(node.kind==="chapter")collected.push(node.body);
+   else collected.push(`${node.kind.toUpperCase()}${node.code?` ${node.code}`:""} — ${node.title}\n${node.body}`.trim());
+  }
+  return collected.filter(Boolean).join("\n\n").trim();
+ };
+
+ for(const node of nodes){
+  try{
+   const projectId=node.projectKey?projectIds.get(node.projectKey)||null:null;
+   const arcId=node.arcKey?arcIds.get(node.arcKey)||null:null;
+   const chapterId=node.chapterKey?chapterIds.get(node.chapterKey)||null:null;
+   const sceneId=node.sceneKey?sceneIds.get(node.sceneKey)||null:null;
+   const normalized=normalizeImportName(node.title);
+
+   if(node.kind==="project"){
+    const existing=storyProjects.find(project=>normalizeImportName(project.title)===normalized);
+    if(existing){
+     await umbraCloudFetch(`/api/production/projects/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({title:existing.title,summary:node.body||existing.summary||null,status:existing.status})
+     });
+     projectIds.set(node.projectKey!,existing.id);updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/projects",{method:"POST",body:JSON.stringify({
+      title:node.title,project_type:node.subtype||"story",summary:node.body||null,status:"planning"
+     })});
+     const id=getCreatedId(response,"project");
+     if(id)projectIds.set(node.projectKey!,id);
+     created++;
+    }
+    continue;
+   }
+
+   if(node.kind==="arc"){
+    const existing=storyArcs.find(arc=>
+     normalizeImportName(arc.title)===normalized&&
+     (!projectId||arc.project_id===projectId)
+    );
+    if(existing){
+     await umbraCloudFetch(`/api/production/arcs/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({project_id:projectId??existing.project_id,title:existing.title,summary:node.body||existing.summary||null,sort_order:node.sortOrder,status:existing.status})
+     });
+     arcIds.set(node.arcKey!,existing.id);updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/arcs",{method:"POST",body:JSON.stringify({
+      project_id:projectId,title:node.title,summary:node.body||null,sort_order:node.sortOrder,status:"planned"
+     })});
+     const id=getCreatedId(response,"arc");
+     if(id)arcIds.set(node.arcKey!,id);
+     created++;
+    }
+    continue;
+   }
+
+   if(node.kind==="chapter"){
+    const fullBody=chapterFullBody(node);
+    const chapterType=node.subtype==="episode"?"episode":"chapter";
+    const existing=storyChapters.find(chapter=>
+     ((!node.code&&normalizeImportName(chapter.title)===normalized)||
+      (node.code&&normalizeImportName(chapter.chapter_code)===normalizeImportName(node.code)))&&
+     (!projectId||chapter.project_id===projectId)&&
+     (!arcId||chapter.arc_id===arcId)
+    );
+    if(existing){
+     await umbraCloudFetch(`/api/production/chapters/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({
+       project_id:projectId??existing.project_id,
+       arc_id:arcId??existing.arc_id,
+       title:node.title,
+       chapter_code:node.code,
+       chapter_type:chapterType,
+       summary:node.body||existing.summary||null,
+       body_notes:fullBody||existing.body_notes||null,
+       sort_order:node.sortOrder,
+       status:existing.status,
+       source_label:"Smart Ingest manuscript",
+       source_text:fullBody||null
+      })
+     });
+     chapterIds.set(node.chapterKey!,existing.id);const chapterPov=smartImportPovCharacter(fullBody);if(chapterPov)chapterPovs.set(existing.id,chapterPov);updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/chapters",{method:"POST",body:JSON.stringify({
+      project_id:projectId,
+      arc_id:arcId,
+      title:node.title,
+      chapter_code:node.code,
+      chapter_type:chapterType,
+      summary:node.body||null,
+      body_notes:fullBody||null,
+      sort_order:node.sortOrder,
+      status:"draft",
+      source_label:"Smart Ingest manuscript",
+      source_text:fullBody||null
+     })});
+     const id=getCreatedId(response,"chapter");
+     if(id){chapterIds.set(node.chapterKey!,id);const chapterPov=smartImportPovCharacter(fullBody);if(chapterPov)chapterPovs.set(id,chapterPov);}
+     created++;
+    }
+    continue;
+   }
+
+   if(node.kind==="scene"){
+    const pov=smartImportPovCharacter(node.body)||(chapterId?chapterPovs.get(chapterId)||null:null);
+    const location=smartImportLocationMatch(node.title,node.body);
+    const mentions=smartImportCharacterMentions(node.body);
+    if(pov&&!mentions.some(item=>item.character.id===pov.id)){
+     mentions.unshift({character:pov,relation:"appears",index:0});
+    }
+
+    const existing=storyScenes.find(scene=>
+     normalizeImportName(scene.title)===normalized&&
+     (!chapterId||scene.chapter_id===chapterId)&&
+     (!arcId||scene.arc_id===arcId)&&
+     (!projectId||scene.project_id===projectId)
+    );
+
+    let resolvedSceneId="";
+    if(existing){
+     await umbraCloudFetch(`/api/production/scenes/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({
+       project_id:projectId??existing.project_id,
+       arc_id:arcId??existing.arc_id,
+       chapter_id:chapterId??existing.chapter_id,
+       title:node.title,
+       scene_code:node.code,
+       summary:existing.summary||null,
+       body_notes:node.body||existing.body_notes||null,
+       pov_character_id:pov?.id??existing.pov_character_id??null,
+       location_id:location?.id??existing.location_id??null,
+       timeline_event_id:existing.timeline_event_id??null,
+       era:existing.era??null,
+       story_date:existing.story_date??null,
+       sort_order:node.sortOrder,
+       status:existing.status
+      })
+     });
+     resolvedSceneId=existing.id;updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/scenes",{method:"POST",body:JSON.stringify({
+      project_id:projectId,
+      arc_id:arcId,
+      chapter_id:chapterId,
+      title:node.title,
+      scene_code:node.code,
+      summary:null,
+      body_notes:node.body||null,
+      pov_character_id:pov?.id||null,
+      location_id:location?.id||null,
+      era:null,
+      story_date:null,
+      sort_order:node.sortOrder,
+      status:"idea"
+     })});
+     resolvedSceneId=getCreatedId(response,"scene");created++;
+    }
+
+    if(node.sceneKey&&resolvedSceneId)sceneIds.set(node.sceneKey,resolvedSceneId);
+
+    for(const mention of mentions){
+     const relation=pov?.id===mention.character.id?"pov":mention.relation;
+     await addLink("story_scene",resolvedSceneId,"character",mention.character.id,relation);
+     if(chapterId){
+      const map=chapterCharacters.get(chapterId)||new Map<string,"appears"|"mentioned"|"pov">();
+      const previous=map.get(mention.character.id);
+      const rank={mentioned:1,appears:2,pov:3};
+      if(!previous||rank[relation]>rank[previous])map.set(mention.character.id,relation);
+      chapterCharacters.set(chapterId,map);
+     }
+    }
+
+    if(location){
+     await addLink("story_scene",resolvedSceneId,"location",location.id,"setting");
+     if(chapterId){
+      const locations=chapterLocations.get(chapterId)||new Set<string>();
+      locations.add(location.id);chapterLocations.set(chapterId,locations);
+     }
+    }
+
+    const unknown=smartImportUnknownProperNames(node.body,new Set(mentions.map(item=>item.character.id)));
+    if(unknown.length)warnings.push(`${node.title}: review possible unmatched names — ${unknown.join(", ")}`);
+    continue;
+   }
+
+   if(node.kind==="beat"){
+    const existing=storyBeats.find(beat=>
+     normalizeImportName(beat.title)===normalized&&
+     (!sceneId||beat.scene_id===sceneId)
+    );
+    if(existing){
+     await umbraCloudFetch(`/api/production/beats/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({
+       project_id:projectId??existing.project_id,
+       arc_id:arcId??existing.arc_id,
+       scene_id:sceneId??existing.scene_id,
+       title:node.title,
+       description:node.body||existing.description||null,
+       beat_type:existing.beat_type||"plot",
+       status:existing.status,
+       sort_order:node.sortOrder
+      })
+     });
+     updated++;
+    }else{
+     await umbraCloudFetch("/api/production/beats",{method:"POST",body:JSON.stringify({
+      project_id:projectId,arc_id:arcId,scene_id:sceneId,title:node.title,
+      description:node.body||null,beat_type:"plot",status:"idea",sort_order:node.sortOrder
+     })});
+     created++;
+    }
+   }
+  }catch(error:any){
+   failed++;
+   warnings.push(`${node.kind} "${node.title}": ${error?.message||"routing failed"}`);
+  }
+ }
+
+ for(const [chapterId,characters] of chapterCharacters){
+  for(const [characterId,relation] of characters){
+   await addLink("story_chapter",chapterId,"character",characterId,relation);
+  }
+ }
+ for(const [chapterId,locations] of chapterLocations){
+  for(const locationId of locations){
+   await addLink("story_chapter",chapterId,"location",locationId,"setting");
+  }
+ }
+
+ await loadV9Production();
+
+ return {nodes:nodes.length,created,updated,kept,failed,warnings};
 }
 
 function smartImportDatabaseSubtitle(
@@ -1793,6 +2291,33 @@ function smartImportDatabaseSubtitle(
 }
 async function routeSmartImportSections(){
  setImportError("");
+
+ const manuscriptNodes=parseSmartImportManuscript(importText);
+ if(manuscriptNodes.length){
+  try{
+   const result=await routeSmartImportManuscript(importText);
+   if(!result)throw new Error("No manuscript structure was found.");
+   const summary=[
+    `${result.nodes} manuscript sections`,
+    result.created?`${result.created} created`:"",
+    result.updated?`${result.updated} updated`:"",
+    result.failed?`${result.failed} failed`:""
+   ].filter(Boolean).join(" • ");
+   const warningText=result.warnings.length
+    ?` Review: ${result.warnings.slice(0,6).join(" | ")}${result.warnings.length>6?" | …":""}`
+    :"";
+   setImportError(`Smart Ingest manuscript routing complete: ${summary}.${warningText}`);
+   setSmartImportChunks(current=>current.map(chunk=>
+    chunk.kind==="story_chronology"
+     ?{...chunk,routeStatus:result.failed?"failed":"updated",routeMessage:`Manuscript routed into Production • ${summary}.`}
+     :chunk
+   ));
+   return;
+  }catch(error:any){
+   setImportError(error?.message||"The manuscript could not be routed.");
+   return;
+  }
+ }
 
  const selected=smartImportChunks.filter(
   chunk=>chunk.selected&&!chunk.isContainer
@@ -2957,7 +3482,7 @@ async function routeSmartImportSections(){
   updated?`${updated} updated`:"",
   kept?`${kept} kept existing`:"",
   skipped?`${skipped} skipped`:"",
-  deferred?`${deferred} waiting for later Phase 2 routing`:"",
+  deferred?`${deferred} deferred for review or missing record types`:"",
   failed?`${failed} failed`:""
  ].filter(Boolean).join(" • ");
 
@@ -3168,16 +3693,103 @@ function sitewideDuplicateGroups(){
 async function deleteDuplicateEntity(table:string,id:string,label:string){if(!window.confirm(`Delete ${label}? This permanently deletes this record. Use this only after confirming it is a duplicate.`))return;try{await umbraCloudFetch("/api/duplicates",{method:"DELETE",body:JSON.stringify({table,id})});await Promise.all([loadWorldDatabase(),loadWorldRecords(),loadWorldExplorer(),loadV9Production(),loadMyCharacters()]);}catch(f){setDatabaseError(f instanceof Error?f.message:"Duplicate could not be deleted.");}}
 async function loadV9Production(){
  if(!session)return;setProductionBusy(true);setProductionError("");
- try{const data=await umbraCloudFetch<any>("/api/production");setStoryProjects((data.projects??[]) as StoryProject[]);setStoryArcs((data.arcs??[]) as StoryArc[]);setStoryScenes((data.scenes??[]) as StoryScene[]);setStoryBeats((data.beats??[]) as StoryBeat[]);setStoryLinks((data.links??[]) as StoryEntityLink[]);setReviewComments((data.comments??[]) as ReviewComment[]);setStudioAssignments((data.assignments??[]) as StudioAssignment[]);setStudioNotifications((data.notifications??[]) as StudioNotification[]);setCharacterJourney((data.journey??[]) as CharacterJourney[]);setChangesSinceVisit((data.changes??[]) as ChangeSinceVisit[]);if(data.health)setV9Health(data.health as V9Health);}catch(f){setProductionError(f instanceof Error?f.message:"Story Production could not be loaded.");}finally{setProductionBusy(false);}
+ try{const data=await umbraCloudFetch<any>("/api/production");setStoryProjects((data.projects??[]) as StoryProject[]);setStoryArcs((data.arcs??[]) as StoryArc[]);setStoryChapters((data.chapters??[]) as StoryChapter[]);setStoryScenes((data.scenes??[]) as StoryScene[]);setStoryBeats((data.beats??[]) as StoryBeat[]);setStoryLinks((data.links??[]) as StoryEntityLink[]);setReviewComments((data.comments??[]) as ReviewComment[]);setStudioAssignments((data.assignments??[]) as StudioAssignment[]);setStudioNotifications((data.notifications??[]) as StudioNotification[]);setCharacterJourney((data.journey??[]) as CharacterJourney[]);setChangesSinceVisit((data.changes??[]) as ChangeSinceVisit[]);if(data.health)setV9Health(data.health as V9Health);}catch(f){setProductionError(f instanceof Error?f.message:"Story Production could not be loaded.");}finally{setProductionBusy(false);}
 }
 async function openProduction(tab:typeof productionTab="overview"){setProductionTab(tab);setPage("production");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadV9Production(),loadAdminCenter(),loadWorldDatabase()]);}
 async function createStoryProject(){if(!session||!projectForm.title.trim())return;try{await umbraCloudFetch("/api/production/projects",{method:"POST",body:JSON.stringify({title:projectForm.title.trim(),project_type:projectForm.projectType,summary:projectForm.summary.trim()||null,status:projectForm.status})});setProjectForm({title:"",projectType:"story",summary:"",status:"planning"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Project could not be created.");}}
 async function createStoryArc(){if(!session||!arcForm.title.trim())return;try{await umbraCloudFetch("/api/production/arcs",{method:"POST",body:JSON.stringify({project_id:arcForm.projectId||null,title:arcForm.title.trim(),summary:arcForm.summary.trim()||null,status:arcForm.status})});setArcForm({projectId:"",title:"",summary:"",status:"planned"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Arc could not be created.");}}
-async function createStoryScene(){if(!session||!sceneForm.title.trim())return;try{await umbraCloudFetch("/api/production/scenes",{method:"POST",body:JSON.stringify({project_id:sceneForm.projectId||null,arc_id:sceneForm.arcId||null,title:sceneForm.title.trim(),summary:sceneForm.summary.trim()||null,pov_character_id:sceneForm.povId||null,location_id:sceneForm.locationId||null,era:sceneForm.era.trim()||null,story_date:sceneForm.storyDate.trim()||null,status:sceneForm.status})});setSceneForm({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Scene could not be created.");}}
+async function createStoryChapter(){
+ if(!session||!chapterForm.title.trim())return;
+
+ try{
+  await umbraCloudFetch("/api/production/chapters",{
+   method:"POST",
+   body:JSON.stringify({
+    project_id:chapterForm.projectId||null,
+    arc_id:chapterForm.arcId||null,
+    title:chapterForm.title.trim(),
+    chapter_code:chapterForm.chapterCode.trim()||null,
+    chapter_type:chapterForm.chapterType,
+    summary:chapterForm.summary.trim()||null,
+    body_notes:chapterForm.bodyNotes.trim()||null,
+    sort_order:Number(chapterForm.sortOrder||0),
+    status:chapterForm.status
+   })
+  });
+
+  setChapterForm({
+   projectId:"",
+   arcId:"",
+   title:"",
+   chapterCode:"",
+   chapterType:"chapter",
+   summary:"",
+   bodyNotes:"",
+   sortOrder:"0",
+   status:"draft"
+  });
+
+  await loadV9Production();
+
+ }catch(f){
+  setProductionError(
+   f instanceof Error
+    ?f.message
+    :"Chapter could not be created."
+  );
+ }
+}
+
+async function createStoryScene(){
+ if(!session||!sceneForm.title.trim())return;
+
+ try{
+  await umbraCloudFetch("/api/production/scenes",{
+   method:"POST",
+   body:JSON.stringify({
+    project_id:sceneForm.projectId||null,
+    arc_id:sceneForm.arcId||null,
+    chapter_id:sceneForm.chapterId||null,
+    title:sceneForm.title.trim(),
+    summary:sceneForm.summary.trim()||null,
+    body_notes:sceneForm.bodyNotes.trim()||null,
+    pov_character_id:sceneForm.povId||null,
+    location_id:sceneForm.locationId||null,
+    era:sceneForm.era.trim()||null,
+    story_date:sceneForm.storyDate.trim()||null,
+    status:sceneForm.status
+   })
+  });
+
+  setSceneForm({
+   projectId:"",
+   arcId:"",
+   chapterId:"",
+   title:"",
+   summary:"",
+   bodyNotes:"",
+   povId:"",
+   locationId:"",
+   era:"",
+   storyDate:"",
+   status:"idea"
+  });
+
+  await loadV9Production();
+
+ }catch(f){
+  setProductionError(
+   f instanceof Error
+    ?f.message
+    :"Scene could not be created."
+  );
+ }
+}
+
 async function createStoryBeat(){if(!session||!beatForm.title.trim())return;try{await umbraCloudFetch("/api/production/beats",{method:"POST",body:JSON.stringify({project_id:beatForm.projectId||null,arc_id:beatForm.arcId||null,scene_id:beatForm.sceneId||null,title:beatForm.title.trim(),description:beatForm.description.trim()||null,beat_type:beatForm.beatType,status:beatForm.status})});setBeatForm({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Beat could not be created.");}}
 async function createStoryEntityLink(){if(!session||!storyLinkForm.storyId||!storyLinkForm.linkedId)return;try{await umbraCloudFetch("/api/production/links",{method:"POST",body:JSON.stringify({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null})});setStoryLinkForm(x=>({...x,linkedId:"",label:"",notes:""}));await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story link could not be created.");}}
 async function deleteStoryEntityLink(id:string){try{await umbraCloudFetch(`/api/production/links/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story link could not be deleted.");}}
-async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){if(!confirm(`Delete "${label}"? This cannot be undone.`))return;const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story item could not be deleted.");}}
+async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_chapters"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){if(!confirm(`Delete "${label}"? This cannot be undone.`))return;const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story item could not be deleted.");}}
 async function updateProductionStatus(table:string,id:string,status:string){const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({status})});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Status could not be updated.");}}
 async function addReviewCommentV9(){if(!commentForm.entityId||!commentForm.body.trim())return;try{await umbraCloudFetch("/api/production/reviews",{method:"POST",body:JSON.stringify({entity_type:commentForm.entityType,entity_id:commentForm.entityId,body:commentForm.body.trim(),notify_user_id:commentForm.notifyUserId||null})});setCommentForm(x=>({...x,body:"",notifyUserId:""}));await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Review comment could not be added.");}}
 async function resolveReviewComment(id:string){try{await umbraCloudFetch(`/api/production/reviews/${encodeURIComponent(id)}`,{method:"PATCH"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Review comment could not be resolved.");}}
@@ -3185,7 +3797,7 @@ async function createAssignmentV9(){if(!assignmentForm.title.trim()||!assignment
 async function markNotificationRead(id:string){try{await umbraCloudFetch(`/api/production/notifications/${encodeURIComponent(id)}`,{method:"PATCH"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Notification could not be updated.");}}
 async function createJourneyEvent(){if(!session||!journeyForm.characterId||!journeyForm.title.trim())return;try{await umbraCloudFetch("/api/production/journey",{method:"POST",body:JSON.stringify({character_id:journeyForm.characterId,project_id:journeyForm.projectId||null,arc_id:journeyForm.arcId||null,scene_id:journeyForm.sceneId||null,journey_type:journeyForm.journeyType,title:journeyForm.title.trim(),description:journeyForm.description.trim()||null,before_value:journeyForm.beforeValue.trim()||null,after_value:journeyForm.afterValue.trim()||null})});setJourneyForm({characterId:"",projectId:"",arcId:"",sceneId:"",journeyType:"development",title:"",description:"",beforeValue:"",afterValue:""});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Journey event could not be created.");}}
 
-function productionEntityOptions(type:string){if(type==="story_project")return storyProjects.map(x=>({id:x.id,label:x.title}));if(type==="story_arc")return storyArcs.map(x=>({id:x.id,label:x.title}));if(type==="story_scene")return storyScenes.map(x=>({id:x.id,label:x.title}));if(type==="database")return databaseRecords.map(x=>({id:x.id,label:x.name}));if(type==="character")return studioCharacters.map(x=>({id:x.id,label:x.name}));if(type==="codex")return worldRecords.map(x=>({id:x.id,label:x.name}));if(type==="location")return worldLocations.map(x=>({id:x.id,label:x.name}));return timelineEvents.map(x=>({id:x.id,label:x.title}));}
+function productionEntityOptions(type:string){if(type==="story_project")return storyProjects.map(x=>({id:x.id,label:x.title}));if(type==="story_arc")return storyArcs.map(x=>({id:x.id,label:x.title}));if(type==="story_chapter")return storyChapters.map(x=>({id:x.id,label:x.title}));if(type==="story_scene")return storyScenes.map(x=>({id:x.id,label:x.title}));if(type==="database")return databaseRecords.map(x=>({id:x.id,label:x.name}));if(type==="character")return studioCharacters.map(x=>({id:x.id,label:x.name}));if(type==="codex")return worldRecords.map(x=>({id:x.id,label:x.name}));if(type==="location")return worldLocations.map(x=>({id:x.id,label:x.name}));return timelineEvents.map(x=>({id:x.id,label:x.title}));}
 
 async function loadStudioSettings(){try{const data=await umbraCloudFetch<{ok:true;settings:StudioSettings|null}>("/api/settings");if(data.settings)setStudioSettings({...data.settings,autosave_enabled:Boolean((data.settings as any).autosave_enabled),show_dashboard_activity:Boolean((data.settings as any).show_dashboard_activity),show_help_descriptions:Boolean((data.settings as any).show_help_descriptions)} as StudioSettings);}catch(failure){setSettingsError(failure instanceof Error?failure.message:"Studio settings could not be loaded.");}}
 // Keep the global help preference in sync when another administrator changes it.
@@ -3248,7 +3860,7 @@ async function sendDirectMessage(){
 }
 async function markConversationRead(otherUserId:string){if(!session)return;try{await umbraCloudFetch(`/api/messages/read/${encodeURIComponent(otherUserId)}`,{method:"PATCH"});await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Conversation could not be marked read.");}}
 async function openTransferCenter(){setPage("transfer");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadWorldDatabase(),loadAdminCenter(),loadV9Production(),loadStudioSettings(),loadDirectMessages()]);}
-function validateBackupFile(file:File|null){setBackupValidation(null);if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const payload=JSON.parse(String(reader.result||"{}"));if(!payload||typeof payload!=="object")throw new Error("This is not a Studio backup object.");const version=String(payload.version||"");if(!version.startsWith("v10"))throw new Error(`Unsupported backup version: ${version||"unknown"}.`);const counts=[['characters',payload.characters],['codex',payload.codex],['locations',payload.locations],['timeline',payload.timeline],['lore records',payload.expanded_records],['story projects',payload.story_projects],['story scenes',payload.story_scenes]].map(([label,rows]:any)=>`${Array.isArray(rows)?rows.length:0} ${label}`).join(" • ");setBackupValidation({ok:true,message:"Valid Umbra Studio 1.0 backup.",summary:counts});}catch(e){setBackupValidation({ok:false,message:e instanceof Error?e.message:"Backup could not be validated."});}};reader.readAsText(file);}
+function validateBackupFile(file:File|null){setBackupValidation(null);if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const payload=JSON.parse(String(reader.result||"{}"));if(!payload||typeof payload!=="object")throw new Error("This is not a Studio backup object.");const version=String(payload.version||"");if(!version.startsWith("v10"))throw new Error(`Unsupported backup version: ${version||"unknown"}.`);const counts=[['characters',payload.characters],['codex',payload.codex],['locations',payload.locations],['timeline',payload.timeline],['lore records',payload.expanded_records],['story projects',payload.story_projects],['story chapters',payload.story_chapters],['story scenes',payload.story_scenes]].map(([label,rows]:any)=>`${Array.isArray(rows)?rows.length:0} ${label}`).join(" • ");setBackupValidation({ok:true,message:"Valid Umbra Studio 1.0 backup.",summary:counts});}catch(e){setBackupValidation({ok:false,message:e instanceof Error?e.message:"Backup could not be validated."});}};reader.readAsText(file);}
 
 async function saveStudioSettings(){if(!studioSettings||adminRole!=="primary_admin")return;setSettingsBusy(true);setSettingsError("");try{await umbraCloudFetch("/api/settings",{method:"PUT",body:JSON.stringify(studioSettings)});await loadStudioSettings();}catch(failure){setSettingsError(failure instanceof Error?failure.message:"Studio settings could not be saved.");}finally{setSettingsBusy(false);}}
 async function registerStudioSession(){if(!session?.user.id||activeStudioSessionId)return;try{const data=await umbraCloudFetch<{ok:true;id:string}>("/api/sessions",{method:"POST"});setActiveStudioSessionId(data.id);}catch(failure){console.error("Studio session registration failed:",failure);}}
@@ -3743,6 +4355,7 @@ function openCharacterProfile(saved: StudioCharacterRow, _from: "characters" | "
 setSelectedCharacter(saved);
 setPage("profile");
 void loadConnectedRelationships(saved.id);
+void loadV9Production();
 void loadWorldRecords();
 window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -5651,6 +6264,24 @@ const mediaItems = [
   { label: "Alternate / True Form", url: media.alternateFormUrl || "" },
 ].filter((item) => item.url);
 const galleryImages = Array.isArray(media.galleryUrls) ? media.galleryUrls : [];
+const storyAppearances = storyLinks
+  .filter(link=>link.linked_entity_type==="character"&&link.linked_entity_id===saved.id&&["story_chapter","story_scene"].includes(link.story_entity_type))
+  .map(link=>{
+    const chapter=link.story_entity_type==="story_chapter"?storyChapters.find(x=>x.id===link.story_entity_id):null;
+    const scene=link.story_entity_type==="story_scene"?storyScenes.find(x=>x.id===link.story_entity_id):null;
+    const chapterForScene=scene?.chapter_id?storyChapters.find(x=>x.id===scene.chapter_id):null;
+    const projectId=chapter?.project_id||scene?.project_id||chapterForScene?.project_id||null;
+    const arcId=chapter?.arc_id||scene?.arc_id||chapterForScene?.arc_id||null;
+    return {
+      key:link.id,
+      type:chapter?(chapter.chapter_type==="episode"?"Episode":"Chapter"):"Scene",
+      title:chapter?.title||scene?.title||"Story record",
+      relation:(link.relation_label||"appears").replace(/_/g," "),
+      project:storyProjects.find(x=>x.id===projectId)?.title||"",
+      arc:storyArcs.find(x=>x.id===arcId)?.title||"",
+    };
+  })
+  .filter((row,index,all)=>all.findIndex(x=>x.type===row.type&&x.title===row.title&&x.relation===row.relation)===index);
 const displayProfileValue = (value: unknown): string => {
   if (Array.isArray(value)) {
     return value
@@ -5743,6 +6374,7 @@ return (
       {connectedRelationships.length > 0 && <section className="profile-section"><div className="profile-section-title"><span>♙</span><h2>Character Connections</h2></div><div className="profile-media-grid">{connectedRelationships.map((link) => { const target=link.target; if(!target) return null; const image=target.portrait_url || target.media?.portraitUrl || ""; return <button type="button" className="profile-media-card" style={{textAlign:"left",cursor:"pointer",color:"inherit"}} key={link.id} onClick={() => void openConnectedCharacterProfile(target)}>{image ? <img src={image} alt={`${target.name} portrait`} /> : <div style={{height:300,display:"grid",placeItems:"center",fontSize:64,color:"#e5bd57"}}>☾</div>}<span style={{textTransform:"capitalize"}}>{target.name} • {link.relationship_type}</span></button>})}</div></section>}
       <ProfileSection title="Written Relationships" symbol="♙" items={relationshipItems} />
       <ProfileSection title="Production & Canon Control" symbol="✧" items={productionItems} />
+      <section className="profile-section"><div className="profile-section-title"><span>⌘</span><h2>Story Appearances</h2></div>{storyAppearances.length>0?<div className="profile-media-grid">{storyAppearances.map(item=><article className="profile-media-card" key={item.key} style={{textAlign:"left"}}><span style={{textTransform:"capitalize"}}>{item.type} • {item.relation}</span><strong>{item.title}</strong><small>{[item.project,item.arc].filter(Boolean).join(" → ")||"Story Production"}</small></article>)}</div>:<p className="profile-media-notes">No recognized chapter or scene appearances yet.</p>}</section>
       {(mediaItems.length > 0 || galleryImages.length > 0 || media.galleryUrl || media.mediaNotes) && <section className="profile-section"><div className="profile-section-title"><span>▣</span><h2>Media & References</h2></div>{(mediaItems.length > 0 || galleryImages.length > 0) && <div className="profile-media-grid">{mediaItems.map((item) => <a className="profile-media-card" href={item.url} target="_blank" rel="noreferrer" key={item.label}><img src={item.url} alt={`${saved.name} ${item.label}`} /><span>{item.label}</span></a>)}{galleryImages.map((url: string, index: number) => <a className="profile-media-card" href={url} target="_blank" rel="noreferrer" key={url}><img src={url} alt={`${saved.name} gallery ${index + 1}`} /><span>Gallery Image {index + 1}</span></a>)}</div>}{media.galleryUrl && <a className="profile-gallery-link" href={media.galleryUrl} target="_blank" rel="noreferrer">Open additional gallery / media →</a>}{media.mediaNotes && <p className="profile-media-notes">{media.mediaNotes}</p>}</section>}
     </div>
   </main>
@@ -6644,20 +7276,47 @@ if(page==="production"){
  const arcName=(id:string|null)=>storyArcs.find(x=>x.id===id)?.title||"No arc";
  const personName=(id:string|null)=>adminMembers.find(x=>x.user_id===id)?.display_name||adminMembers.find(x=>x.user_id===id)?.email||"Studio Member";
  const filteredScenes=storyScenes.filter(x=>[x.title,x.summary,x.era,x.story_date,projectName(x.project_id),arcName(x.arc_id)].filter(Boolean).join(" ").toLowerCase().includes(productionSearch.toLowerCase()));
- const graphNodes=[...storyProjects.map(x=>({id:x.id,label:x.title,type:"Project"})),...storyArcs.map(x=>({id:x.id,label:x.title,type:"Arc"})),...storyScenes.map(x=>({id:x.id,label:x.title,type:"Scene"})),...databaseRecords.slice(0,80).map(x=>({id:x.id,label:x.name,type:"Lore"}))];
+ const chapterName=(id:string|null)=>storyChapters.find(x=>x.id===id)?.title||"No chapter";
+ const inspectorChapter=storyInspector?.type==="story_chapter"?storyChapters.find(x=>x.id===storyInspector.id)||null:null;
+ const inspectorScene=storyInspector?.type==="story_scene"?storyScenes.find(x=>x.id===storyInspector.id)||null:null;
+ const inspectorLinks=storyInspector?storyLinks.filter(x=>x.story_entity_type===storyInspector.type&&x.story_entity_id===storyInspector.id):[];
+ const inspectorLinkedLabel=(l:StoryEntityLink)=>l.linked_entity_type==="character"?(studioCharacters.find(x=>x.id===l.linked_entity_id)?.name||"Character"):l.linked_entity_type==="location"?(worldLocations.find(x=>x.id===l.linked_entity_id)?.name||"Location"):l.linked_entity_type==="codex"?(worldRecords.find(x=>x.id===l.linked_entity_id)?.name||"Codex record"):l.linked_entity_type==="database"?(databaseRecords.find(x=>x.id===l.linked_entity_id)?.name||"Lore record"):l.linked_entity_type.replace(/_/g," ");
+ const graphStoryLinks=storyLinks.filter(l=>["story_project","story_arc","story_chapter","story_scene"].includes(l.story_entity_type));
+ const graphCharacterIds=new Set(graphStoryLinks.filter(l=>l.linked_entity_type==="character").map(l=>l.linked_entity_id));
+ const graphLocationIds=new Set(graphStoryLinks.filter(l=>l.linked_entity_type==="location").map(l=>l.linked_entity_id));
+ const graphNodes=[
+  ...storyProjects.map((x,i)=>({key:`project:${x.id}`,id:x.id,label:x.title,type:"Project",x:40,y:60+i*110,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}})),
+  ...storyArcs.map((x,i)=>({key:`arc:${x.id}`,id:x.id,label:x.title,type:"Arc",x:310,y:60+i*110,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}})),
+  ...storyChapters.map((x,i)=>({key:`chapter:${x.id}`,id:x.id,label:x.title,type:x.chapter_type==="episode"?"Episode":"Chapter",x:580,y:60+i*110,inspect:{type:"story_chapter" as const,id:x.id}})),
+  ...storyScenes.map((x,i)=>({key:`scene:${x.id}`,id:x.id,label:x.title,type:"Scene",x:850,y:60+i*110,inspect:{type:"story_scene" as const,id:x.id}})),
+  ...studioCharacters.filter(x=>graphCharacterIds.has(x.id)).map((x,i)=>({key:`character:${x.id}`,id:x.id,label:x.name,type:"Character",x:1120,y:60+i*100,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}})),
+  ...worldLocations.filter(x=>graphLocationIds.has(x.id)).map((x,i)=>({key:`location:${x.id}`,id:x.id,label:x.name,type:"Location",x:1390,y:60+i*100,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}}))
+ ];
+ const graphEdges=[
+  ...storyArcs.filter(x=>x.project_id).map(x=>({from:`project:${x.project_id}`,to:`arc:${x.id}`,label:"contains"})),
+  ...storyChapters.flatMap(x=>x.arc_id?[{from:`arc:${x.arc_id}`,to:`chapter:${x.id}`,label:"contains"}]:x.project_id?[{from:`project:${x.project_id}`,to:`chapter:${x.id}`,label:"contains"}]:[]),
+  ...storyScenes.flatMap(x=>x.chapter_id?[{from:`chapter:${x.chapter_id}`,to:`scene:${x.id}`,label:"contains"}]:x.arc_id?[{from:`arc:${x.arc_id}`,to:`scene:${x.id}`,label:"contains"}]:x.project_id?[{from:`project:${x.project_id}`,to:`scene:${x.id}`,label:"contains"}]:[]),
+  ...graphStoryLinks.flatMap(l=>{const from=l.story_entity_type==="story_project"?`project:${l.story_entity_id}`:l.story_entity_type==="story_arc"?`arc:${l.story_entity_id}`:l.story_entity_type==="story_chapter"?`chapter:${l.story_entity_id}`:`scene:${l.story_entity_id}`;const to=l.linked_entity_type==="character"?`character:${l.linked_entity_id}`:l.linked_entity_type==="location"?`location:${l.linked_entity_id}`:"";return to?[{from,to,label:l.relation_label||"linked"}]:[]})
+ ];
+ const graphPos=(n:(typeof graphNodes)[number])=>graphPositions[n.key]||{x:n.x,y:n.y};
+ const graphNodeByKey=new Map(graphNodes.map(n=>[n.key,n]));
  return <main className="dashboard-shell production-v9-page"><StudioTopNav /><section className="production-v9-shell"><div className="production-v9-hero"><div><p className="eyebrow">STORY • COLLABORATION • WORLD INTELLIGENCE</p><h1>Story Production Center</h1><p>Plan stories without duplicating your lore. Connect projects, arcs, scenes, plot beats, characters, locations, canon records, reviews, assignments, and collaborator activity.</p></div><button className="secondary-action" onClick={()=>void loadV9Production()}>{productionBusy?"Refreshing...":"Refresh Production"}</button></div>{productionError&&<p className="login-error">{productionError}</p>}
  <div className="v9-metrics"><div><strong>{v9Health?.projects??storyProjects.length}</strong><span>Projects</span></div><div><strong>{v9Health?.scenes??storyScenes.length}</strong><span>Scenes</span></div><div><strong>{v9Health?.open_assignments??0}</strong><span>Open Assignments</span></div><div><strong>{v9Health?.my_unread_notifications??studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread</span></div><div><strong>{v9Health?.continuity_open??continuityIssues.filter(x=>['open','reviewing'].includes(x.status)).length}</strong><span>Continuity Alerts</span></div></div>
- <nav className="admin-tabs v9-tabs">{(["overview","projects","arcs","scenes","plot","journeys","review","assignments","inbox","graph"] as const).map(t=><button key={t} className={productionTab===t?"active":""} onClick={()=>setProductionTab(t)}>{t}</button>)}</nav><StudioGuide title="Story Production">{productionGuide[productionTab]}</StudioGuide>
+ <nav className="admin-tabs v9-tabs">{(["overview","projects","arcs","chapters","scenes","plot","journeys","review","assignments","inbox","graph"] as const).map(t=><button key={t} className={productionTab===t?"active":""} onClick={()=>setProductionTab(t)}>{t}</button>)}</nav><StudioGuide title="Story Production">{productionGuide[productionTab]}</StudioGuide>
  {productionTab==="overview"&&<><div className="v9-overview-grid"><section className="admin-panel"><span className="card-label">WHAT CHANGED?</span><h2>Since Your Last Visit</h2><p className="admin-help">Changes are timestamped and attributed to each collaborator's Studio name.</p><div className="admin-feed">{changesSinceVisit.slice(0,12).map(x=><div className="admin-feed-row" key={x.id}><div><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")}</span></div><small>{x.actor_name} • {new Date(x.created_at).toLocaleString()}</small></div>)}{changesSinceVisit.length===0&&<p className="admin-empty">No collaborator changes since your previous Studio visit.</p>}</div></section><section className="admin-panel"><span className="card-label">PRODUCTION PULSE</span><h2>Work Waiting on the Team</h2><div className="v9-pulse"><p><strong>{reviewComments.filter(x=>x.status==='open').length}</strong> open review comments</p><p><strong>{studioAssignments.filter(x=>!['done','cancelled'].includes(x.status)).length}</strong> active assignments</p><p><strong>{storyBeats.filter(x=>x.status!=='complete').length}</strong> unfinished plot beats</p><p><strong>{storyScenes.filter(x=>x.status==='review').length}</strong> scenes in review</p></div></section></div><section className="admin-panel"><span className="card-label">RECENT STORY WORK</span><h2>Production Activity</h2><div className="v9-card-grid">{storyProjects.slice(0,6).map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><small>{p.status.replace(/_/g,' ')} • {p.canon_status.replace(/_/g,' ')}</small></article>)}</div></section></>}
  {productionTab==="projects"&&<><section className="admin-panel"><span className="card-label">SAGAS • BOOKS • SEASONS • STORIES</span><h2>Create Story Project</h2><div className="v9-form-grid"><input placeholder="Project title" value={projectForm.title} onChange={e=>setProjectForm({...projectForm,title:e.target.value})}/><select value={projectForm.projectType} onChange={e=>setProjectForm({...projectForm,projectType:e.target.value})}><option value="story">Story</option><option value="saga">Saga</option><option value="book">Book</option><option value="season">Season</option><option value="volume">Volume</option><option value="campaign">Campaign</option></select><select value={projectForm.status} onChange={e=>setProjectForm({...projectForm,status:e.target.value})}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><textarea placeholder="Project summary" value={projectForm.summary} onChange={e=>setProjectForm({...projectForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryProject()}>Create Project</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyProjects.map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><select value={p.status} onChange={e=>void updateProductionStatus("studio_story_projects",p.id,e.target.value)}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option><option value="archived">Archived</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_projects",p.id,p.title)}>Delete</button></article>)}</div></section></>}
  {productionTab==="arcs"&&<><section className="admin-panel"><span className="card-label">STORY STRUCTURE</span><h2>Create Arc</h2><div className="v9-form-grid"><select value={arcForm.projectId} onChange={e=>setArcForm({...arcForm,projectId:e.target.value})}><option value="">No project yet</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Arc title" value={arcForm.title} onChange={e=>setArcForm({...arcForm,title:e.target.value})}/><textarea placeholder="Arc summary" value={arcForm.summary} onChange={e=>setArcForm({...arcForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryArc()}>Create Arc</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyArcs.map(a=><article className="v9-story-card" key={a.id}><span>{projectName(a.project_id)}</span><h3>{a.title}</h3><p>{a.summary||"No summary yet."}</p><select value={a.status} onChange={e=>void updateProductionStatus("studio_story_arcs",a.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_arcs",a.id,a.title)}>Delete</button></article>)}</div></section></>}
- {productionTab==="scenes"&&<><section className="admin-panel"><span className="card-label">SCENE MANAGER</span><h2>Create Scene</h2><div className="v9-form-grid"><select value={sceneForm.projectId} onChange={e=>setSceneForm({...sceneForm,projectId:e.target.value,arcId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.arcId} onChange={e=>setSceneForm({...sceneForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.filter(x=>!sceneForm.projectId||x.project_id===sceneForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Scene title" value={sceneForm.title} onChange={e=>setSceneForm({...sceneForm,title:e.target.value})}/><select value={sceneForm.povId} onChange={e=>setSceneForm({...sceneForm,povId:e.target.value})}><option value="">No POV character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={sceneForm.locationId} onChange={e=>setSceneForm({...sceneForm,locationId:e.target.value})}><option value="">No location</option>{worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input placeholder="Era" value={sceneForm.era} onChange={e=>setSceneForm({...sceneForm,era:e.target.value})}/><input placeholder="Story date / approximate date" value={sceneForm.storyDate} onChange={e=>setSceneForm({...sceneForm,storyDate:e.target.value})}/><textarea placeholder="Scene summary" value={sceneForm.summary} onChange={e=>setSceneForm({...sceneForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryScene()}>Create Scene</button></div></section><section className="admin-panel"><div className="database-toolbar"><input type="search" value={productionSearch} onChange={e=>setProductionSearch(e.target.value)} placeholder="Search scenes, projects, arcs, eras..."/></div><div className="v9-scene-list">{filteredScenes.map(s=><article key={s.id}><div><span>{projectName(s.project_id)} → {arcName(s.arc_id)}</span><h3>{s.title}</h3><p>{s.summary||"No summary yet."}</p><small>{s.era||"Era unset"}{s.story_date?` • ${s.story_date}`:""} • POV: {studioCharacters.find(x=>x.id===s.pov_character_id)?.name||"Unset"}</small></div><select value={s.status} onChange={e=>void updateProductionStatus("studio_story_scenes",s.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select></article>)}</div></section></>}
+ {productionTab==="chapters"&&<><section className="admin-panel"><span className="card-label">MANUSCRIPT STRUCTURE</span><h2>Create Chapter / Episode</h2><div className="v9-form-grid"><select value={chapterForm.projectId} onChange={e=>setChapterForm({...chapterForm,projectId:e.target.value,arcId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={chapterForm.arcId} onChange={e=>setChapterForm({...chapterForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.filter(x=>!chapterForm.projectId||x.project_id===chapterForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={chapterForm.chapterType} onChange={e=>setChapterForm({...chapterForm,chapterType:e.target.value})}><option value="chapter">Chapter</option><option value="episode">Episode</option></select><input placeholder="Chapter / Episode code" value={chapterForm.chapterCode} onChange={e=>setChapterForm({...chapterForm,chapterCode:e.target.value})}/><input type="number" placeholder="Order" value={chapterForm.sortOrder} onChange={e=>setChapterForm({...chapterForm,sortOrder:e.target.value})}/><input placeholder="Chapter / Episode title" value={chapterForm.title} onChange={e=>setChapterForm({...chapterForm,title:e.target.value})}/><select value={chapterForm.status} onChange={e=>setChapterForm({...chapterForm,status:e.target.value})}><option value="draft">Draft</option><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><textarea placeholder="Chapter summary" value={chapterForm.summary} onChange={e=>setChapterForm({...chapterForm,summary:e.target.value})}/><textarea rows={16} placeholder="Full chapter / episode manuscript" value={chapterForm.bodyNotes} onChange={e=>setChapterForm({...chapterForm,bodyNotes:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryChapter()}>Create Chapter / Episode</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyChapters.map(c=><article className="v9-story-card v9-openable-story-card" key={c.id} onClick={()=>setStoryInspector({type:"story_chapter",id:c.id})}><span>{c.chapter_type==="episode"?"Episode":"Chapter"}{c.chapter_code?` • ${c.chapter_code}`:""}</span><h3>{c.title}</h3><p>{c.summary||"No summary yet."}</p>{c.body_notes&&<details><summary>Manuscript</summary><p style={{whiteSpace:"pre-wrap"}}>{c.body_notes}</p></details>}<small>{projectName(c.project_id)}{c.arc_id?` → ${arcName(c.arc_id)}`:""}</small><select value={c.status} onClick={e=>e.stopPropagation()} onChange={e=>void updateProductionStatus("studio_story_chapters",c.id,e.target.value)}><option value="draft">Draft</option><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_chapters",c.id,c.title)}>Delete</button></article>)}</div></section></>}
+ {productionTab==="scenes"&&<><section className="admin-panel"><span className="card-label">SCENE MANAGER</span><h2>Create Scene</h2><div className="v9-form-grid"><select value={sceneForm.projectId} onChange={e=>setSceneForm({...sceneForm,projectId:e.target.value,arcId:"",chapterId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.arcId} onChange={e=>setSceneForm({...sceneForm,arcId:e.target.value,chapterId:""})}><option value="">No arc</option>{storyArcs.filter(x=>!sceneForm.projectId||x.project_id===sceneForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.chapterId} onChange={e=>setSceneForm({...sceneForm,chapterId:e.target.value})}><option value="">No chapter / episode</option>{storyChapters.filter(x=>(!sceneForm.projectId||x.project_id===sceneForm.projectId)&&(!sceneForm.arcId||x.arc_id===sceneForm.arcId)).map(x=><option key={x.id} value={x.id}>{x.chapter_code?`${x.chapter_code} — ${x.title}`:x.title}</option>)}</select><input placeholder="Scene title" value={sceneForm.title} onChange={e=>setSceneForm({...sceneForm,title:e.target.value})}/><select value={sceneForm.povId} onChange={e=>setSceneForm({...sceneForm,povId:e.target.value})}><option value="">No POV character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={sceneForm.locationId} onChange={e=>setSceneForm({...sceneForm,locationId:e.target.value})}><option value="">No location</option>{worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input placeholder="Era" value={sceneForm.era} onChange={e=>setSceneForm({...sceneForm,era:e.target.value})}/><input placeholder="Story date / approximate date" value={sceneForm.storyDate} onChange={e=>setSceneForm({...sceneForm,storyDate:e.target.value})}/><textarea placeholder="Scene summary" value={sceneForm.summary} onChange={e=>setSceneForm({...sceneForm,summary:e.target.value})}/><textarea rows={14} placeholder="Full scene manuscript" value={sceneForm.bodyNotes} onChange={e=>setSceneForm({...sceneForm,bodyNotes:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryScene()}>Create Scene</button></div></section><section className="admin-panel"><div className="database-toolbar"><input type="search" value={productionSearch} onChange={e=>setProductionSearch(e.target.value)} placeholder="Search scenes, projects, arcs, eras..."/></div><div className="v9-scene-list">{filteredScenes.map(s=><article className="v9-openable-story-card" key={s.id} onClick={()=>setStoryInspector({type:"story_scene",id:s.id})}><div><span>{projectName(s.project_id)} → {arcName(s.arc_id)}{s.chapter_id?` → ${storyChapters.find(c=>c.id===s.chapter_id)?.title||"Chapter"}`:""}</span><h3>{s.title}</h3><p>{s.summary||"No summary yet."}</p><small>{s.era||"Era unset"}{s.story_date?` • ${s.story_date}`:""} • POV: {studioCharacters.find(x=>x.id===s.pov_character_id)?.name||"Unset"}</small></div><select value={s.status} onClick={e=>e.stopPropagation()} onChange={e=>void updateProductionStatus("studio_story_scenes",s.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select></article>)}</div></section></>}
  {productionTab==="plot"&&<><section className="admin-panel"><span className="card-label">PLOT BOARD</span><h2>Add Story Beat</h2><div className="v9-form-grid"><select value={beatForm.projectId} onChange={e=>setBeatForm({...beatForm,projectId:e.target.value})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={beatForm.arcId} onChange={e=>setBeatForm({...beatForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={beatForm.sceneId} onChange={e=>setBeatForm({...beatForm,sceneId:e.target.value})}><option value="">No scene</option>{storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Beat title" value={beatForm.title} onChange={e=>setBeatForm({...beatForm,title:e.target.value})}/><select value={beatForm.beatType} onChange={e=>setBeatForm({...beatForm,beatType:e.target.value})}><option value="plot">Plot</option><option value="character">Character</option><option value="reveal">Reveal</option><option value="conflict">Conflict</option><option value="setup">Setup</option><option value="payoff">Payoff</option></select><textarea placeholder="What happens?" value={beatForm.description} onChange={e=>setBeatForm({...beatForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryBeat()}>Add Beat</button></div></section><section className="v9-kanban">{["idea","planned","writing","review","complete"].map(status=><div className="v9-kanban-column" key={status}><h3>{status.replace(/_/g,' ')}</h3>{storyBeats.filter(x=>x.status===status).map(b=><article key={b.id}><span>{b.beat_type}</span><strong>{b.title}</strong><p>{b.description||""}</p><select value={b.status} onChange={e=>void updateProductionStatus("studio_story_beats",b.id,e.target.value)}>{["idea","planned","writing","review","complete"].map(s=><option key={s} value={s}>{s}</option>)}</select></article>)}</div>)}</section></>}
  {productionTab==="journeys"&&<><section className="admin-panel"><span className="card-label">CHARACTER JOURNEY TRACKER</span><h2>Record Character Change</h2><div className="v9-form-grid"><select value={journeyForm.characterId} onChange={e=>setJourneyForm({...journeyForm,characterId:e.target.value})}><option value="">Choose character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={journeyForm.journeyType} onChange={e=>setJourneyForm({...journeyForm,journeyType:e.target.value})}><option value="development">Development</option><option value="goal">Goal</option><option value="injury">Injury</option><option value="transformation">Transformation</option><option value="title">Title / Rank</option><option value="allegiance">Allegiance</option><option value="relationship">Relationship</option><option value="power">Power</option></select><select value={journeyForm.projectId} onChange={e=>setJourneyForm({...journeyForm,projectId:e.target.value})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={journeyForm.sceneId} onChange={e=>setJourneyForm({...journeyForm,sceneId:e.target.value})}><option value="">No scene</option>{storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Change title" value={journeyForm.title} onChange={e=>setJourneyForm({...journeyForm,title:e.target.value})}/><input placeholder="Before" value={journeyForm.beforeValue} onChange={e=>setJourneyForm({...journeyForm,beforeValue:e.target.value})}/><input placeholder="After" value={journeyForm.afterValue} onChange={e=>setJourneyForm({...journeyForm,afterValue:e.target.value})}/><textarea placeholder="Notes" value={journeyForm.description} onChange={e=>setJourneyForm({...journeyForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createJourneyEvent()}>Add Journey Event</button></div></section><section className="admin-panel"><div className="v9-journey-list">{characterJourney.map(j=><article key={j.id}><span>{j.journey_type}</span><h3>{studioCharacters.find(x=>x.id===j.character_id)?.name||"Character"} — {j.title}</h3>{(j.before_value||j.after_value)&&<p><strong>{j.before_value||"—"}</strong> → <strong>{j.after_value||"—"}</strong></p>}<small>{j.description||""}</small></article>)}</div></section></>}
- {productionTab==="review"&&<><section className="admin-panel"><span className="card-label">COMMENTS & REVIEW THREADS</span><h2>Start Review Comment</h2><div className="v9-form-grid"><select value={commentForm.entityType} onChange={e=>setCommentForm({...commentForm,entityType:e.target.value,entityId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_scene">Scene</option><option value="database">World Database</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><select value={commentForm.entityId} onChange={e=>setCommentForm({...commentForm,entityId:e.target.value})}><option value="">Choose record</option>{productionEntityOptions(commentForm.entityType).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select><select value={commentForm.notifyUserId} onChange={e=>setCommentForm({...commentForm,notifyUserId:e.target.value})}><option value="">No notification</option>{adminMembers.filter(x=>x.user_id!==session.user.id).map(x=><option key={x.user_id} value={x.user_id}>Notify {x.display_name||x.email}</option>)}</select><textarea placeholder="Review comment..." value={commentForm.body} onChange={e=>setCommentForm({...commentForm,body:e.target.value})}/><button className="primary-action" onClick={()=>void addReviewCommentV9()}>Post Comment</button></div></section><section className="admin-panel"><div className="v9-review-list">{reviewComments.map(c=><article className={c.status==='resolved'?"resolved":""} key={c.id}><div><strong>{c.created_by_name||personName(c.created_by)}</strong><span>{c.entity_type} • {new Date(c.created_at).toLocaleString()}</span></div><p>{c.body}</p>{c.status==='open'?<button onClick={()=>void resolveReviewComment(c.id)}>Resolve</button>:<small>Resolved</small>}</article>)}</div></section></>}
+ {productionTab==="review"&&<><section className="admin-panel"><span className="card-label">COMMENTS & REVIEW THREADS</span><h2>Start Review Comment</h2><div className="v9-form-grid"><select value={commentForm.entityType} onChange={e=>setCommentForm({...commentForm,entityType:e.target.value,entityId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_chapter">Chapter / Episode</option>
+<option value="story_scene">Scene</option><option value="database">World Database</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><select value={commentForm.entityId} onChange={e=>setCommentForm({...commentForm,entityId:e.target.value})}><option value="">Choose record</option>{productionEntityOptions(commentForm.entityType).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select><select value={commentForm.notifyUserId} onChange={e=>setCommentForm({...commentForm,notifyUserId:e.target.value})}><option value="">No notification</option>{adminMembers.filter(x=>x.user_id!==session.user.id).map(x=><option key={x.user_id} value={x.user_id}>Notify {x.display_name||x.email}</option>)}</select><textarea placeholder="Review comment..." value={commentForm.body} onChange={e=>setCommentForm({...commentForm,body:e.target.value})}/><button className="primary-action" onClick={()=>void addReviewCommentV9()}>Post Comment</button></div></section><section className="admin-panel"><div className="v9-review-list">{reviewComments.map(c=><article className={c.status==='resolved'?"resolved":""} key={c.id}><div><strong>{c.created_by_name||personName(c.created_by)}</strong><span>{c.entity_type} • {new Date(c.created_at).toLocaleString()}</span></div><p>{c.body}</p>{c.status==='open'?<button onClick={()=>void resolveReviewComment(c.id)}>Resolve</button>:<small>Resolved</small>}</article>)}</div></section></>}
  {productionTab==="assignments"&&<><section className="admin-panel"><span className="card-label">TEAM WORK QUEUE</span><h2>Create Assignment</h2><div className="v9-form-grid"><input placeholder="Assignment title" value={assignmentForm.title} onChange={e=>setAssignmentForm({...assignmentForm,title:e.target.value})}/><select value={assignmentForm.assignedTo} onChange={e=>setAssignmentForm({...assignmentForm,assignedTo:e.target.value})}><option value="">Assign to...</option>{adminMembers.map(x=><option key={x.user_id} value={x.user_id}>{x.display_name||x.email}</option>)}</select><select value={assignmentForm.priority} onChange={e=>setAssignmentForm({...assignmentForm,priority:e.target.value})}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select><input type="datetime-local" value={assignmentForm.dueAt} onChange={e=>setAssignmentForm({...assignmentForm,dueAt:e.target.value})}/><textarea placeholder="Instructions" value={assignmentForm.description} onChange={e=>setAssignmentForm({...assignmentForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createAssignmentV9()}>Assign Work</button></div></section><section className="admin-panel"><div className="v9-assignment-list">{studioAssignments.map(a=><article key={a.id}><div><span className={`v9-priority ${a.priority}`}>{a.priority}</span><h3>{a.title}</h3><p>{a.description||""}</p><small>{personName(a.assigned_to)}{a.due_at?` • Due ${new Date(a.due_at).toLocaleString()}`:""}</small></div><select value={a.status} onChange={e=>void updateProductionStatus("studio_assignments",a.id,e.target.value)}><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option><option value="cancelled">Cancelled</option></select></article>)}</div></section></>}
  {productionTab==="inbox"&&<section className="admin-panel"><span className="card-label">STUDIO NOTIFICATIONS</span><h2>Inbox</h2><div className="v9-inbox">{studioNotifications.map(n=><article className={n.is_read?"read":"unread"} key={n.id}><div><strong>{n.title}</strong><span>{n.actor_name||"Umbra Studio"} • {new Date(n.created_at).toLocaleString()}</span></div><p>{n.message||""}</p>{!n.is_read&&<button onClick={()=>void markNotificationRead(n.id)}>Mark Read</button>}</article>)}{studioNotifications.length===0&&<p className="admin-empty">Your Studio inbox is clear.</p>}</div></section>}
- {productionTab==="graph"&&<><section className="admin-panel"><span className="card-label">CONNECTED STORY RECORDS</span><h2>Link Story to the World</h2><p className="admin-help">Reference existing characters, locations, Codex pages, artifacts, weapons, creatures, magic systems, and other lore without retyping them.</p><div className="v9-form-grid"><select value={storyLinkForm.storyType} onChange={e=>setStoryLinkForm({...storyLinkForm,storyType:e.target.value,storyId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_scene">Scene</option></select><select value={storyLinkForm.storyId} onChange={e=>setStoryLinkForm({...storyLinkForm,storyId:e.target.value})}><option value="">Choose story record</option>{storyLinkForm.storyType==="story_project"?storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_arc"?storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={storyLinkForm.linkedType} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedType:e.target.value,linkedId:""})}><option value="character">Character</option><option value="location">Location</option><option value="codex">World / Codex</option><option value="database">Artifact / Lore Record</option></select><select value={storyLinkForm.linkedId} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedId:e.target.value})}><option value="">Choose existing record</option>{storyLinkForm.linkedType==="character"?studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="location"?worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="codex"?worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>):databaseRecords.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input value={storyLinkForm.label} onChange={e=>setStoryLinkForm({...storyLinkForm,label:e.target.value})} placeholder="Connection: appears in, carries, discovers..."/><textarea value={storyLinkForm.notes} onChange={e=>setStoryLinkForm({...storyLinkForm,notes:e.target.value})} placeholder="Optional production notes..."/><button className="primary-action" disabled={!storyLinkForm.storyId||!storyLinkForm.linkedId} onClick={()=>void createStoryEntityLink()}>Connect Existing Record</button></div><div className="admin-feed">{storyLinks.slice(0,60).map(l=><div className="admin-feed-row" key={l.id}><div><strong>{l.relation_label||"Connected record"}</strong><span>{l.story_entity_type.replace(/_/g," ")} → {l.linked_entity_type.replace(/_/g," ")}</span></div><button className="secondary-action" onClick={()=>void deleteStoryEntityLink(l.id)}>Remove</button></div>)}{storyLinks.length===0&&<p className="admin-empty">No story-world links yet.</p>}</div></section><section className="admin-panel"><span className="card-label">WORLD INTELLIGENCE</span><h2>Relationship & Dependency Graph</h2><p className="admin-help">A lightweight graph index of story structure and existing lore. Universal links and story links remain the source of truth; this view never changes canon automatically.</p><div className="v9-graph"><div className="v9-graph-nodes">{graphNodes.slice(0,160).map(n=><article key={`${n.type}:${n.id}`}><span>{n.type}</span><strong>{n.label}</strong><small>{universalLinks.filter(l=>l.source_id===n.id||l.target_id===n.id).length+storyLinks.filter(l=>l.story_entity_id===n.id||l.linked_entity_id===n.id).length} connections</small></article>)}</div></div></section></>}
+ {productionTab==="graph"&&<><section className="admin-panel"><span className="card-label">CONNECTED STORY RECORDS</span><h2>Link Story to the World</h2><p className="admin-help">Reference existing characters, locations, Codex pages, artifacts, weapons, creatures, magic systems, and other lore without retyping them.</p><div className="v9-form-grid"><select value={storyLinkForm.storyType} onChange={e=>setStoryLinkForm({...storyLinkForm,storyType:e.target.value,storyId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_chapter">Chapter / Episode</option>
+<option value="story_scene">Scene</option></select><select value={storyLinkForm.storyId} onChange={e=>setStoryLinkForm({...storyLinkForm,storyId:e.target.value})}><option value="">Choose story record</option>{storyLinkForm.storyType==="story_project"?storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_arc"?storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_chapter"?storyChapters.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={storyLinkForm.linkedType} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedType:e.target.value,linkedId:""})}><option value="character">Character</option><option value="location">Location</option><option value="codex">World / Codex</option><option value="database">Artifact / Lore Record</option></select><select value={storyLinkForm.linkedId} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedId:e.target.value})}><option value="">Choose existing record</option>{storyLinkForm.linkedType==="character"?studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="location"?worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="codex"?worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>):databaseRecords.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input value={storyLinkForm.label} onChange={e=>setStoryLinkForm({...storyLinkForm,label:e.target.value})} placeholder="Connection: appears in, carries, discovers..."/><textarea value={storyLinkForm.notes} onChange={e=>setStoryLinkForm({...storyLinkForm,notes:e.target.value})} placeholder="Optional production notes..."/><button className="primary-action" disabled={!storyLinkForm.storyId||!storyLinkForm.linkedId} onClick={()=>void createStoryEntityLink()}>Connect Existing Record</button></div><div className="admin-feed">{storyLinks.slice(0,60).map(l=><div className="admin-feed-row" key={l.id}><div><strong>{l.relation_label||"Connected record"}</strong><span>{l.story_entity_type.replace(/_/g," ")} → {l.linked_entity_type.replace(/_/g," ")}</span></div><button className="secondary-action" onClick={()=>void deleteStoryEntityLink(l.id)}>Remove</button></div>)}{storyLinks.length===0&&<p className="admin-empty">No story-world links yet.</p>}</div></section><section className="admin-panel"><span className="card-label">WORLD INTELLIGENCE</span><h2>Relationship & Dependency Graph</h2><p className="admin-help">Project → Arc → Chapter / Episode → Scene, with recognized Character and Location connections. Drag nodes, pan empty space, zoom, and click Chapters or Scenes to inspect them.</p><div className="v9-graph-toolbar"><button onClick={()=>setGraphZoom(z=>Math.min(1.8,Number((z+.1).toFixed(2))))}>Zoom +</button><button onClick={()=>setGraphZoom(z=>Math.max(.45,Number((z-.1).toFixed(2))))}>Zoom −</button><button onClick={()=>{setGraphZoom(1);setGraphPan({x:30,y:30});setGraphPositions({})}}>Reset View</button><span>{Math.round(graphZoom*100)}%</span></div><div className="v9-real-graph" onPointerDown={e=>{const target=e.target as HTMLElement;if(!target.closest(".v9-graph-node"))setGraphPanDrag({x:e.clientX,y:e.clientY,px:graphPan.x,py:graphPan.y})}} onPointerMove={e=>{if(graphDrag){const node=graphNodeByKey.get(graphDrag.key);if(node)setGraphPositions(p=>({...p,[graphDrag.key]:{x:(e.clientX-graphPan.x)/graphZoom-graphDrag.dx,y:(e.clientY-graphPan.y)/graphZoom-graphDrag.dy}}))}else if(graphPanDrag)setGraphPan({x:graphPanDrag.px+e.clientX-graphPanDrag.x,y:graphPanDrag.py+e.clientY-graphPanDrag.y})}} onPointerUp={()=>{setGraphDrag(null);setGraphPanDrag(null)}} onPointerLeave={()=>{setGraphDrag(null);setGraphPanDrag(null)}}><div className="v9-graph-stage" style={{transform:`translate(${graphPan.x}px,${graphPan.y}px) scale(${graphZoom})`}}><svg className="v9-graph-lines" width="1700" height={Math.max(720,graphNodes.length*80)}>{graphEdges.map((edge,i)=>{const a=graphNodeByKey.get(edge.from),b=graphNodeByKey.get(edge.to);if(!a||!b)return null;const ap=graphPos(a),bp=graphPos(b);const x1=ap.x+95,y1=ap.y+31,x2=bp.x+95,y2=bp.y+31;return <g key={`${edge.from}:${edge.to}:${i}`}><line x1={x1} y1={y1} x2={x2} y2={y2}/><text x={(x1+x2)/2} y={(y1+y2)/2-5}>{edge.label}</text></g>})}</svg>{graphNodes.map(n=>{const pos=graphPos(n);return <article key={n.key} className={`v9-graph-node v9-graph-${n.type.toLowerCase()}`} style={{left:pos.x,top:pos.y}} onPointerDown={e=>{e.stopPropagation();const p=graphPos(n);setGraphDrag({key:n.key,dx:(e.clientX-graphPan.x)/graphZoom-p.x,dy:(e.clientY-graphPan.y)/graphZoom-p.y})}} onDoubleClick={()=>{if(n.inspect)setStoryInspector(n.inspect)}}><span>{n.type}</span><strong>{n.label}</strong><small>{graphEdges.filter(e=>e.from===n.key||e.to===n.key).length} connections</small></article>})}</div></div><p className="admin-help">Double-click a Chapter, Episode, or Scene node to open its inspector.</p></section></>}
+ {storyInspector&&(inspectorChapter||inspectorScene)&&<div className="v9-story-inspector-backdrop" onClick={()=>setStoryInspector(null)}><section className="v9-story-inspector" onClick={e=>e.stopPropagation()}><header><div><span className="card-label">{inspectorChapter?(inspectorChapter.chapter_type==="episode"?"EPISODE":"CHAPTER"):"SCENE"} DETAIL</span><h2>{inspectorChapter?.title||inspectorScene?.title}</h2></div><button type="button" onClick={()=>setStoryInspector(null)}>×</button></header><div className="v9-inspector-meta"><span>{projectName((inspectorChapter||inspectorScene)?.project_id||null)}</span><span>{arcName((inspectorChapter||inspectorScene)?.arc_id||null)}</span>{inspectorScene?.chapter_id&&<span>{chapterName(inspectorScene.chapter_id)}</span>}{inspectorScene&&<span>POV: {studioCharacters.find(x=>x.id===inspectorScene.pov_character_id)?.name||"Unset"}</span>}{inspectorScene?.location_id&&<span>Location: {worldLocations.find(x=>x.id===inspectorScene.location_id)?.name||"Unknown"}</span>}</div><section><h3>Summary</h3><p>{(inspectorChapter||inspectorScene)?.summary||"No summary yet."}</p></section><section><h3>Recognized Connections</h3><div className="v9-inspector-links">{inspectorLinks.length?inspectorLinks.map(l=><span key={l.id}><strong>{inspectorLinkedLabel(l)}</strong> • {(l.relation_label||"linked").replace(/_/g," ")}</span>):<p>No recognized connections yet.</p>}</div></section><section><h3>Manuscript</h3><div className="v9-manuscript-reader">{(inspectorChapter||inspectorScene)?.body_notes||"No manuscript text saved."}</div></section></section></div>}
  </section></main>;
 }
 
