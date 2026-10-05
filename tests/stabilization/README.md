@@ -24,3 +24,9 @@ The SQLite adapter verifies real SQL, migrations, referential cleanup and handle
 ## Actual Cloudflare runtime
 
 The same suites also pass against local Miniflare/workerd D1 and R2. Instead of the SQLite adapter, start `node tests/stabilization/stabilization-cloudflare-server.cjs` after installing the Worker dependencies. Use only one fixture server at a time; both listen on port 8787. This server applies migration 0014 to an isolated, disposable D1 database and uses synthetic sessions. Run the API suites followed by the browser suite as above. This is a local Cloudflare runtime check, not a remote staging or production deployment.
+
+## Expanded staging coverage
+
+Additional suites: `expanded-browser-tests.cjs`, `staging-extra-api.cjs`, `staging-workspaces.cjs`, and `staging-negative-browser.cjs`. Run them with the same synthetic fixture server and browser environment as the primary suites. Remote staging uses an authenticated local proxy restricted to the staging hostname; never route these suites to production. Temporary random staging sessions expire after eight hours. No staging credentials are committed. The dedicated `wrangler.staging.jsonc` maps both existing binding names exclusively to isolated resources.
+
+For a local UI connected directly to remote staging, copy `.env.example` to the ignored `.env.staging` and run `npm run dev -- --mode staging`. The example contains only the staging API URL. Use authorized staging accounts; no credentials are supplied in source. Default builds retain the existing production API URL. Additional regressions: `staging-existing-api.cjs` and `staging-utility-browser.cjs`.

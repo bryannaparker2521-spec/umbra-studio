@@ -30,6 +30,7 @@ export async function lifecycleRequest(request: Request, db: D1Database, user: A
           const aliases=[type,...Object.entries(entityAliases).filter(([,canonical])=>canonical===type).map(([alias])=>alias)];
           return `(${typeColumn} IN (${aliases.map(alias=>`'${alias}'`).join(',')}) AND NOT EXISTS(SELECT 1 FROM ${d.table} WHERE id=${row.table}.${idColumn}))`;
         }));
+        if(row.table==='studio_media_attachments')conditions.push('NOT EXISTS(SELECT 1 FROM studio_media_assets WHERE id=studio_media_attachments.media_id)');
         return db.prepare(`DELETE FROM ${row.table} WHERE id=? AND (${conditions.join(' OR ')})`).bind(row.id);
       });
       const results=await db.batch(statements);removed+=results.reduce((sum,result)=>sum+result.meta.changes,0);
@@ -97,6 +98,18 @@ export async function recordDependencies(db: D1Database, type: string, id: strin
     ['Story connections', 'studio_story_entity_links', '(story_entity_type=? AND story_entity_id=?) OR (linked_entity_type=? AND linked_entity_id=?)', [type,id,type,id]],
     ...['studio_favorites','studio_collection_items','studio_tag_assignments','studio_media_attachments','studio_assignments','studio_review_comments'].map(table => [table.replace('studio_', '').replace(/_/g,' '),table,'entity_type=? AND entity_id=?',[type,id]]),
   ] as Array<[string,string,string,string[]]>;
+  const native:Record<string,Array<[string,string,string]>>={
+    character:[['POV scenes','studio_story_scenes','pov_character_id'],['Character timeline events','studio_timeline_events','character_id'],['Character journeys (cascade delete)','studio_character_journey','character_id']],
+    location:[['Child locations (detach)','studio_world_locations','parent_location_id'],['Location timeline events','studio_timeline_events','location_id'],['Location scenes','studio_story_scenes','location_id']],
+    timeline:[['Scenes using this event','studio_story_scenes','timeline_event_id']],
+    codex:[['Codex locations','studio_world_locations','codex_record_id'],['Codex timeline events','studio_timeline_events','codex_record_id']],
+    story_project:[['Project arcs (cascade delete)','studio_story_arcs','project_id'],['Project chapters (cascade delete)','studio_story_chapters','project_id'],['Project scenes (cascade delete)','studio_story_scenes','project_id'],['Project plot beats (cascade delete)','studio_story_beats','project_id'],['Project journeys (cascade delete)','studio_character_journey','project_id']],
+    story_arc:[['Arc chapters (detach)','studio_story_chapters','arc_id'],['Arc scenes (detach)','studio_story_scenes','arc_id'],['Arc plot beats (detach)','studio_story_beats','arc_id'],['Arc journeys (detach)','studio_character_journey','arc_id']],
+    story_chapter:[['Chapter scenes (detach)','studio_story_scenes','chapter_id']],
+    story_scene:[['Scene plot beats (detach)','studio_story_beats','scene_id'],['Scene journeys (detach)','studio_character_journey','scene_id']],
+    media:[['Media attachments','studio_media_attachments','media_id']]
+  };
+  for(const [label,table,column]of native[type]||[])tables.push([label,table,column+'=?',[id]]);
   const result = await Promise.all(tables.map(async ([label, table, where, bindings]) => ({ label, count: Number((await db.prepare(`SELECT count(*) n FROM ${table} WHERE ${where}`).bind(...bindings).first<{n:number}>())?.n || 0) })));
   return result.filter(r => r.count);
 }
@@ -110,7 +123,6 @@ export async function resolvePendingRelationships(db:D1Database,userId:string){
     if(!sourceType||!source||source.record.archived_at)continue;
     const candidates:Array<{type:string;id:string}>=[];
     for(const [type,d]of Object.entries(destinations)){
-      if(type==='media'||type==='journey')continue;
       const rows=await db.prepare(`SELECT * FROM ${d.table} WHERE (id=? OR lower(trim(${d.title}))=lower(trim(?)) OR id IN (SELECT entity_id FROM studio_entity_slugs WHERE entity_type=? AND slug=?)) AND archived_at IS NULL`).bind(proposal.target_name,proposal.target_name,type,recordSlug(proposal.target_name)).all<Record<string,string>>();
       for(const row of rows.results){
         if(proposal.target_type){
@@ -148,6 +160,8 @@ async function integrityScan(db:D1Database){
     const rows=await db.prepare(`SELECT * FROM ${table}`).all<Record<string,string>>();
     for(const row of rows.results){const sourceType=row.source_type||row.story_entity_type,targetType=row.target_type||row.linked_entity_type,sourceId=row.source_id||row.story_entity_id,targetId=row.target_id||row.linked_entity_id;if((entityType(aliases[sourceType]||sourceType)&&!exists(sourceType,sourceId))||(entityType(aliases[targetType]||targetType)&&!exists(targetType,targetId)))orphans.push({table,id:row.id,reason:'Broken relationship endpoint'});}
   }
+  const missingMedia=await db.prepare('SELECT id FROM studio_media_attachments WHERE NOT EXISTS(SELECT 1 FROM studio_media_assets WHERE id=studio_media_attachments.media_id)').all<{id:string}>();
+  for(const row of missingMedia.results)if(!orphans.some(item=>item.table==='studio_media_attachments'&&item.id===row.id))orphans.push({table:'studio_media_attachments',id:row.id,reason:'Missing media asset'});
   const identities=await db.prepare(`SELECT record_type_id,lower(trim(name)) name,count(*) count FROM studio_database_records WHERE archived_at IS NULL GROUP BY record_type_id,lower(trim(name)) HAVING count(*)>1`).all();
   const pending=await db.prepare(`SELECT * FROM studio_pending_relationships WHERE status='pending'`).all();
   return {orphan_count:orphans.length,orphans,duplicate_identities:identities.results,pending_relationships:pending.results};

@@ -1,0 +1,23 @@
+{
+  "name": "umbra-studio-stabilization-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-26",
+  "account_id": "dd60fdf4ed3eb7bdcda5a48c4928cc58",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "umbra_studio_production",
+      "database_name": "umbra-studio-stabilization-staging",
+      "database_id": "97ac25ac-1e1f-45a2-bd5f-deac0282c872"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "umbra_studio_media",
+      "bucket_name": "umbra-studio-stabilization-staging-media"
+    }
+  ]
+}

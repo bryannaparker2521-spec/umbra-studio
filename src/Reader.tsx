@@ -56,7 +56,7 @@ export default function ReaderProvider({ children }: { children: ReactNode }) {
     utterance.lang = utterance.voice?.lang || 'en-US'; utterance.rate = p.rate;
     utterance.onend = () => {
       if (generation.current !== token) return;
-      if (position + 1 < sections.current.length) speak(position + 1); else setStatus('stopped');
+      if (position + 1 < sections.current.length) setTimeout(() => { if (generation.current === token) speak(position + 1); }, 220); else setStatus('stopped');
     };
     utterance.onerror = event => { if (generation.current === token && event.error !== 'canceled' && event.error !== 'interrupted') { setError(`Voice could not speak (${event.error}). Choose another installed voice.`); setStatus('stopped'); } };
     window.speechSynthesis.speak(utterance);

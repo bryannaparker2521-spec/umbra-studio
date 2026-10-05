@@ -1401,6 +1401,7 @@ function smartImportHasTypeConflict(
  existing:any
 ){
  if(!existing)return false;
+ if(existing.ambiguous)return true;
 
  const area=String(existing.area||"").toLowerCase();
 
@@ -1537,22 +1538,26 @@ function updateSmartImportChunk(
 }
 
 function analyzedImportChunks(snapshot:ImportSnapshot){return smartImportChunks.map(chunk=>{
- const live=chunk.structured?structuredMatch({...chunk.structured,name:chunk.heading,slug:chunk.proposedSlug},snapshot):liveImportMatch(chunk.heading,snapshot);
+ const live=chunk.structured?structuredMatch({...chunk.structured,name:chunk.heading,slug:chunk.proposedSlug},snapshot):liveImportMatch(chunk.heading,snapshot,chunk.kind);
  return {...chunk,existing:live,routeStatus:(["created","updated"].includes(chunk.routeStatus)&&!live)?"":chunk.routeStatus,routeMessage:(["created","updated"].includes(chunk.routeStatus)&&!live)?"Previously saved record was deleted. Create a new record to save this proposal again.":chunk.routeMessage};
 });}
 async function importSnapshot(){
  const [characters,codex,locations,timeline,database,production]=await Promise.all([
   cloudFetch<any>("/api/characters?include_archived=1"),cloudFetch<any>("/api/world-records?include_archived=1"),cloudFetch<any>("/api/locations?include_archived=1"),cloudFetch<any>("/api/timeline?include_archived=1"),cloudFetch<any>("/api/world-database"),cloudFetch<any>("/api/production?include_archived=1")]);
- const snapshot={characters:characters.characters||[],codex:codex.records||[],locations:locations.locations||[],timeline:timeline.events||[],database:database.records||[],types:database.types||[],production};
+ const snapshot={characters:(characters.characters||[]) as StudioCharacterRow[],codex:(codex.records||[]) as WorldRecord[],locations:(locations.locations||[]) as WorldLocation[],timeline:(timeline.events||[]) as TimelineEvent[],database:(database.records||[]) as StudioDatabaseRecord[],types:(database.types||[]) as StudioRecordType[],production};
  setStudioCharacters(snapshot.characters.filter((r:any)=>!r.archived_at));setWorldRecords(snapshot.codex.filter((r:any)=>!r.archived_at));setWorldLocations(snapshot.locations.filter((r:any)=>!r.archived_at));setTimelineEvents(snapshot.timeline.filter((r:any)=>!r.archived_at));setDatabaseRecords(snapshot.database);setRecordTypes(snapshot.types);
  setStoryProjects((production.projects||[]).filter((r:any)=>!r.archived_at));setStoryArcs((production.arcs||[]).filter((r:any)=>!r.archived_at));setStoryChapters((production.chapters||[]).filter((r:any)=>!r.archived_at));setStoryScenes((production.scenes||[]).filter((r:any)=>!r.archived_at));setStoryBeats((production.beats||[]).filter((r:any)=>!r.archived_at));setStoryLinks(production.links||[]);
  return snapshot;
 }
 type ImportSnapshot=Awaited<ReturnType<typeof importSnapshot>>;
-function liveImportMatch(heading:string,snapshot:ImportSnapshot){
+function liveImportMatch(heading:string,snapshot:ImportSnapshot,kind?:SmartImportKind){
  const normalized=normalizeImportName(heading);
  const items=[...snapshot.characters.map((r:any)=>({id:r.id,name:r.name,area:"Character",type:"character",archived:Boolean(r.archived_at)})),...snapshot.codex.map((r:any)=>({id:r.id,name:r.name,area:`Codex • ${r.record_type}`,type:"codex",archived:Boolean(r.archived_at)})),...snapshot.locations.map((r:any)=>({id:r.id,name:r.name,area:"Location",type:"location",archived:Boolean(r.archived_at)})),...snapshot.timeline.map((r:any)=>({id:r.id,name:r.title,area:"Timeline",type:"timeline",archived:Boolean(r.archived_at)})),...snapshot.database.map((r:any)=>({id:r.id,name:r.name,archived:Boolean(r.archived_at),area:`World Database • ${snapshot.types.find((t:any)=>t.id===r.record_type_id)?.name||"Lore"}`,type:"database"}))];
- return items.find(item=>normalizeImportName(item.name)===normalized)||null;
+ const matches=items.filter(item=>normalizeImportName(item.name)===normalized);
+ const databaseType=kind?smartImportDatabaseTypeForKind(kind,snapshot.types):null;
+ const compatible=kind?matches.filter(item=>!smartImportHasTypeConflict(kind,item)&&(item.type!=='database'||!databaseType||snapshot.database.find(record=>record.id===item.id)?.record_type_id===databaseType.id)):matches;
+ const candidates=compatible.length?compatible:matches;
+ return candidates.length>1?{...candidates[0],ambiguous:true,area:'Ambiguous — '+candidates.length+' canonical records share this name'}:candidates[0]||null;
 }
 function structuredCanonicalType(record:StructuredRecord):string{
  const destination=record.destination;
@@ -1598,7 +1603,7 @@ function analyzeSmartImportDocument(raw:string,snapshot:ImportSnapshot){
  }
  return [...grouped.values()].map((chunk,index)=>{
   const result=classifySmartImportChunk(chunk.sourceHeading,chunk.content);
-  result.existing=liveImportMatch(chunk.heading,snapshot);
+  result.existing=liveImportMatch(chunk.heading,snapshot,result.kind);
 
   const isContainer=isSmartImportContainerHeading(
    chunk.heading,
@@ -2406,11 +2411,6 @@ async function routeSmartImportSections(onlyId?:string){
 }
 async function routeSmartImportSectionsInternal(onlyId?:string){
  const snapshot=await importSnapshot();
- const studioCharacters=snapshot.characters as StudioCharacterRow[];
- const worldRecords=snapshot.codex as WorldRecord[];
- const worldLocations=snapshot.locations as WorldLocation[];
- const timelineEvents=snapshot.timeline as TimelineEvent[];
- const databaseRecords=snapshot.database as StudioDatabaseRecord[];
  const storyProjects=(snapshot.production.projects||[]) as StoryProject[];
  const storyArcs=(snapshot.production.arcs||[]) as StoryArc[];
  const storyScenes=(snapshot.production.scenes||[]) as StoryScene[];
@@ -2519,6 +2519,7 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
     catch(error){failed++;setResult(chunk.id,'failed',error instanceof Error?error.message:'Structured record could not be saved.');}
     continue;
   }
+  if(chunk.existing?.ambiguous){deferred++;setResult(chunk.id,'deferred','Multiple canonical records match this name and type. Review the destination and resolve the ambiguity before importing. Nothing was changed.');continue;}
   if(chunk.existing?.archived){deferred++;setResult(chunk.id,"deferred","This record exists in Archive. Restore it in its destination before updating, or choose a different proposed record name. No record was created.");continue;}
   if(chunk.existing&&chunk.resolution==="existing"){
    kept++;
@@ -2556,14 +2557,14 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
     const matchedByClassifier=
      chunk.existing&&
      String(chunk.existing.area||"").toLowerCase().startsWith("location")
-      ?worldLocations.find(
+      ?snapshot.locations.find(
         location=>location.id===chunk.existing.id
        )
       :null;
 
     const matchedByName=
      matchedByClassifier||
-     worldLocations.find(
+     snapshot.locations.find(
       location=>
        !location.archived_at&&
        normalizeImportName(location.name)===normalizedName
@@ -2685,14 +2686,14 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
     const matchedByClassifier=
      chunk.existing&&
      String(chunk.existing.area||"").toLowerCase().startsWith("timeline")
-      ?timelineEvents.find(
+      ?snapshot.timeline.find(
         event=>event.id===chunk.existing.id
        )
       :null;
 
     const matchedByName=
      matchedByClassifier||
-     timelineEvents.find(
+     snapshot.timeline.find(
       event=>
        !event.archived_at&&
        normalizeImportName(event.title)===normalizedName
@@ -2813,7 +2814,7 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
    */
   if(chunk.kind==="character"){
    const existingCharacter=
-    studioCharacters.find(character=>
+    snapshot.characters.find(character=>
      normalizeImportName(character.name)===
      normalizeImportName(name)
     );
@@ -3132,7 +3133,7 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
      normalizeImportName(name);
 
     const existingTimeline=
-     timelineEvents.find(event=>
+     snapshot.timeline.find(event=>
       !event.archived_at&&
       normalizeImportName(event.title)===
       normalizedName
@@ -3287,8 +3288,8 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
      normalizeImportName(name);
 
     const existingDatabase=
-     databaseRecords.find(record=>
-      !record.archived_at&&
+     snapshot.database.find(record=>
+      !record.archived_at&&record.record_type_id===databaseType.id&&
       normalizeImportName(record.name)===
       normalizedName
      );
@@ -3480,7 +3481,7 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
    const existingCodex=
     chunk.existing&&
     String(chunk.existing.area||"").toLowerCase().startsWith("codex")
-     ?worldRecords.find(
+     ?snapshot.codex.find(
        record=>record.id===chunk.existing.id
       )
      :null;
@@ -3534,7 +3535,7 @@ async function routeSmartImportSectionsInternal(onlyId?:string){
     */
    const normalizedName=normalizeImportName(name);
 
-   const duplicateCodex=worldRecords.find(
+   const duplicateCodex=snapshot.codex.find(
     record=>
      normalizeImportName(record.name)===normalizedName
    );
@@ -4976,8 +4977,8 @@ function editTimelineEvent(ev: TimelineEvent){setEditingEventId(ev.id);setExplor
 function cancelEventEdit(){setEditingEventId(null);setEventForm({title:"",era:"",displayDate:"",sortOrder:"0",description:"",locationId:"",codexId:"",characterId:"",tags:""});}
 
 async function toggleFavorite(itemType:string,itemId:string){if(!session)return;const key=`${itemType}:${itemId}`;try{await umbraCloudFetch("/api/explorer/favorite",{method:"PUT",body:JSON.stringify({item_type:itemType,item_id:itemId,enabled:!favoriteKeys.has(key)})});await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Favorite could not be changed.");}}
-async function archiveExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){if(!session)return;const path=table==="studio_world_locations"?`/api/locations/${encodeURIComponent(id)}`:`/api/timeline/${encodeURIComponent(id)}`;try{await umbraCloudFetch(path,{method:"PUT",body:JSON.stringify({archived_at:new Date().toISOString()})});if(selectedLocationId===id)setSelectedLocationId("");await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Item could not be archived.");}}
-async function restoreExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){if(!session)return;const path=table==="studio_world_locations"?`/api/locations/${encodeURIComponent(id)}`:`/api/timeline/${encodeURIComponent(id)}`;try{await umbraCloudFetch(path,{method:"PUT",body:JSON.stringify({archived_at:null})});await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Item could not be restored.");}}
+async function archiveExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){try{await performLifecycleAction('archive',[{type:table==="studio_world_locations"?'location':'timeline',id,title:'World record'}]);}catch(f){setExplorerError(f instanceof Error?f.message:'Item could not be archived.');}}
+async function restoreExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string){try{await performLifecycleAction('restore',[{type:table==="studio_world_locations"?'location':'timeline',id,title:'World record'}]);}catch(f){setExplorerError(f instanceof Error?f.message:'Item could not be restored.');}}
 async function permanentlyDeleteExplorerItem(table:"studio_world_locations"|"studio_timeline_events",id:string,label:string){if(!session||!confirm(`Permanently delete "${label}"? This cannot be undone.`))return;const path=table==="studio_world_locations"?`/api/locations/${encodeURIComponent(id)}`:`/api/timeline/${encodeURIComponent(id)}`;try{await umbraCloudFetch(path,{method:"DELETE"});await loadWorldExplorer();}catch(f){setExplorerError(f instanceof Error?f.message:"Item could not be permanently deleted.");}}
 function markerPositionFromPointer(e:any){const stage=e.currentTarget.parentElement as HTMLElement|null;if(!stage)return null;const r=stage.getBoundingClientRect();return{x:Math.max(0,Math.min(100,((e.clientX-r.left)/r.width)*100)),y:Math.max(0,Math.min(100,((e.clientY-r.top)/r.height)*100))};}
 function dragMapMarker(e:any,loc:WorldLocation){if(!draggingLocationId||draggingLocationId!==loc.id)return;const pos=markerPositionFromPointer(e);if(!pos)return;setWorldLocations(items=>items.map(x=>x.id===loc.id?{...x,map_x:pos.x,map_y:pos.y}:x));}
@@ -5262,13 +5263,13 @@ async function loadArchiveRecords(){try{const response=await cloudFetch<any>('/a
 async function openArchiveWorkspace(type='all'){setArchiveType(type);setPage('archive');await loadArchiveRecords();}
 async function openMediaWorkspace(tab:'library'|'import'){setMediaTab(tab);setPage('media');await loadWorldDatabase();}
 async function performLifecycleAction(action:'archive'|'restore'|'delete',items:ManagedItem[]){
+ const auxiliary=new Set(['collection','tag','template','issue','assignment','comment','link']);
  if(action==='delete'){
-  const dependencies=await Promise.all(items.map(async item=>{try{return await cloudFetch<any>('/api/lifecycle/dependencies/'+item.type+'/'+encodeURIComponent(item.id));}catch{return {dependencies:[]};}}));
+  const dependencies=await Promise.all(items.filter(item=>!auxiliary.has(item.type)).map(item=>cloudFetch<any>('/api/lifecycle/dependencies/'+item.type+'/'+encodeURIComponent(item.id))));
   const refs=dependencies.flatMap(x=>x.dependencies).reduce((sum:number,x:any)=>sum+x.count,0);
   const usedIn=dependencies.flatMap(x=>x.dependencies).map((x:any)=>x.label+': '+x.count).join('\n');
   if(!confirm('Permanently delete '+(items.length===1?'"'+items[0].title+'"':items.length+' records')+'?\nTypes: '+[...new Set(items.map(x=>x.type))].join(', ')+'\n'+refs+' references will be detached.\n'+usedIn+'\nRelated canonical records are preserved except existing Story parent-child cascades. This cannot be undone. Cancel and use Archive if you want reversible removal.'))return;
  }
- const auxiliary=new Set(['collection','tag','template','issue','assignment','comment','link']);
  if(items.every(x=>auxiliary.has(x.type))){for(const type of new Set(items.map(x=>x.type)))await cloudFetch('/api/lifecycle/managed/'+type,{method:'POST',body:JSON.stringify({ids:items.filter(x=>x.type===type).map(x=>x.id)})});}
  else await cloudFetch('/api/lifecycle/bulk',{method:'POST',body:JSON.stringify({action,items:items.map(({id,type})=>({id,type}))})});
  setSelectedDatabaseRecordIds(new Set());setSelectedDatabaseRecordId(null);setSelectedLocationId('');setStoryInspector(null);setLifecycleMessage(items.length+' records '+(action==='delete'?'deleted':action==='restore'?'restored':'archived')+'.');
@@ -5277,7 +5278,7 @@ async function performLifecycleAction(action:'archive'|'restore'|'delete',items:
 }
 function managementControls(context:string){
  let items:ManagedItem[]=[],archive=true;
- const map=(rows:any[],type:string)=>rows.filter(r=>!r.archived_at).map(r=>({id:r.id,type,title:r.name||r.title||r.relation_label||r.message||r.entity_label||'Untitled'}));
+ const map=(rows:any[],type:string)=>rows.filter(r=>!r.archived_at).map(r=>({id:r.id,type,title:r.name||r.title||r.relation_label||(r.entity_label? r.entity_label+' — '+(r.message||'') : r.message)||r.body?.slice(0,120)||'Untitled'}));
  if(context==='characters')items=map(studioCharacters,'character');
  else if(context==='world')items=map(worldRecords,'codex');
  else if(context==='explorer')items=explorerTab==='locations'?map(worldLocations,'location'):explorerTab==='timeline'?map(timelineEvents,'timeline'):[];
