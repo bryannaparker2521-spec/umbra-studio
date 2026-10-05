@@ -1579,15 +1579,14 @@ return json({ok:true,id});
 
 if(prodMatch&&prodMatch[2]&&request.method==="DELETE"){
 requireRole(user,["primary_admin","admin"]);
-
-const id=decodeURIComponent(prodMatch[2]);
-const table=productionTables[prodMatch[1]];
-
-await env.umbra_studio_production
-.prepare(`DELETE FROM ${table} WHERE id=?`)
-.bind(id)
-.run();
-
+const id=decodeURIComponent(prodMatch[2]),kind=prodMatch[1],table=productionTables[kind];
+const entityType=kind==="projects"?"story_project":kind==="arcs"?"story_arc":kind==="chapters"?"story_chapter":kind==="scenes"?"story_scene":kind==="beats"?"story_beat":null;
+if(entityType){await env.umbra_studio_production.batch([
+ env.umbra_studio_production.prepare(`DELETE FROM studio_story_entity_links WHERE story_entity_type=? AND story_entity_id=?`).bind(entityType,id),
+ env.umbra_studio_production.prepare(`DELETE FROM studio_review_comments WHERE entity_type=? AND entity_id=?`).bind(entityType,id),
+ env.umbra_studio_production.prepare(`DELETE FROM studio_assignments WHERE entity_type=? AND entity_id=?`).bind(entityType,id)
+]);}
+await env.umbra_studio_production.prepare(`DELETE FROM ${table} WHERE id=?`).bind(id).run();
 return json({ok:true,id});
 }
 
