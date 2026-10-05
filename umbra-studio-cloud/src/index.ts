@@ -342,6 +342,38 @@ export default {
 			}
 
 			const user = await authenticate(request, env);
+                  // MY ACCOUNT PASSWORD
+                  if(request.method==="PATCH"&&url.pathname==="/api/me/password"){
+                          const b=await readJsonBody(request);
+                          const currentPassword=String(b.current_password??"");
+                          const newPassword=String(b.new_password??"");
+
+                          if(!currentPassword||!newPassword)
+                                  return errorResponse(400,"Current password and new password are required.");
+
+                          if(newPassword.length<8)
+                                  return errorResponse(400,"New password must be at least 8 characters.");
+
+                          if(currentPassword===newPassword)
+                                  return errorResponse(400,"New password must be different from your current password.");
+
+                          const account=await env.umbra_studio_production
+                                  .prepare("SELECT password_hash FROM studio_users WHERE id=? LIMIT 1")
+                                  .bind(user.id)
+                                  .first<any>();
+
+                          if(!account?.password_hash||!(await verifyPassword(currentPassword,String(account.password_hash))))
+                                  return errorResponse(401,"Current password is incorrect.");
+
+                          const passwordHash=await hashPassword(newPassword);
+
+                          await env.umbra_studio_production
+                                  .prepare("UPDATE studio_users SET password_hash=?,updated_at=? WHERE id=?")
+                                  .bind(passwordHash,new Date().toISOString(),user.id)
+                                  .run();
+
+                          return json({ok:true});
+                  }
 
 			if(request.method==="POST"&&url.pathname==="/api/auth/setup-code"){
 				requireRole(user,["primary_admin"]);
@@ -432,6 +464,94 @@ export default {
 					},
 				});
 			}
+
+                        // ------------------------------------------------------------
+                        // MY PROFILE
+                        // ------------------------------------------------------------
+
+                        if (
+                                request.method === "GET" &&
+                                url.pathname === "/api/me/profile"
+                        ) {
+                                const profile = await env.umbra_studio_production
+                                        .prepare(`
+                                                SELECT user_id, profile_image_url, personal_notes, created_at, updated_at
+                                                FROM studio_user_profiles
+                                                WHERE user_id = ?
+                                                LIMIT 1
+                                        `)
+                                        .bind(user.id)
+                                        .first();
+
+                                return json({
+                                        ok: true,
+                                        profile: profile ?? {
+                                                user_id: user.id,
+                                                profile_image_url: null,
+                                                personal_notes: null,
+                                                created_at: null,
+                                                updated_at: null,
+                                        },
+                                });
+                        }
+
+                        if (
+                                request.method === "PATCH" &&
+                                url.pathname === "/api/me/profile"
+                        ) {
+                                const body = await readJsonBody(request);
+                                const now = new Date().toISOString();
+
+                                const existing = await env.umbra_studio_production
+                                        .prepare(`
+                                                SELECT user_id
+                                                FROM studio_user_profiles
+                                                WHERE user_id = ?
+                                                LIMIT 1
+                                        `)
+                                        .bind(user.id)
+                                        .first();
+
+                                if (existing) {
+                                        await env.umbra_studio_production
+                                                .prepare(`
+                                                        UPDATE studio_user_profiles
+                                                        SET profile_image_url = ?,
+                                                            personal_notes = ?,
+                                                            updated_at = ?
+                                                        WHERE user_id = ?
+                                                `)
+                                                .bind(
+                                                        nullableString(body.profile_image_url),
+                                                        nullableString(body.personal_notes),
+                                                        now,
+                                                        user.id,
+                                                )
+                                                .run();
+                                } else {
+                                        await env.umbra_studio_production
+                                                .prepare(`
+                                                        INSERT INTO studio_user_profiles (
+                                                                user_id,
+                                                                profile_image_url,
+                                                                personal_notes,
+                                                                created_at,
+                                                                updated_at
+                                                        )
+                                                        VALUES (?, ?, ?, ?, ?)
+                                                `)
+                                                .bind(
+                                                        user.id,
+                                                        nullableString(body.profile_image_url),
+                                                        nullableString(body.personal_notes),
+                                                        now,
+                                                        now,
+                                                )
+                                                .run();
+                                }
+
+                                return json({ ok: true });
+                        }
 
 			// ------------------------------------------------------------
 			// CHARACTERS
@@ -909,55 +1029,569 @@ export default {
 
 
 			// ------------------------------------------------------------
+                // ------------------------------------------------------------
+                // TEAM TRAINING
+                // ------------------------------------------------------------
+                if(request.method==="GET"&&url.pathname==="/api/training"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const [items,assignments]=await Promise.all([
+                                getAll(env,`SELECT t.*,COALESCE(u.display_name,u.email,'Studio Member') created_by_name
+                                FROM studio_training_items t
+                                LEFT JOIN studio_users u ON u.id=t.created_by
+                                ORDER BY t.updated_at DESC`),
+                                getAll(env,`SELECT a.*,
+                                COALESCE(u.display_name,u.email,'Studio Member') assigned_to_name,
+                                u.email assigned_to_email,
+                                COALESCE(by_user.display_name,by_user.email,'Studio Member') assigned_by_name
+                                FROM studio_training_assignments a
+                                LEFT JOIN studio_users u ON u.id=a.assigned_to
+                                LEFT JOIN studio_users by_user ON by_user.id=a.assigned_by
+                                ORDER BY a.assigned_at DESC`)
+                        ]);
+                        return json({ok:true,items,assignments});
+                }
+
+                if(request.method==="GET"&&url.pathname==="/api/me/training"){
+                        const rows=await getAll(env,`SELECT
+                        a.id assignment_id,a.training_id,a.assigned_to,a.assigned_by,
+                        a.status,a.assigned_at,a.updated_at,a.completed_at,
+                        t.title,t.description,t.video_url,t.resource_url,t.resource_name,
+                        t.created_by,t.created_at training_created_at,t.updated_at training_updated_at
+                        FROM studio_training_assignments a
+                        JOIN studio_training_items t ON t.id=a.training_id
+                        WHERE a.assigned_to=?
+                        ORDER BY
+                        CASE a.status
+                          WHEN 'in_progress' THEN 0
+                          WHEN 'not_started' THEN 1
+                          WHEN 'completed' THEN 2
+                          ELSE 3
+                        END,
+                        a.assigned_at DESC`,[user.id]);
+                        return json({ok:true,training:rows});
+                }
+
+                if(request.method==="POST"&&url.pathname==="/api/training"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const b=await readJsonBody(request);
+                        const title=String(b.title??"").trim();
+
+                        if(!title)
+                                return errorResponse(400,"Training title is required.");
+
+                        const id=crypto.randomUUID(),now=new Date().toISOString();
+
+                        await env.umbra_studio_production.prepare(`INSERT INTO
+                        studio_training_items(
+                          id,title,description,video_url,resource_url,resource_name,
+                          created_by,created_at,updated_at
+                        ) VALUES(?,?,?,?,?,?,?,?,?)`)
+                        .bind(
+                          id,
+                          title,
+                          nullableString(b.description),
+                          nullableString(b.video_url),
+                          nullableString(b.resource_url),
+                          nullableString(b.resource_name),
+                          user.id,
+                          now,
+                          now
+                        ).run();
+
+                        return json({ok:true,id},201);
+                }
+
+                const trainingAssignMatch=url.pathname.match(/^\/api\/training\/([^/]+)\/assign$/);
+                if(trainingAssignMatch&&request.method==="POST"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const trainingId=decodeURIComponent(trainingAssignMatch[1]);
+                        const b=await readJsonBody(request);
+                        const assignedTo=Array.isArray(b.assigned_to)
+                          ? b.assigned_to.map(String).filter(Boolean)
+                          : [String(b.assigned_to??"")].filter(Boolean);
+
+                        if(!assignedTo.length)
+                                return errorResponse(400,"Choose at least one team member.");
+
+                        const training=await env.umbra_studio_production
+                          .prepare(`SELECT id FROM studio_training_items WHERE id=? LIMIT 1`)
+                          .bind(trainingId)
+                          .first<any>();
+
+                        if(!training)
+                                return errorResponse(404,"Training item not found.");
+
+                        const now=new Date().toISOString();
+                        let assigned=0;
+
+                        for(const memberId of assignedTo){
+                                const member=await env.umbra_studio_production
+                                  .prepare(`SELECT user_id FROM studio_admin_members WHERE user_id=? LIMIT 1`)
+                                  .bind(memberId)
+                                  .first<any>();
+
+                                if(!member)continue;
+
+                                await env.umbra_studio_production.prepare(`INSERT INTO
+                                studio_training_assignments(
+                                  id,training_id,assigned_to,assigned_by,status,
+                                  assigned_at,updated_at,completed_at
+                                ) VALUES(?,?,?,?,?,?,?,?)
+                                ON CONFLICT(training_id,assigned_to) DO NOTHING`)
+                                .bind(
+                                  crypto.randomUUID(),
+                                  trainingId,
+                                  memberId,
+                                  user.id,
+                                  "not_started",
+                                  now,
+                                  now,
+                                  null
+                                ).run();
+
+                                assigned++;
+                        }
+
+                        return json({ok:true,assigned});
+                }
+
+                const myTrainingMatch=url.pathname.match(/^\/api\/me\/training\/([^/]+)$/);
+                if(myTrainingMatch&&request.method==="PATCH"){
+                        const assignmentId=decodeURIComponent(myTrainingMatch[1]);
+                        const b=await readJsonBody(request);
+                        const status=String(b.status??"");
+
+                        if(!["not_started","in_progress","completed"].includes(status))
+                                return errorResponse(400,"Invalid training status.");
+
+                        const existing=await env.umbra_studio_production
+                          .prepare(`SELECT id FROM studio_training_assignments
+                          WHERE id=? AND assigned_to=? LIMIT 1`)
+                          .bind(assignmentId,user.id)
+                          .first<any>();
+
+                        if(!existing)
+                                return errorResponse(404,"Training assignment not found.");
+
+                        const now=new Date().toISOString();
+
+                        await env.umbra_studio_production.prepare(`UPDATE studio_training_assignments
+                        SET status=?,updated_at=?,completed_at=?
+                        WHERE id=? AND assigned_to=?`)
+                        .bind(
+                          status,
+                          now,
+                          status==="completed"?now:null,
+                          assignmentId,
+                          user.id
+                        ).run();
+
+                        return json({ok:true,id:assignmentId,status});
+                }
+
+                const trainingDeleteMatch=url.pathname.match(/^\/api\/training\/([^/]+)$/);
+                if(trainingDeleteMatch&&request.method==="DELETE"){
+                        requireRole(user,["primary_admin","admin"]);
+                        const id=decodeURIComponent(trainingDeleteMatch[1]);
+
+                        const existing=await env.umbra_studio_production
+                          .prepare(`SELECT id FROM studio_training_items WHERE id=? LIMIT 1`)
+                          .bind(id)
+                          .first<any>();
+
+                        if(!existing)
+                                return errorResponse(404,"Training item not found.");
+
+                        await env.umbra_studio_production
+                          .prepare(`DELETE FROM studio_training_items WHERE id=?`)
+                          .bind(id)
+                          .run();
+
+                        return json({ok:true,id});
+                }
 			// STORY PRODUCTION (D1)
 			// ------------------------------------------------------------
 			if(request.method==="GET"&&url.pathname==="/api/production"){
-				const [projects,arcs,scenes,beats,links,comments,assignments,notifications,journey,changes]=await Promise.all([
-					getAll(env,`SELECT * FROM studio_story_projects ORDER BY updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_arcs ORDER BY sort_order ASC,updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_scenes ORDER BY sort_order ASC,updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_beats ORDER BY sort_order ASC,updated_at DESC`),
-					getAll(env,`SELECT * FROM studio_story_entity_links ORDER BY created_at DESC`),
-					getAll(env,`SELECT * FROM studio_review_comments ORDER BY created_at DESC LIMIT 300`),
-					getAll(env,`SELECT * FROM studio_assignments ORDER BY updated_at DESC LIMIT 300`),
-					getAll(env,`SELECT * FROM studio_notifications WHERE recipient_user_id=? ORDER BY created_at DESC LIMIT 300`,[user.id]),
-					getAll(env,`SELECT * FROM studio_character_journey ORDER BY sort_order ASC,created_at DESC LIMIT 500`),
-					getAll(env,`SELECT id,actor_user_id,COALESCE(actor_name,actor_email,'Studio Member') actor_name,action,entity_type,entity_id,entity_label,created_at FROM studio_activity_log ORDER BY created_at DESC LIMIT 100`)
-				]);
-				const health={
-					projects:projects.length,scenes:scenes.length,
-					open_assignments:(assignments as any[]).filter(x=>!["done","completed","closed"].includes(String(x.status))).length,
-					my_unread_notifications:(notifications as any[]).filter(x=>!x.is_read).length,
-					continuity_open:Number((await env.umbra_studio_production.prepare(`SELECT COUNT(*) n FROM studio_continuity_issues WHERE status IN ('open','reviewing')`).first<any>())?.n??0)
-				};
-				return json({ok:true,projects,arcs,scenes,beats,links,comments,assignments,notifications,journey,changes,health});
-			}
-			const productionTables:Record<string,string>={
-				"projects":"studio_story_projects","arcs":"studio_story_arcs","scenes":"studio_story_scenes","beats":"studio_story_beats"
-			};
-			const prodMatch=url.pathname.match(/^\/api\/production\/(projects|arcs|scenes|beats)(?:\/([^/]+))?$/);
-			if(prodMatch&&request.method==="POST"&&!prodMatch[2]){
-				requireRole(user,["primary_admin","admin","editor"]);const b=await readJsonBody(request);const id=crypto.randomUUID(),now=new Date().toISOString();
-				const table=productionTables[prodMatch[1]];
-				const configs:any={
-					projects:{cols:["id","title","project_type","summary","status","created_by","updated_by","created_at","updated_at"],vals:[id,String(b.title??""),String(b.project_type??"story"),nullableString(b.summary),String(b.status??"planning"),user.id,user.id,now,now]},
-					arcs:{cols:["id","project_id","title","summary","status","created_by","updated_by","created_at","updated_at"],vals:[id,nullableString(b.project_id),String(b.title??""),nullableString(b.summary),String(b.status??"planned"),user.id,user.id,now,now]},
-					scenes:{cols:["id","project_id","arc_id","title","summary","pov_character_id","location_id","era","story_date","status","created_by","updated_by","created_at","updated_at"],vals:[id,nullableString(b.project_id),nullableString(b.arc_id),String(b.title??""),nullableString(b.summary),nullableString(b.pov_character_id),nullableString(b.location_id),nullableString(b.era),nullableString(b.story_date),String(b.status??"idea"),user.id,user.id,now,now]},
-					beats:{cols:["id","project_id","arc_id","scene_id","title","description","beat_type","status","created_by","created_at","updated_at"],vals:[id,nullableString(b.project_id),nullableString(b.arc_id),nullableString(b.scene_id),String(b.title??""),nullableString(b.description),String(b.beat_type??"plot"),String(b.status??"idea"),user.id,now,now]}
-				};
-				const c=configs[prodMatch[1]];await env.umbra_studio_production.prepare(`INSERT INTO ${table}(${c.cols.join(",")}) VALUES(${c.cols.map(()=>"?").join(",")})`).bind(...c.vals).run();
-				return json({ok:true,id},201);
-			}
-			if(prodMatch&&prodMatch[2]&&request.method==="PATCH"){
-				requireRole(user,["primary_admin","admin","editor"]);const id=decodeURIComponent(prodMatch[2]),b=await readJsonBody(request),table=productionTables[prodMatch[1]];
-				await env.umbra_studio_production.prepare(`UPDATE ${table} SET status=?,updated_at=? WHERE id=?`).bind(String(b.status??"idea"),new Date().toISOString(),id).run();
-				return json({ok:true,id});
-			}
-			if(prodMatch&&prodMatch[2]&&request.method==="DELETE"){
-				requireRole(user,["primary_admin","admin"]);const id=decodeURIComponent(prodMatch[2]),table=productionTables[prodMatch[1]];
-				await env.umbra_studio_production.prepare(`DELETE FROM ${table} WHERE id=?`).bind(id).run();return json({ok:true,id});
-			}
-			if(request.method==="POST"&&url.pathname==="/api/production/links"){
+const [projects,arcs,chapters,scenes,beats,links,comments,assignments,notifications,journey,changes]=await Promise.all([
+getAll(env,`SELECT * FROM studio_story_projects ORDER BY updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_arcs ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_chapters ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_scenes ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_beats ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_entity_links ORDER BY created_at DESC`),
+getAll(env,`SELECT * FROM studio_review_comments ORDER BY created_at DESC LIMIT 300`),
+getAll(env,`SELECT * FROM studio_assignments ORDER BY updated_at DESC LIMIT 300`),
+getAll(env,`SELECT * FROM studio_notifications WHERE recipient_user_id=? ORDER BY created_at DESC LIMIT 300`,[user.id]),
+getAll(env,`SELECT * FROM studio_character_journey ORDER BY sort_order ASC,created_at DESC LIMIT 500`),
+getAll(env,`SELECT id,actor_user_id,COALESCE(actor_name,actor_email,'Studio Member') actor_name,action,entity_type,entity_id,entity_label,created_at FROM studio_activity_log ORDER BY created_at DESC LIMIT 100`)
+]);
+
+const health={
+projects:projects.length,
+chapters:chapters.length,
+scenes:scenes.length,
+open_assignments:(assignments as any[]).filter(x=>!["done","completed","closed"].includes(String(x.status))).length,
+my_unread_notifications:(notifications as any[]).filter(x=>!x.is_read).length,
+continuity_open:Number((await env.umbra_studio_production.prepare(`SELECT COUNT(*) n FROM studio_continuity_issues WHERE status IN ('open','reviewing')`).first<any>())?.n??0)
+};
+
+return json({
+ok:true,
+projects,
+arcs,
+chapters,
+scenes,
+beats,
+links,
+comments,
+assignments,
+notifications,
+journey,
+changes,
+health
+});
+}
+
+const productionTables:Record<string,string>={
+projects:"studio_story_projects",
+arcs:"studio_story_arcs",
+chapters:"studio_story_chapters",
+scenes:"studio_story_scenes",
+beats:"studio_story_beats"
+};
+
+const prodMatch=url.pathname.match(/^\/api\/production\/(projects|arcs|chapters|scenes|beats)(?:\/([^/]+))?$/);
+
+if(prodMatch&&request.method==="POST"&&!prodMatch[2]){
+requireRole(user,["primary_admin","admin","editor"]);
+
+const b=await readJsonBody(request);
+const id=crypto.randomUUID();
+const now=new Date().toISOString();
+const table=productionTables[prodMatch[1]];
+
+const configs:any={
+projects:{
+cols:["id","title","project_type","summary","status","created_by","updated_by","created_at","updated_at"],
+vals:[
+id,
+String(b.title??""),
+String(b.project_type??"story"),
+nullableString(b.summary),
+String(b.status??"planning"),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+arcs:{
+cols:["id","project_id","title","arc_code","summary","sort_order","status","created_by","updated_by","created_at","updated_at"],
+vals:[
+id,
+nullableString(b.project_id),
+String(b.title??""),
+nullableString(b.arc_code),
+nullableString(b.summary),
+Number(b.sort_order??0),
+String(b.status??"planned"),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+chapters:{
+cols:[
+"id",
+"project_id",
+"arc_id",
+"title",
+"chapter_code",
+"chapter_type",
+"summary",
+"body_notes",
+"sort_order",
+"status",
+"canon_status",
+"spoiler_level",
+"source_label",
+"source_text",
+"created_by",
+"updated_by",
+"created_at",
+"updated_at"
+],
+vals:[
+id,
+nullableString(b.project_id),
+nullableString(b.arc_id),
+String(b.title??""),
+nullableString(b.chapter_code),
+String(b.chapter_type??"chapter"),
+nullableString(b.summary),
+nullableString(b.body_notes),
+Number(b.sort_order??0),
+String(b.status??"draft"),
+String(b.canon_status??"draft"),
+String(b.spoiler_level??"none"),
+nullableString(b.source_label),
+nullableString(b.source_text),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+scenes:{
+cols:[
+"id",
+"project_id",
+"arc_id",
+"chapter_id",
+"title",
+"scene_code",
+"summary",
+"body_notes",
+"pov_character_id",
+"location_id",
+"era",
+"story_date",
+"sort_order",
+"status",
+"created_by",
+"updated_by",
+"created_at",
+"updated_at"
+],
+vals:[
+id,
+nullableString(b.project_id),
+nullableString(b.arc_id),
+nullableString(b.chapter_id),
+String(b.title??""),
+nullableString(b.scene_code),
+nullableString(b.summary),
+nullableString(b.body_notes),
+nullableString(b.pov_character_id),
+nullableString(b.location_id),
+nullableString(b.era),
+nullableString(b.story_date),
+Number(b.sort_order??0),
+String(b.status??"idea"),
+user.id,
+user.id,
+now,
+now
+]
+},
+
+beats:{
+cols:[
+"id",
+"project_id",
+"arc_id",
+"scene_id",
+"title",
+"description",
+"beat_type",
+"status",
+"sort_order",
+"created_by",
+"updated_by",
+"created_at",
+"updated_at"
+],
+vals:[
+id,
+nullableString(b.project_id),
+nullableString(b.arc_id),
+nullableString(b.scene_id),
+String(b.title??""),
+nullableString(b.description),
+String(b.beat_type??"plot"),
+String(b.status??"idea"),
+Number(b.sort_order??0),
+user.id,
+user.id,
+now,
+now
+]
+}
+};
+
+const c=configs[prodMatch[1]];
+
+await env.umbra_studio_production
+.prepare(`INSERT INTO ${table}(${c.cols.join(",")}) VALUES(${c.cols.map(()=>"?").join(",")})`)
+.bind(...c.vals)
+.run();
+
+return json({ok:true,id},201);
+}
+
+if(prodMatch&&prodMatch[2]&&request.method==="PATCH"){
+requireRole(user,["primary_admin","admin","editor"]);
+
+const id=decodeURIComponent(prodMatch[2]);
+const b=await readJsonBody(request);
+const table=productionTables[prodMatch[1]];
+const now=new Date().toISOString();
+
+if(Object.keys(b).length===1&&b.status!==undefined){
+await env.umbra_studio_production
+.prepare(`UPDATE ${table} SET status=?,updated_at=? WHERE id=?`)
+.bind(String(b.status),now,id)
+.run();
+
+return json({ok:true,id});
+}
+
+const writableByType:Record<string,string[]>={
+projects:[
+"title",
+"project_type",
+"summary",
+"status",
+"canon_status",
+"spoiler_level",
+"is_public",
+"cover_url"
+],
+
+arcs:[
+"project_id",
+"title",
+"arc_code",
+"summary",
+"sort_order",
+"status",
+"canon_status",
+"spoiler_level"
+],
+
+chapters:[
+"project_id",
+"arc_id",
+"title",
+"chapter_code",
+"chapter_type",
+"summary",
+"body_notes",
+"sort_order",
+"status",
+"canon_status",
+"spoiler_level",
+"source_label",
+"source_text"
+],
+
+scenes:[
+"project_id",
+"arc_id",
+"chapter_id",
+"title",
+"scene_code",
+"summary",
+"body_notes",
+"pov_character_id",
+"location_id",
+"timeline_event_id",
+"era",
+"story_date",
+"sort_order",
+"status",
+"spoiler_level"
+],
+
+beats:[
+"project_id",
+"arc_id",
+"scene_id",
+"title",
+"description",
+"beat_type",
+"status",
+"sort_order"
+]
+};
+
+const allowed=writableByType[prodMatch[1]]??[];
+const keys=allowed.filter(key=>Object.prototype.hasOwnProperty.call(b,key));
+
+if(!keys.length){
+return errorResponse(400,"No supported Production fields were provided.");
+}
+
+const nullableFields=new Set([
+"project_id",
+"arc_id",
+"chapter_id",
+"scene_id",
+"summary",
+"body_notes",
+"pov_character_id",
+"location_id",
+"timeline_event_id",
+"era",
+"story_date",
+"arc_code",
+"chapter_code",
+"scene_code",
+"source_label",
+"source_text",
+"description",
+"cover_url"
+]);
+
+const numericFields=new Set([
+"sort_order",
+"is_public"
+]);
+
+const values=keys.map(key=>{
+if(numericFields.has(key)){
+return Number(b[key]??0);
+}
+
+if(nullableFields.has(key)){
+return nullableString(b[key]);
+}
+
+return String(b[key]??"");
+});
+
+const sql=
+`UPDATE ${table} SET `+
+keys.map(key=>`${key}=?`).join(",")+
+`,updated_by=?,updated_at=? WHERE id=?`;
+
+await env.umbra_studio_production
+.prepare(sql)
+.bind(...values,user.id,now,id)
+.run();
+
+return json({ok:true,id});
+}
+
+if(prodMatch&&prodMatch[2]&&request.method==="DELETE"){
+requireRole(user,["primary_admin","admin"]);
+
+const id=decodeURIComponent(prodMatch[2]);
+const table=productionTables[prodMatch[1]];
+
+await env.umbra_studio_production
+.prepare(`DELETE FROM ${table} WHERE id=?`)
+.bind(id)
+.run();
+
+return json({ok:true,id});
+}
+
+if(request.method==="POST"&&url.pathname==="/api/production/links"){
 				requireRole(user,["primary_admin","admin","editor"]);const b=await readJsonBody(request),id=crypto.randomUUID();
 				await env.umbra_studio_production.prepare(`INSERT INTO studio_story_entity_links(id,story_entity_type,story_entity_id,linked_entity_type,linked_entity_id,relation_label,notes,created_at) VALUES(?,?,?,?,?,?,?,?)`)
 				.bind(id,String(b.story_entity_type),String(b.story_entity_id),String(b.linked_entity_type),String(b.linked_entity_id),nullableString(b.relation_label),nullableString(b.notes),new Date().toISOString()).run();return json({ok:true,id},201);
@@ -989,14 +1623,19 @@ export default {
 				.bind(id,String(b.character_id),nullableString(b.project_id),nullableString(b.arc_id),nullableString(b.scene_id),String(b.journey_type??"development"),String(b.title??""),nullableString(b.description),nullableString(b.before_value),nullableString(b.after_value),user.id,now).run();return json({ok:true,id},201);
 			}
 			if(request.method==="GET"&&url.pathname==="/api/messages"){
-				const rows=await getAll(env,`SELECT id,sender_user_id,recipient_user_id,body,entity_type,entity_id,read_at,created_at FROM studio_direct_messages WHERE sender_user_id=? OR recipient_user_id=? ORDER BY created_at ASC LIMIT 1000`,[user.id,user.id]);
+				const rows=await getAll(env,`SELECT id,sender_user_id,recipient_user_id,body,entity_type,entity_id,read_at,created_at,attachment_url,attachment_name,attachment_type,attachment_size FROM studio_direct_messages WHERE sender_user_id=? OR recipient_user_id=? ORDER BY created_at ASC LIMIT 1000`,[user.id,user.id]);
 				return json({ok:true,messages:rows});
 			}
 			if(request.method==="POST"&&url.pathname==="/api/messages"){
-				const b=await readJsonBody(request),id=crypto.randomUUID(),body=String(b.body??"").trim(),target=String(b.recipient_user_id??"");
-				if(!body||!target)return errorResponse(400,"Recipient and message are required.");
-				await env.umbra_studio_production.prepare(`INSERT INTO studio_direct_messages(id,sender_user_id,recipient_user_id,body,entity_type,entity_id,created_at) VALUES(?,?,?,?,?,?,?)`)
-				.bind(id,user.id,target,body,nullableString(b.entity_type),nullableString(b.entity_id),new Date().toISOString()).run();return json({ok:true,id},201);
+				const b=await readJsonBody(request),id=crypto.randomUUID(),body=String(b.body??"").trim(),target=String(b.recipient_user_id??"").trim();
+                        const attachmentUrl=nullableString(b.attachment_url),attachmentName=nullableString(b.attachment_name),attachmentType=nullableString(b.attachment_type);
+                        const rawAttachmentSize=Number(b.attachment_size);
+                        const attachmentSize=Number.isFinite(rawAttachmentSize)&&rawAttachmentSize>=0?Math.round(rawAttachmentSize):null;
+				if(!target)return errorResponse(400,"Recipient is required.");
+                        if(!body&&!attachmentUrl)return errorResponse(400,"Message text or an attachment is required.");
+                        if(attachmentUrl&&!attachmentName)return errorResponse(400,"Attachment name is required.");
+				await env.umbra_studio_production.prepare(`INSERT INTO studio_direct_messages(id,sender_user_id,recipient_user_id,body,entity_type,entity_id,attachment_url,attachment_name,attachment_type,attachment_size,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+				.bind(id,user.id,target,body,nullableString(b.entity_type),nullableString(b.entity_id),attachmentUrl,attachmentName,attachmentType,attachmentSize,new Date().toISOString()).run();return json({ok:true,id},201);
 			}
 
 
@@ -1104,7 +1743,7 @@ export default {
 				const b=await readJsonBody(request),rows=Array.isArray(b.rows)?b.rows:[];for(const raw of rows as any[]){const id=crypto.randomUUID(),now=new Date().toISOString(),code=`REC-${Date.now()}-${id.slice(0,6)}`;await env.umbra_studio_production.prepare(`INSERT INTO studio_database_records(id,created_by,updated_by,record_type_id,record_code,name,subtitle,summary,details,workflow_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id,user.id,user.id,String(raw.record_type_id),code,String(raw.name??""),nullableString(raw.subtitle),nullableString(raw.summary),jsonText(raw.details,{}),String(raw.workflow_status??"draft"),now,now).run();}return json({ok:true,count:rows.length},201);
 			}
 			if(request.method==="DELETE"&&url.pathname==="/api/duplicates"){
-				requireRole(user,["primary_admin","admin"]);const b=await readJsonBody(request),table=String(b.table??""),id=String(b.id??"");const allowed:Record<string,string>={studio_characters:"studio_characters",studio_world_records:"studio_world_records",studio_world_locations:"studio_world_locations",studio_database_records:"studio_database_records",studio_story_projects:"studio_story_projects",studio_story_arcs:"studio_story_arcs",studio_story_scenes:"studio_story_scenes"};if(!allowed[table]||!id)return errorResponse(400,"Unsupported duplicate type.");await env.umbra_studio_production.prepare(`DELETE FROM ${allowed[table]} WHERE id=?`).bind(id).run();return json({ok:true});
+				requireRole(user,["primary_admin","admin"]);const b=await readJsonBody(request),table=String(b.table??""),id=String(b.id??"");const allowed:Record<string,string>={studio_characters:"studio_characters",studio_world_records:"studio_world_records",studio_world_locations:"studio_world_locations",studio_database_records:"studio_database_records",studio_story_projects:"studio_story_projects",studio_story_arcs:"studio_story_arcs",studio_story_chapters:"studio_story_chapters",studio_story_scenes:"studio_story_scenes"};if(!allowed[table]||!id)return errorResponse(400,"Unsupported duplicate type.");await env.umbra_studio_production.prepare(`DELETE FROM ${allowed[table]} WHERE id=?`).bind(id).run();return json({ok:true});
 			}
 			const canonMatch=url.pathname.match(/^\/api\/world-database\/records\/([^/]+)\/canon$/);
 			if(canonMatch&&request.method==="PATCH"){

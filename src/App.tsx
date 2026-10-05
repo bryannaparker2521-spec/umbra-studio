@@ -6,7 +6,7 @@ import StudioUpdateCenter from "./StudioUpdateCenter";
 import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
 
-type StudioPage = "dashboard" | "create" | "characters" | "library" | "profile" | "connections" | "world" | "explorer" | "admin" | "database" | "canon" | "production" | "settings" | "messages" | "transfer";
+type StudioPage = "dashboard" | "create" | "characters" | "library" | "profile" | "my-profile" | "connections" | "world" | "explorer" | "admin" | "database" | "canon" | "production" | "settings" | "messages" | "transfer";
 
 type CharacterRelationship = {
   id: string;
@@ -56,19 +56,64 @@ type TimelineEvent = {
 type WorldAtlas = { id: string; user_id: string; title: string; map_url: string | null; description: string | null; is_public: boolean; };
 
 type StudioAdminMember = { user_id:string; email:string|null; display_name:string|null; role:"primary_admin"|"admin"|"editor"; created_at:string; last_login_at?:string|null; last_seen_at?:string|null; password_set?:number|boolean; };
+type StudioUserProfile = { user_id:string; profile_image_url:string|null; personal_notes:string|null; created_at:string|null; updated_at:string|null; };
 type CollaboratorSession = { id:string; user_id:string; display_name:string|null; email:string|null; role:string|null; signed_in_at:string; last_seen_at:string; signed_out_at:string|null; };
 type CanonHistory = { id:string; entity_type:string; entity_id:string; entity_label:string|null; previous_status:string|null; new_status:string; reason:string|null; changed_by:string|null; changed_by_name:string|null; created_at:string; };
 type ContinuityIssue = { id:string; issue_type:string; severity:"info"|"warning"|"critical"; entity_type:string; entity_id:string|null; entity_label:string|null; message:string; details:Record<string,any>; status:string; created_at:string; updated_at:string; };
 type PublicSettings = { id:boolean; title:string; subtitle:string|null; introduction:string|null; hero_image_url:string|null; is_enabled:boolean; updated_at:string; };
 type StoryProject = { id:string; title:string; project_type:string; summary:string|null; status:string; canon_status:string; spoiler_level:string; is_public:boolean; cover_url:string|null; created_by:string|null; updated_at:string; };
 type StoryArc = { id:string; project_id:string|null; title:string; arc_code:string|null; summary:string|null; sort_order:number; status:string; canon_status:string; spoiler_level:string; updated_at:string; };
-type StoryScene = { id:string; project_id:string|null; arc_id:string|null; title:string; scene_code:string|null; summary:string|null; body_notes:string|null; pov_character_id:string|null; location_id:string|null; timeline_event_id:string|null; era:string|null; story_date:string|null; sort_order:number; status:string; spoiler_level:string; updated_at:string; };
+type StoryChapter = { id:string; project_id:string|null; arc_id:string|null; title:string; chapter_code:string|null; chapter_type:string; summary:string|null; body_notes:string|null; sort_order:number; status:string; canon_status:string; spoiler_level:string; source_label:string|null; source_text:string|null; updated_at:string; };
+type StoryScene = { id:string; project_id:string|null; arc_id:string|null; chapter_id:string|null; title:string; scene_code:string|null; summary:string|null; body_notes:string|null; pov_character_id:string|null; location_id:string|null; timeline_event_id:string|null; era:string|null; story_date:string|null; sort_order:number; status:string; spoiler_level:string; updated_at:string; };
 type StoryBeat = { id:string; project_id:string|null; arc_id:string|null; scene_id:string|null; title:string; description:string|null; beat_type:string; status:string; sort_order:number; updated_at:string; };
 type StoryEntityLink = { id:string; story_entity_type:string; story_entity_id:string; linked_entity_type:string; linked_entity_id:string; relation_label:string|null; notes:string|null; created_at:string; };
 type ReviewComment = { id:string; entity_type:string; entity_id:string; body:string; status:string; created_by:string|null; created_by_name:string|null; created_at:string; resolved_at:string|null; };
+type StudioTrainingItem = {
+  id:string;
+  title:string;
+  description:string|null;
+  video_url:string|null;
+  resource_url:string|null;
+  resource_name:string|null;
+  created_by:string;
+  created_at:string;
+  updated_at:string;
+  created_by_name?:string|null;
+};
+
+type StudioTrainingAssignment = {
+  id:string;
+  training_id:string;
+  assigned_to:string;
+  assigned_by:string;
+  status:"not_started"|"in_progress"|"completed";
+  assigned_at:string;
+  updated_at:string;
+  completed_at:string|null;
+  assigned_to_name?:string|null;
+  assigned_to_email?:string|null;
+  assigned_by_name?:string|null;
+};
+
+type MyTrainingAssignment = {
+  assignment_id:string;
+  training_id:string;
+  assigned_to:string;
+  assigned_by:string;
+  status:"not_started"|"in_progress"|"completed";
+  assigned_at:string;
+  updated_at:string;
+  completed_at:string|null;
+  title:string;
+  description:string|null;
+  video_url:string|null;
+  resource_url:string|null;
+  resource_name:string|null;
+};
+
 type StudioAssignment = { id:string; title:string; description:string|null; entity_type:string|null; entity_id:string|null; assigned_to:string; assigned_by:string|null; priority:string; status:string; due_at:string|null; created_at:string; updated_at:string; };
 type StudioNotification = { id:string; recipient_user_id:string; actor_user_id:string|null; actor_name:string|null; notification_type:string; title:string; message:string|null; entity_type:string|null; entity_id:string|null; is_read:boolean; created_at:string; };
-type StudioDirectMessage = { id:string; sender_user_id:string; recipient_user_id:string; body:string; entity_type:string|null; entity_id:string|null; read_at:string|null; created_at:string; };
+type StudioDirectMessage = { id:string; sender_user_id:string; recipient_user_id:string; body:string; entity_type:string|null; entity_id:string|null; read_at:string|null; created_at:string; attachment_url:string|null; attachment_name:string|null; attachment_type:string|null; attachment_size:number|null; };
 type CharacterJourney = { id:string; character_id:string; project_id:string|null; arc_id:string|null; scene_id:string|null; journey_type:string; title:string; description:string|null; before_value:string|null; after_value:string|null; sort_order:number; created_at:string; };
 type V9Health = { projects:number; arcs:number; scenes:number; beats:number; open_comments:number; open_assignments:number; my_unread_notifications:number; continuity_open:number; };
 type StudioSettings = { id:boolean; studio_name:string; studio_subtitle:string; default_canon_status:string; default_spoiler_level:string; autosave_enabled:boolean; autosave_seconds:number; stale_session_minutes:number; show_dashboard_activity:boolean; show_help_descriptions:boolean; updated_at:string; };
@@ -164,6 +209,7 @@ const [connectedRelationships, setConnectedRelationships] = useState<CharacterRe
 const [relationshipTargetId, setRelationshipTargetId] = useState("");
 const [relationshipType, setRelationshipType] = useState("sibling");
 const [relationshipCharacterSearch, setRelationshipCharacterSearch] = useState("");
+const [relationshipSearchOpen, setRelationshipSearchOpen] = useState(false);
 const [pendingImportedRelationshipSync, setPendingImportedRelationshipSync] = useState<any | null>(null);
 const [relationshipBusy, setRelationshipBusy] = useState(false);
 const [relationshipError, setRelationshipError] = useState("");
@@ -225,12 +271,39 @@ const [editingEventId, setEditingEventId] = useState<string | null>(null);
 const [draggingLocationId, setDraggingLocationId] = useState<string | null>(null);
 const [studioSearch, setStudioSearch] = useState("");
 const [adminMembers,setAdminMembers]=useState<StudioAdminMember[]>([]);
+const [myProfile,setMyProfile]=useState<StudioUserProfile|null>(null);
+const [myProfileNotes,setMyProfileNotes]=useState("");
+const [myProfileBusy,setMyProfileBusy]=useState(false);
+const [myProfileError,setMyProfileError]=useState("");
+const [myProfileDisplayName,setMyProfileDisplayName]=useState("");
+const [myProfileRole,setMyProfileRole]=useState("");
+const [myProfileEmail,setMyProfileEmail]=useState("");
+const [myProfileImageBusy,setMyProfileImageBusy]=useState(false);
+const [myProfilePasswordCurrent,setMyProfilePasswordCurrent]=useState("");
+const [myProfilePasswordNew,setMyProfilePasswordNew]=useState("");
+const [myProfilePasswordConfirm,setMyProfilePasswordConfirm]=useState("");
+const [myProfilePasswordBusy,setMyProfilePasswordBusy]=useState(false);
+const [myProfileMessage,setMyProfileMessage]=useState("");
+
+const [myTraining,setMyTraining]=useState<MyTrainingAssignment[]>([]);
+const [trainingItems,setTrainingItems]=useState<StudioTrainingItem[]>([]);
+const [trainingAssignments,setTrainingAssignments]=useState<StudioTrainingAssignment[]>([]);
+
+const [trainingTitle,setTrainingTitle]=useState("");
+const [trainingDescription,setTrainingDescription]=useState("");
+const [trainingVideoFile,setTrainingVideoFile]=useState<File|null>(null);
+const [trainingResourceFile,setTrainingResourceFile]=useState<File|null>(null);
+const [trainingSelectedMembers,setTrainingSelectedMembers]=useState<string[]>([]);
+
+const [trainingBusy,setTrainingBusy]=useState(false);
+const [trainingError,setTrainingError]=useState("");
+const [trainingMessage,setTrainingMessage]=useState("");
 const [adminRole,setAdminRole]=useState<StudioAdminMember["role"]|null>(null);
 const [adminActivity,setAdminActivity]=useState<StudioActivity[]>([]);
 const [adminRevisions,setAdminRevisions]=useState<StudioRevision[]>([]);
 const [adminNotes,setAdminNotes]=useState<StudioNote[]>([]);
 const [adminContent,setAdminContent]=useState<AdminContentRow[]>([]);
-const [adminTab,setAdminTab]=useState<"overview"|"content"|"activity"|"sessions"|"revisions"|"notes"|"team">("overview");
+const [adminTab,setAdminTab]=useState<"overview"|"content"|"activity"|"sessions"|"revisions"|"notes"|"team"|"training">("overview");
 const [adminBusy,setAdminBusy]=useState(false);
 const [adminError,setAdminError]=useState("");
 const [adminMemberEmail,setAdminMemberEmail]=useState("");
@@ -279,6 +352,7 @@ const [importText,setImportText]=useState("");
 const [importPreview,setImportPreview]=useState<any[]>([]);
 const [importError,setImportError]=useState("");
 const [characterImportPreview,setCharacterImportPreview]=useState<any|null>(null);
+const [smartImportChunks,setSmartImportChunks]=useState<any[]>([]);
 
 const [recordMediaId,setRecordMediaId]=useState("");
 const [recordReferences,setRecordReferences]=useState<RecordReference[]>([]);
@@ -306,9 +380,10 @@ const [publicBrowseCharacters,setPublicBrowseCharacters]=useState<StudioCharacte
 const [publicBrowseWorld,setPublicBrowseWorld]=useState<WorldRecord[]>([]);
 const [publicBrowseLocations,setPublicBrowseLocations]=useState<WorldLocation[]>([]);
 const [publicBrowseTimeline,setPublicBrowseTimeline]=useState<TimelineEvent[]>([]);
-const [productionTab,setProductionTab]=useState<"overview"|"projects"|"arcs"|"scenes"|"plot"|"journeys"|"review"|"assignments"|"inbox"|"graph">("overview");
+const [productionTab,setProductionTab]=useState<"overview"|"projects"|"arcs"|"chapters"|"scenes"|"plot"|"journeys"|"review"|"assignments"|"inbox"|"graph">("overview");
 const [storyProjects,setStoryProjects]=useState<StoryProject[]>([]);
 const [storyArcs,setStoryArcs]=useState<StoryArc[]>([]);
+const [storyChapters,setStoryChapters]=useState<StoryChapter[]>([]);
 const [storyScenes,setStoryScenes]=useState<StoryScene[]>([]);
 const [storyBeats,setStoryBeats]=useState<StoryBeat[]>([]);
 const [storyLinks,setStoryLinks]=useState<StoryEntityLink[]>([]);
@@ -328,13 +403,21 @@ const [appVersion,setAppVersion]=useState("...");
 const [directMessages,setDirectMessages]=useState<StudioDirectMessage[]>([]);
 const [messageRecipientId,setMessageRecipientId]=useState("");
 const [messageBody,setMessageBody]=useState("");
+const [messageAttachmentFile,setMessageAttachmentFile]=useState<File|null>(null);
 const [messagesBusy,setMessagesBusy]=useState(false);
 const [messagesError,setMessagesError]=useState("");
 const [backupValidation,setBackupValidation]=useState<{ok:boolean;message:string;summary?:string}|null>(null);
-const [productionSearch,setProductionSearch]=useState("");
+const [productionSearch,setProductionSearch]=useState("");
+const [storyInspector,setStoryInspector]=useState<{type:"story_chapter"|"story_scene";id:string}|null>(null);
+const [graphZoom,setGraphZoom]=useState(1);
+const [graphPan,setGraphPan]=useState({x:30,y:30});
+const [graphPositions,setGraphPositions]=useState<Record<string,{x:number;y:number}>>({});
+const [graphDrag,setGraphDrag]=useState<{key:string;dx:number;dy:number}|null>(null);
+const [graphPanDrag,setGraphPanDrag]=useState<{x:number;y:number;px:number;py:number}|null>(null);
 const [projectForm,setProjectForm]=useState({title:"",projectType:"story",summary:"",status:"planning"});
 const [arcForm,setArcForm]=useState({projectId:"",title:"",summary:"",status:"planned"});
-const [sceneForm,setSceneForm]=useState({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});
+const [chapterForm,setChapterForm]=useState({projectId:"",arcId:"",title:"",chapterCode:"",chapterType:"chapter",summary:"",bodyNotes:"",sortOrder:"0",status:"draft"});
+const [sceneForm,setSceneForm]=useState({projectId:"",arcId:"",chapterId:"",title:"",summary:"",bodyNotes:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});
 const [beatForm,setBeatForm]=useState({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});
 const [commentForm,setCommentForm]=useState({entityType:"story_project",entityId:"",body:"",notifyUserId:""});
 const [assignmentForm,setAssignmentForm]=useState({title:"",description:"",entityType:"story_project",entityId:"",assignedTo:"",priority:"normal",dueAt:""});
@@ -582,9 +665,9 @@ async function createUniversalLink(){if(!session||!linkForm.sourceId||!linkForm.
 async function deleteUniversalLink(id:string){try{await umbraCloudFetch(`/api/world-database/links/${encodeURIComponent(id)}`,{method:"DELETE"});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Link could not be deleted.");}}
 function setGuidancePreference(enabled:boolean){setShowStudioGuidance(enabled);try{localStorage.setItem("umbra-studio-guidance",enabled?"on":"off");}catch{}}
 function StudioGuide({title,children}:{title:string;children:any}){return showStudioGuidance?<div className="studio-tab-guide"><div><strong>{title}</strong><p>{children}</p></div><button type="button" onClick={()=>setGuidancePreference(false)}>Hide tips for me</button></div>:null;}
-const adminGuide:Record<string,string>={overview:"See the Studio workflow at a glance: review queue, team activity, and work needing attention.",content:"Review and move characters, Codex entries, locations, and timeline records through Draft, Review, Approved, and Published.",activity:"Audit who changed Studio content and when. Use this for accountability and troubleshooting.",sessions:"See authorized collaborator sign-ins, last-seen activity, and recorded sign-outs.",revisions:"Review automatic snapshots captured before tracked content changes or deletion.",notes:"Keep private production notes for the admin team. These are not public lore.",team:"Manage Studio collaborators, display names, access roles, and permissions."};
+const adminGuide:Record<string,string>={overview:"See the Studio workflow at a glance: review queue, team activity, and work needing attention.",content:"Review and move characters, Codex entries, locations, and timeline records through Draft, Review, Approved, and Published.",activity:"Audit who changed Studio content and when. Use this for accountability and troubleshooting.",sessions:"See authorized collaborator sign-ins, last-seen activity, and recorded sign-outs.",revisions:"Review automatic snapshots captured before tracked content changes or deletion.",notes:"Keep private production notes for the admin team. These are not public lore.",team:"Manage Studio collaborators, display names, access roles, and permissions.",training:"Create training lessons, attach videos and resources, assign team members, and review individual progress."};
 const explorerGuide:Record<string,string>={map:"Place and move locations on the interactive world map.",locations:"Create, edit, organize, and archive places in the Umbral world.",timeline:"Build chronological world and story events and connect them to characters, locations, and Codex records.",favorites:"Keep frequently used world items together for faster access.",archive:"Review locations and timeline events removed from active work without permanently losing them."};
-const productionGuide:Record<string,string>={overview:"See current story-production activity, pending work, and recent collaborator changes.",projects:"Create major stories, books, seasons, campaigns, or other top-level productions.",arcs:"Organize story arcs inside projects and track their production status.",scenes:"Write and organize scenes, POV characters, locations, dates, and production notes.",plot:"Break stories into ordered beats and plot events.",journeys:"Track how characters change across projects, arcs, and scenes.",review:"Leave and resolve editorial comments without changing the underlying canon directly.",assignments:"Assign production work to Studio collaborators with priority, status, and due dates.",inbox:"Read Studio notifications and work that needs your attention.",graph:"View connections between story entities and linked world information."};
+const productionGuide:Record<string,string>={overview:"See current story-production activity, pending work, and recent collaborator changes.",projects:"Create major stories, books, seasons, campaigns, or other top-level productions.",arcs:"Organize story arcs inside projects and track their production status.",chapters:"Organize chapters and episodes inside projects and arcs, preserve full manuscript text, and review recognized story connections.",scenes:"Write and organize scenes, POV characters, locations, dates, and production notes.",plot:"Break stories into ordered beats and plot events.",journeys:"Track how characters change across projects, arcs, and scenes.",review:"Leave and resolve editorial comments without changing the underlying canon directly.",assignments:"Assign production work to Studio collaborators with priority, status, and due dates.",inbox:"Read Studio notifications and work that needs your attention.",graph:"View connections between story entities and linked world information."};
 async function uploadCatalogFile(file:File){
  if(!session)return "";
  const imageKinds=["image","map","reference"]; if(imageKinds.includes(mediaForm.mediaType)&&!file.type.startsWith("image/"))throw new Error("Choose an image file for this media type.");
@@ -609,7 +692,7 @@ async function bulkWorkflow(status:string){const ids=[...selectedDatabaseRecordI
 async function bulkArchive(){const ids=[...selectedDatabaseRecordIds];if(!ids.length)return;try{await umbraCloudFetch("/api/world-database/bulk",{method:"POST",body:JSON.stringify({ids,archive:true})});setSelectedDatabaseRecordIds(new Set());await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Bulk archive failed.");}}
 function toggleDatabaseSelection(id:string){setSelectedDatabaseRecordIds(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});}
 async function createStudioBackup(){const label=backupLabel.trim()||`Umbra Studio backup ${new Date().toLocaleString()}`;try{await umbraCloudFetch("/api/world-database/backup",{method:"POST",body:JSON.stringify({label})});setBackupLabel("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Backup could not be created.");}}
-function exportStudioData(){const payload={version:"v10-studio-1.0",exported_at:new Date().toISOString(),studio_settings:studioSettings,characters:studioCharacters,codex:worldRecords,locations:worldLocations,timeline:timelineEvents,record_types:recordTypes,expanded_records:databaseRecords,collections,collection_items:collectionItems,tags:studioTags,tag_assignments:tagAssignments,universal_links:universalLinks,media_assets:mediaAssets,record_references:recordReferences,canon_history:canonHistory,continuity_issues:continuityIssues,story_projects:storyProjects,story_arcs:storyArcs,story_scenes:storyScenes,story_beats:storyBeats,story_entity_links:storyLinks,review_comments:reviewComments,assignments:studioAssignments,character_journey:characterJourney,direct_messages:directMessages};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`umbra-studio-1.0-export-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
+function exportStudioData(){const payload={version:"v10-studio-1.0",exported_at:new Date().toISOString(),studio_settings:studioSettings,characters:studioCharacters,codex:worldRecords,locations:worldLocations,timeline:timelineEvents,record_types:recordTypes,expanded_records:databaseRecords,collections,collection_items:collectionItems,tags:studioTags,tag_assignments:tagAssignments,universal_links:universalLinks,media_assets:mediaAssets,record_references:recordReferences,canon_history:canonHistory,continuity_issues:continuityIssues,story_projects:storyProjects,story_arcs:storyArcs,story_chapters:storyChapters,story_scenes:storyScenes,story_beats:storyBeats,story_entity_links:storyLinks,review_comments:reviewComments,assignments:studioAssignments,character_journey:characterJourney,direct_messages:directMessages};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`umbra-studio-1.0-export-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
 function exportSelectedCsv(){const rows=databaseRecords.filter(r=>selectedDatabaseRecordIds.has(r.id));if(!rows.length)return;const esc=(v:any)=>`"${String(v??"").replace(/"/g,'""')}"`;const csv=["record_code,type,name,subtitle,workflow_status,summary",...rows.map(r=>[r.record_code,recordTypes.find(t=>t.id===r.record_type_id)?.name||"",r.name,r.subtitle,r.workflow_status,r.summary].map(esc).join(","))].join("\n");const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="umbra-studio-selected-records.csv";a.click();URL.revokeObjectURL(url);}
 function recordCompleteness(r:StudioDatabaseRecord){let score=20;if(r.subtitle)score+=10;if(r.summary)score+=25;if(r.image_url)score+=15;if(r.details&&Object.keys(r.details).length)score+=15;if(tagAssignments.some(x=>x.entity_type==="database"&&x.entity_id===r.id))score+=5;if(collectionItems.some(x=>x.entity_type==="database"&&x.entity_id===r.id))score+=5;if(universalLinks.some(x=>(x.source_type==="database"&&x.source_id===r.id)||(x.target_type==="database"&&x.target_id===r.id)))score+=5;return Math.min(100,score);}
 
@@ -648,14 +731,2814 @@ function parseLabelledCharacterText(raw:string){
  for(const key of Object.keys(out))if(typeof out[key]==="string")out[key]=out[key].replace(/\n{3,}/g,"\n\n").trim();
  return out;
 }
+type SmartImportKind =
+ | "character"
+ | "cosmology"
+ | "power_magic"
+ | "realm"
+ | "location"
+ | "people_species"
+ | "religion_tradition"
+ | "history_event"
+ | "organization_faction"
+ | "artifact"
+ | "story_chronology"
+ | "general_lore";
+
+const smartImportReviewStyles={
+ card:{
+  border:"1px solid rgba(167,125,255,.24)",
+  borderRadius:14,
+  padding:"16px 18px",
+  background:"linear-gradient(145deg,rgba(22,10,30,.96),rgba(12,7,18,.97))",
+  display:"grid",
+  gap:13,
+  boxShadow:"0 8px 24px rgba(0,0,0,.18)",
+  overflow:"hidden"
+ },
+ header:{
+  display:"flex",
+  justifyContent:"space-between",
+  alignItems:"flex-start",
+  gap:14,
+  flexWrap:"wrap" as const
+ },
+ headerLeft:{
+  display:"flex",
+  alignItems:"flex-start",
+  gap:12,
+  minWidth:0,
+  flex:"1 1 300px"
+ },
+ number:{
+  color:"#aa8abb",
+  fontSize:12,
+  fontWeight:700,
+  whiteSpace:"nowrap" as const,
+  paddingTop:3
+ },
+ eyebrow:{
+  color:"#a98bbb",
+  fontSize:10,
+  letterSpacing:".08em",
+  textTransform:"uppercase" as const,
+  fontWeight:700
+ },
+ title:{
+  color:"#f2cb69",
+  fontSize:18,
+  lineHeight:1.25,
+  fontWeight:700,
+  margin:0,
+  overflowWrap:"anywhere" as const
+ },
+ badge:{
+  display:"inline-flex",
+  alignItems:"center",
+  width:"fit-content",
+  maxWidth:"100%",
+  border:"1px solid rgba(205,157,255,.32)",
+  background:"rgba(119,69,151,.14)",
+  borderRadius:999,
+  padding:"5px 9px",
+  color:"#d8b8e8",
+  fontSize:11,
+  fontWeight:700,
+  lineHeight:1.2,
+  whiteSpace:"nowrap" as const
+ },
+ sectionLabel:{
+  color:"#987aa9",
+  fontSize:10,
+  fontWeight:800,
+  letterSpacing:".1em",
+  textTransform:"uppercase" as const,
+  marginBottom:-4
+ },
+ infoGrid:{
+  display:"grid",
+  gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",
+  gap:9
+ },
+ infoBox:{
+  border:"1px solid rgba(167,125,255,.15)",
+  borderRadius:9,
+  padding:"9px 11px",
+  background:"rgba(255,255,255,.022)",
+  minWidth:0,
+  overflow:"hidden"
+ },
+ label:{
+  display:"block",
+  color:"#987aa9",
+  fontSize:10,
+  fontWeight:800,
+  letterSpacing:".07em",
+  textTransform:"uppercase" as const,
+  marginBottom:4,
+  whiteSpace:"nowrap" as const,
+  overflow:"hidden",
+  textOverflow:"ellipsis"
+ },
+ value:{
+  color:"#e6d8ec",
+  fontSize:13,
+  lineHeight:1.35,
+  overflowWrap:"anywhere" as const
+ },
+ conflict:{
+  border:"1px solid rgba(232,178,82,.34)",
+  borderRadius:9,
+  padding:"10px 12px",
+  background:"rgba(116,72,21,.11)",
+  color:"#e7c58c",
+  fontSize:13,
+  lineHeight:1.4
+ },
+ conflictTitle:{
+  color:"#f1cf86",
+  fontSize:11,
+  fontWeight:800,
+  letterSpacing:".07em",
+  marginBottom:4
+ },
+ controls:{
+  display:"flex",
+  flexWrap:"wrap" as const,
+  alignItems:"flex-end",
+  gap:10
+ },
+ field:{
+  display:"grid",
+  gap:5,
+  flex:"0 1 auto"
+ },
+ select:{
+  width:"100%",
+  maxWidth:"100%",
+  minWidth:0,
+  height:36,
+  padding:"6px 30px 6px 10px",
+  borderRadius:7,
+  border:"1px solid rgba(178,132,204,.38)",
+  background:"#160d1c",
+  color:"#f2e8f5",
+  fontSize:13,
+  outline:"none",
+  colorScheme:"dark" as const
+ },
+ smallSelect:{
+  width:"100%",
+  maxWidth:"100%",
+  minWidth:0,
+  height:36,
+  padding:"6px 28px 6px 10px",
+  borderRadius:7,
+  border:"1px solid rgba(178,132,204,.38)",
+  background:"#160d1c",
+  color:"#f2e8f5",
+  fontSize:13,
+  outline:"none",
+  colorScheme:"dark" as const
+ },
+ resolutionSelect:{
+  width:"100%",
+  maxWidth:"100%",
+  minWidth:0,
+  height:36,
+  padding:"6px 30px 6px 10px",
+  borderRadius:7,
+  border:"1px solid rgba(178,132,204,.38)",
+  background:"#160d1c",
+  color:"#f2e8f5",
+  fontSize:13,
+  outline:"none",
+  colorScheme:"dark" as const
+ },
+ success:{
+  border:"1px solid rgba(111,207,151,.28)",
+  background:"rgba(54,128,84,.09)",
+  borderRadius:8,
+  padding:"9px 11px",
+  color:"#bce5c9",
+  fontSize:12,
+  lineHeight:1.4
+ },
+ includeRow:{
+  display:"flex",
+  alignItems:"center",
+  gap:8,
+  minHeight:28,
+  color:"#eadff0",
+  fontSize:13
+ },
+ source:{
+  borderTop:"1px solid rgba(167,125,255,.13)",
+  paddingTop:10
+ },
+ sourceText:{
+  margin:"5px 0 0",
+  color:"#cdb8d4",
+  fontSize:13,
+  lineHeight:1.5,
+  whiteSpace:"pre-wrap" as const,
+  overflowWrap:"anywhere" as const
+ },
+ routingRow:{
+  display:"grid",
+  gridTemplateColumns:"repeat(2,minmax(0,1fr))",
+  gap:10,
+  width:"100%"
+ },
+ overrideRow:{
+  display:"flex",
+  flexWrap:"wrap" as const,
+  gap:12,
+  alignItems:"flex-end",
+  width:"100%"
+ },
+ overrideField:{
+  display:"grid",
+  gridTemplateRows:"auto 36px",
+  gap:5,
+  width:"220px",
+  maxWidth:"100%",
+  flex:"0 0 auto"
+ },
+ codexField:{
+  display:"grid",
+  gridTemplateRows:"auto 36px",
+  gap:5,
+  width:"155px",
+  maxWidth:"100%",
+  flex:"0 0 auto"
+ },
+ resolutionField:{
+  display:"grid",
+  gridTemplateRows:"auto 36px",
+  gap:5,
+  width:"210px",
+  maxWidth:"100%",
+  flex:"0 0 auto"
+ },
+ fullRow:{
+  width:"100%",
+  minWidth:0,
+  clear:"both" as const
+ },
+ includeWrap:{
+  display:"flex",
+  alignItems:"center",
+  gap:9,
+  width:"fit-content",
+  maxWidth:"100%",
+  minHeight:30,
+  whiteSpace:"nowrap" as const
+ },
+ sourceWrap:{
+  width:"100%",
+  minWidth:0,
+  borderTop:"1px solid rgba(167,125,255,.13)",
+  paddingTop:11,
+  marginTop:1
+ }, container:{
+  border:"1px dashed rgba(167,125,255,.22)",
+  borderRadius:11,
+  padding:"11px 14px",
+  background:"rgba(115,73,137,.055)",
+  display:"grid",
+  gap:5
+ }
+};
+function smartImportKindLabel(kind:SmartImportKind){
+ const labels:Record<SmartImportKind,string>={
+  character:"Character",
+  cosmology:"Cosmology / Foundation",
+  power_magic:"Power / Magic",
+  realm:"World / Realm / Civilization",
+  location:"Location / Place",
+  people_species:"People / Species",
+  religion_tradition:"Religion / Learned Tradition",
+  history_event:"History / Historical Event",
+  organization_faction:"Organization / Faction",
+  artifact:"Artifact / Item",
+  story_chronology:"Main-Story Chronology",
+  general_lore:"General Lore"
+ };
+ return labels[kind];
+}
+
+function splitSmartImportChunks(raw:string){
+ const clean=String(raw??"").replace(/\r/g,"").trim();
+ if(!clean)return [];
+
+ const lines=clean.split("\n");
+ const chunks:Array<{heading:string;content:string}>=[];
+ let heading="";
+ let body:string[]=[];
+
+ const flush=()=>{
+  const content=body.join("\n").trim();
+
+  if(content||heading){
+   chunks.push({
+    heading:heading.trim(),
+    content
+   });
+  }
+
+  body=[];
+ };
+
+ for(const original of lines){
+  const trimmed=original.trim();
+
+  const markdown=trimmed.match(/^#{1,6}\s+(.+)$/);
+  const bold=trimmed.match(/^\*\*([^*]{2,120})\*\*\s*:?\s*$/);
+  const numbered=trimmed.match(/^\d+\.\s+\*{0,2}(.+?)\*{0,2}\s*$/);
+
+  const foundationHeading=
+   trimmed.length>0 &&
+   trimmed.length<=120 &&
+   !/[.!?]$/.test(trimmed) &&
+   /^(cosmology|creation|chronoessence|soul reflection|spiritual ecology|umbra|lumina|light|darkness|shadow|four primordials|aethelgard|major realm|realm|civilization|people|species|religion|learned magical|magic|ancient|history|historical|organization|faction|artifact|character|main.story|story chronology)\b/i.test(
+    trimmed.replace(/^[-*•\d.\s]+/,"")
+   );
+
+  const detected=
+   markdown?.[1]||
+   bold?.[1]||
+   numbered?.[1]||
+   (foundationHeading?trimmed:"");
+
+  if(detected){
+   if(body.length||heading)flush();
+
+   heading=detected
+    .replace(/^[-*•\d.\s]+/,"")
+    .replace(/\*+/g,"")
+    .replace(/:$/,"")
+    .trim();
+  }else{
+   body.push(original);
+  }
+ }
+
+ flush();
+
+ if(chunks.length<=1){
+  const paragraphs=clean
+   .split(/\n{2,}/)
+   .map(x=>x.trim())
+   .filter(Boolean);
+
+  if(paragraphs.length>1){
+   return paragraphs.map((content,index)=>({
+    heading:index===0
+     ?"Imported Foundation / Lore"
+     :`Imported Section ${index+1}`,
+    content
+   }));
+  }
+ }
+
+ return chunks.length
+  ?chunks
+  :[{heading:"Imported Material",content:clean}];
+}
+
+function classifySmartImportChunk(heading:string,content:string){
+ const source=`${heading}\n${content}`.toLowerCase();
+
+ const scores:Record<SmartImportKind,number>={
+  character:0,
+  cosmology:0,
+  power_magic:0,
+  realm:0,
+  location:0,
+  people_species:0,
+  religion_tradition:0,
+  history_event:0,
+  organization_faction:0,
+  artifact:0,
+  story_chronology:0,
+  general_lore:0
+ };
+
+ const add=(
+  kind:SmartImportKind,
+  points:number,
+  ...patterns:RegExp[]
+ )=>{
+  for(const pattern of patterns){
+   if(pattern.test(source))scores[kind]+=points;
+  }
+ };
+
+ add("cosmology",5,
+  /\bcosmology\b/,
+  /\bcreation\b/,
+  /\bseventh world\b/,
+  /\bchronoessence\b/,
+  /\bsoul reflection\b/,
+  /\bspiritual ecology\b/,
+  /\bumbra\b.*\bconscious/,
+  /\blumina\b.*\bconscious/,
+  /\blight\b.*\bdarkness\b.*\bshadow\b/,
+  /\bfour primordials\b/
+ );
+
+ add("character",4,
+  /\bcharacter\b/,
+  /\bpersonality\b/,
+  /\bbackstory\b/,
+  /\bappearance\b/,
+  /\bparents?\b/,
+  /\bsiblings?\b/,
+  /\bchildren\b/,
+  /\bpronouns?\b/,
+  /\boccupation\b/,
+  /\bcurrent story role\b/
+ );
+
+ add("power_magic",4,
+  /\bpowers?\b/,
+  /\bmagic\b/,
+  /\babilities?\b/,
+  /\bspells?\b/,
+  /\btechniques?\b/,
+  /\btransformations?\b/,
+  /\bmagic system\b/,
+  /\bpower source\b/
+ );
+
+ add("realm",4,
+  /\brealms?\b/,
+  /\bkingdom\b/,
+  /\bempire\b/,
+  /\bcivilizations?\b/,
+  /\bcontinent\b/,
+  /\bnation\b/,
+  /\bterritor(y|ies)\b/,
+  /\baethelgard\b/
+ );
+
+ add("location",4,
+  /\blocations?\b/,
+  /\bcity\b/,
+  /\bvillage\b/,
+  /\bisland\b/,
+  /\bocean\b/,
+  /\bsea\b/,
+  /\bmountains?\b/,
+  /\bcaverns?\b/,
+  /\bforest\b/,
+  /\bvalley\b/,
+  /\blandmark\b/
+ );
+
+ add("people_species",5,
+  /\bpeoples?\b/,
+  /\bspecies\b/,
+  /\braces?\b/,
+  /\bethnic/,
+  /\btribe\b/
+ );
+
+ add("religion_tradition",5,
+  /\breligions?\b/,
+  /\bfaith\b/,
+  /\bworship\b/,
+  /\bdeit(y|ies)\b/,
+  /\btraditions?\b/,
+  /\blearned magical tradition/
+ );
+
+ add("history_event",5,
+  /\bhistory\b/,
+  /\bhistorical event/,
+  /\bancient\b/,
+  /\bwar\b/,
+  /\bcataclysm\b/,
+  /\bfounding\b/,
+  /\bfall of\b/,
+  /\brise of\b/,
+  /\bmansa\b/
+ );
+
+ add("organization_faction",5,
+  /\borganizations?\b/,
+  /\bfactions?\b/,
+  /\bclans?\b/,
+  /\bhouses?\b/,
+  /\bguild\b/,
+  /\border\b/
+ );
+
+ add("artifact",6,
+  /\bartifacts?\b/,
+  /\brelics?\b/,
+  /\bweapons?\b/,
+  /\blamp\b/,
+  /\bstaff\b/,
+  /\bsword\b/
+ );
+
+ add("story_chronology",6,
+  /\bmain[- ]story chronology\b/,
+  /\bstory chronology\b/,
+  /\bmain story\b/,
+  /\bepisode\b/,
+  /\bseason\b/,
+  /\bstory arc\b/,
+  /\bchapter\b/
+ );
+
+ const ranked=(Object.entries(scores) as Array<[SmartImportKind,number]>)
+  .filter(([kind])=>kind!=="general_lore")
+  .sort((a,b)=>b[1]-a[1]);
+
+ const top=ranked[0]?.[1]??0;
+ const second=ranked[1]?.[1]??0;
+
+ const kind:SmartImportKind=
+  top>0
+   ?ranked[0][0]
+   :"general_lore";
+
+ const confidence:"high"|"medium"|"low"=
+  top>=8&&top>=second+3
+   ?"high"
+   :top>=4&&top>=second+1
+    ?"medium"
+    :"low";
+
+ const normalizedHeading=heading
+  .replace(/^[\d.\s*-]+/,"")
+  .trim();
+
+ const candidates=[
+  ...studioCharacters.map(x=>({
+   id:x.id,
+   name:x.name,
+   area:"Character"
+  })),
+  ...worldRecords.map(x=>({
+   id:x.id,
+   name:x.name,
+   area:`Codex • ${x.record_type}`
+  })),
+  ...worldLocations
+   .filter(x=>!x.archived_at)
+   .map(x=>({
+    id:x.id,
+    name:x.name,
+    area:"Location"
+   })),
+  ...databaseRecords
+   .filter(x=>!x.archived_at)
+   .map(x=>({
+    id:x.id,
+    name:x.name,
+    area:"World Database"
+   })),
+  ...timelineEvents.map(x=>({
+   id:x.id,
+   name:x.title,
+   area:"Timeline"
+  }))
+ ];
+
+ const existing=candidates.find(
+  x=>
+   normalizeImportName(x.name)===
+   normalizeImportName(normalizedHeading)
+ );
+
+ return {
+  kind,
+  confidence,
+  score:top,
+  existing:existing||null
+ };
+}
+
+function isSmartImportContainerHeading(
+ heading:string,
+ _content:string
+){
+ const normalized=heading
+  .toLowerCase()
+  .replace(/[—–-]/g," ")
+  .replace(/[\/&]+/g," ")
+  .replace(/\s+/g," ")
+  .trim();
+
+ // These are organizational/category headings, not entities.
+ // Their body text is retained in the raw import source but the
+ // heading itself must never become a database record.
+ const containerHeadings=new Set([
+  "characters",
+  "people species",
+  "peoples species",
+  "religions and learned magical traditions",
+  "major historical events",
+  "organizations factions",
+  "organization factions",
+  "artifacts",
+  "major realms civilizations",
+  "major realms and civilizations",
+  "realms civilizations",
+  "main story chronology"
+ ]);
+
+ return containerHeadings.has(normalized);
+}
+function smartImportDestination(kind:SmartImportKind){
+ const destinations:Record<SmartImportKind,string>={
+  character:"Characters",
+  cosmology:"World Database • Cosmology / Foundation",
+  power_magic:"World Database • Powers / Magic",
+  realm:"Codex / Locations • Realm or Civilization",
+  location:"Locations",
+  people_species:"Codex • People / Species",
+  religion_tradition:"Codex / World Database • Religion / Tradition",
+  history_event:"Timeline / World Database • History",
+  organization_faction:"Codex • Organization / Faction",
+  artifact:"World Database • Artifact / Item",
+  story_chronology:"Timeline / Production • Story Chronology",
+  general_lore:"World Database • General Lore"
+ };
+
+ return destinations[kind];
+}
+
+function smartImportExpectedAreas(kind:SmartImportKind){
+ const areas:Record<SmartImportKind,string[]>={
+  character:["Character"],
+  cosmology:["World Database"],
+  power_magic:["World Database"],
+  realm:["Location","Codex"],
+  location:["Location"],
+  people_species:["Codex"],
+  religion_tradition:["Codex","World Database"],
+  history_event:["Timeline","World Database"],
+  organization_faction:["Codex"],
+  artifact:["World Database"],
+  story_chronology:["Timeline","World Database"],
+  general_lore:["World Database"]
+ };
+
+ return areas[kind];
+}
+
+function smartImportHasTypeConflict(
+ kind:SmartImportKind,
+ existing:any
+){
+ if(!existing)return false;
+
+ const area=String(existing.area||"").toLowerCase();
+
+ // First validate the broad Studio area.
+ const expected=smartImportExpectedAreas(kind);
+ const broadMatch=expected.some(expectedArea=>
+  area.startsWith(expectedArea.toLowerCase())
+ );
+
+ if(!broadMatch)return true;
+
+ // Then validate important Codex subtypes.
+ if(kind==="people_species" && area.startsWith("codex")){
+  const validPeopleTypes=[
+   "race",
+   "culture",
+   "people",
+   "species"
+  ];
+
+  return !validPeopleTypes.some(type=>
+   area.includes(type)
+  );
+ }
+
+ if(kind==="organization_faction" && area.startsWith("codex")){
+  const validOrganizationTypes=[
+   "faction",
+   "clan",
+   "house",
+   "organization",
+   "family",
+   "bloodline"
+  ];
+
+  return !validOrganizationTypes.some(type=>
+   area.includes(type)
+  );
+ }
+
+ if(kind==="religion_tradition" && area.startsWith("codex")){
+  return !area.includes("religion");
+ }
+
+ return false;
+}
+const smartImportKindOptions:Array<{
+ value:SmartImportKind;
+ label:string;
+}>=[
+ {value:"character",label:"Character"},
+ {value:"cosmology",label:"Cosmology / Foundation"},
+ {value:"power_magic",label:"Power / Magic"},
+ {value:"realm",label:"World / Realm / Civilization"},
+ {value:"location",label:"Location"},
+ {value:"people_species",label:"People / Species"},
+ {value:"religion_tradition",label:"Religion / Learned Tradition"},
+ {value:"history_event",label:"History / Historical Event"},
+ {value:"organization_faction",label:"Organization / Faction"},
+ {value:"artifact",label:"Artifact / Item"},
+ {value:"story_chronology",label:"Main-Story Chronology"},
+ {value:"general_lore",label:"General Lore"}
+];
+
+const smartImportCodexTypes=[
+ "realm",
+ "race",
+ "faction",
+ "clan",
+ "house",
+ "family",
+ "bloodline",
+ "culture",
+ "organization",
+ "religion"
+] as const;
+
+function smartImportCodexTypeForKind(
+ kind:SmartImportKind
+):string{
+ if(kind==="people_species")return "race";
+ if(kind==="organization_faction")return "organization";
+ if(kind==="religion_tradition")return "religion";
+ if(kind==="realm")return "realm";
+ return "";
+}
+
+function smartImportExistingCodexType(existing:any){
+ const area=String(existing?.area||"");
+ const match=area.match(/^Codex\s*•\s*(.+)$/i);
+ return match?match[1].trim().toLowerCase():"";
+}
+
+function smartImportTypeChangeLabel(chunk:any){
+ if(!chunk.existing)return "";
+
+ const current=smartImportExistingCodexType(chunk.existing);
+ const next=String(chunk.codexType||"").toLowerCase();
+
+ if(!current||!next||current===next)return "";
+
+ return `${current} → ${next}`;
+}
+
+function updateSmartImportChunk(
+ id:string,
+ patch:Record<string,any>
+){
+ setSmartImportChunks(current=>
+  current.map(chunk=>{
+   if(chunk.id!==id)return chunk;
+
+   const next={...chunk,...patch};
+
+   if(patch.kind){
+    next.label=smartImportKindLabel(patch.kind);
+    next.destination=smartImportDestination(patch.kind);
+
+    const defaultCodexType=
+     smartImportCodexTypeForKind(patch.kind);
+
+    next.codexType=defaultCodexType;
+
+    next.typeConflict=smartImportHasTypeConflict(
+     patch.kind,
+     next.existing
+    );
+   }
+
+   return next;
+  })
+ );
+}
+function analyzeSmartImportDocument(raw:string){
+ return splitSmartImportChunks(raw).map((chunk,index)=>{
+  const result=classifySmartImportChunk(
+   chunk.heading,
+   chunk.content
+  );
+
+  const isContainer=isSmartImportContainerHeading(
+   chunk.heading,
+   chunk.content
+  );
+
+  const typeConflict=
+   !isContainer &&
+   smartImportHasTypeConflict(
+    result.kind,
+    result.existing
+   );
+
+  return {
+   id:`smart-${index+1}`,
+   row:index+1,
+   heading:chunk.heading||`Imported Section ${index+1}`,
+   content:chunk.content,
+   kind:result.kind,
+   label:isContainer
+    ?"Section Heading"
+    :smartImportKindLabel(result.kind),
+   confidence:isContainer
+    ?"high"
+    :result.confidence,
+   score:result.score,
+   existing:result.existing,
+   destination:isContainer
+    ?"Do not save"
+    :smartImportDestination(result.kind),
+   isContainer,
+   typeConflict,
+   codexType:isContainer
+    ?""
+    :smartImportCodexTypeForKind(result.kind),
+   resolution:typeConflict
+    ?"imported"
+    :"auto",
+   routeStatus:"",
+   routeMessage:"",
+   selected:!isContainer
+  };
+ });
+}
 async function loadImportFile(file:File){
  setImportError("");
  const ext=file.name.split(".").pop()?.toLowerCase();
  if(!["txt","md","json","csv"].includes(ext||"")){setImportError("Choose a TXT, Markdown, JSON, or CSV file.");return;}
- try{const text=await file.text();setImportText(text);setCharacterImportPreview(null);setImportPreview([]);}
+ try{const text=await file.text();setImportText(text);setCharacterImportPreview(null);setImportPreview([]);setSmartImportChunks([]);}
  catch{setImportError("That file could not be read.");}
 }
-function previewImport(){setImportError("");setCharacterImportPreview(null);try{let parsed:any;try{parsed=JSON.parse(importText);}catch{parsed=parseLabelledCharacterText(importText);if(!parsed.name)throw new Error("Add a character name and labeled profile information, or choose a supported profile file.");}
+function toggleSmartImportChunk(
+ id:string,
+ selected:boolean
+){
+ setSmartImportChunks(current=>
+  current.map(chunk=>
+   chunk.id===id
+    ?{...chunk,selected}
+    :chunk
+  )
+ );
+}
+function smartImportIsCodexKind(kind:SmartImportKind){
+ return [
+  "people_species",
+  "organization_faction",
+  "religion_tradition",
+  "realm"
+ ].includes(kind);
+}
+
+function smartImportLocationType(
+ heading:string,
+ content:string
+){
+ const text=`${heading} ${content}`.toLowerCase();
+
+ const tests:Array<[string,string[]]>=[
+  ["continent",["continent"]],
+  ["region",["region","province"]],
+  ["city",["city","capital"]],
+  ["village",["village","settlement"]],
+  ["island",["island","isle"]],
+  ["ocean",["ocean","sea"]],
+  ["mountain",["mountain","peak","mountains"]],
+  ["forest",["forest","woods","woodland"]],
+  ["desert",["desert","dunes"]],
+  ["river",["river"]],
+  ["lake",["lake"]],
+  ["cave",["cave","cavern","caverns"]],
+  ["ruin",["ruin","ruins"]],
+  ["sanctuary",["sanctuary"]],
+  ["temple",["temple","shrine"]],
+  ["academy",["academy","school"]],
+  ["fortress",["fortress","citadel","stronghold","castle"]],
+  ["port",["port","harbor","harbour"]],
+  ["realm",["realm","kingdom","empire"]],
+  ["landmark",["landmark"]]
+ ];
+
+ for(const [type,words] of tests){
+  if(words.some(word=>text.includes(word)))return type;
+ }
+
+ return "other";
+}
+function smartImportDatabaseTypeForKind(
+ kind:SmartImportKind
+){
+ const aliases:Record<string,string[]>={
+  cosmology:[
+   "cosmology",
+   "foundation",
+   "world foundation",
+   "worldbuilding",
+   "lore"
+  ],
+  power_magic:[
+   "power",
+   "powers",
+   "magic",
+   "magic system",
+   "ability",
+   "abilities",
+   "lore"
+  ],
+  artifact:[
+   "artifact",
+   "artifacts",
+   "item",
+   "items",
+   "relic",
+   "relics",
+   "lore"
+  ],
+  religion_tradition:[
+   "tradition",
+   "traditions",
+   "magic",
+   "magic system",
+   "lore"
+  ],
+  general_lore:[
+   "lore",
+   "world lore",
+   "foundation",
+   "worldbuilding"
+  ]
+ };
+
+ const wanted=aliases[kind]||[];
+
+ function normalized(value:any){
+  return String(value||"")
+   .toLowerCase()
+   .replace(/[_-]+/g," ")
+   .replace(/\s+/g," ")
+   .trim();
+ }
+
+ /*
+  * Prefer exact slug/name matches first.
+  */
+ for(const alias of wanted){
+  const exact=recordTypes.find(type=>
+   normalized(type.slug)===normalized(alias)||
+   normalized(type.name)===normalized(alias)
+  );
+
+  if(exact)return exact;
+ }
+
+ /*
+  * Then allow a descriptive partial match.
+  */
+ for(const alias of wanted){
+  const partial=recordTypes.find(type=>{
+   const slug=normalized(type.slug);
+   const name=normalized(type.name);
+   const needle=normalized(alias);
+
+   return (
+    slug.includes(needle)||
+    name.includes(needle)||
+    needle.includes(slug)||
+    needle.includes(name)
+   );
+  });
+
+  if(partial)return partial;
+ }
+
+ return null;
+}
+
+function smartImportIsLearnedTradition(
+ heading:string,
+ content:string
+){
+ const text=`${heading} ${content}`.toLowerCase();
+
+ return [
+  "learned magic",
+  "learned magical",
+  "magical tradition",
+  "magic tradition",
+  "school of magic",
+  "discipline",
+  "spellcraft",
+  "sorcery tradition"
+ ].some(term=>text.includes(term));
+}
+
+function smartImportStoryProductionType(
+ heading:string,
+ content:string
+){
+ const headingText=String(heading||"").toLowerCase();
+ const text=`${heading} ${content}`.toLowerCase();
+
+ if(/\bscene\b/.test(headingText)||/\bscene\s+\d+\b/.test(text))return "scene";
+ if(/\bchapter\b/.test(headingText)||/\bepisode\b/.test(headingText))return "chapter";
+ if(/\bbeat\b/.test(headingText)||/\bstory beat\b/.test(text)||/\bplot beat\b/.test(text))return "beat";
+ if(/\barc\b/.test(headingText)||/\bstory arc\b/.test(text))return "arc";
+ if(/\bproject\b/.test(headingText)||/\bbook\b/.test(headingText)||/\bvolume\b/.test(headingText)||/\bseries\b/.test(headingText)||/\bseason\b/.test(headingText))return "project";
+ return "";
+}
+
+type SmartManuscriptKind="project"|"arc"|"chapter"|"scene"|"beat";
+type SmartManuscriptNode={
+ kind:SmartManuscriptKind;
+ title:string;
+ code:string|null;
+ subtype:string|null;
+ body:string;
+ sortOrder:number;
+ projectKey:string|null;
+ arcKey:string|null;
+ chapterKey:string|null;
+ sceneKey:string|null;
+};
+
+function smartImportCleanStoryHeading(raw:string){
+ return String(raw||"")
+  .replace(/^#{1,6}\s*/,"")
+  .replace(/^\*\*|\*\*$/g,"")
+  .trim();
+}
+
+function smartImportStoryHeading(raw:string){
+ const clean=smartImportCleanStoryHeading(raw);
+ const match=clean.match(/^(BOOK|PROJECT|SEASON|VOLUME|ARC|CHAPTER|EPISODE|SCENE|BEAT)\b\s*(?:[:#-]|—|–)?\s*(.*)$/i);
+ if(!match)return null;
+
+ const label=match[1].toUpperCase();
+ const rest=String(match[2]||"").trim();
+ const kind:SmartManuscriptKind=
+  ["BOOK","PROJECT","SEASON","VOLUME"].includes(label)?"project":
+  label==="ARC"?"arc":
+  ["CHAPTER","EPISODE"].includes(label)?"chapter":
+  label==="SCENE"?"scene":"beat";
+
+ const codeMatch=rest.match(/^([IVXLCDM]+|\d+(?:\.\d+)*)(?:\s*(?:[:#-]|—|–)\s*|\s+)(.*)$/i);
+ const code=codeMatch?.[1]||null;
+ const title=(codeMatch?.[2]||rest||`${label}${code?` ${code}`:""}`).trim();
+
+ return {
+  kind,
+  label,
+  code,
+  title,
+  subtype:label==="EPISODE"?"episode":label==="CHAPTER"?"chapter":label.toLowerCase()
+ };
+}
+
+function parseSmartImportManuscript(raw:string){
+ const clean=String(raw||"").replace(/\r/g,"").trim();
+ if(!clean)return [] as SmartManuscriptNode[];
+
+ const lines=clean.split("\n");
+ const nodes:SmartManuscriptNode[]=[];
+ let current:SmartManuscriptNode|null=null;
+ let body:string[]=[];
+ let projectKey:string|null=null;
+ let arcKey:string|null=null;
+ let chapterKey:string|null=null;
+ let sceneKey:string|null=null;
+ let order=0;
+
+ const flush=()=>{
+  if(!current)return;
+  current.body=body.join("\n").trim();
+  nodes.push(current);
+  body=[];
+ };
+
+ for(const line of lines){
+  const parsed=smartImportStoryHeading(line.trim());
+  if(!parsed){
+   if(current)body.push(line);
+   continue;
+  }
+
+  flush();
+  order++;
+  const key=`${parsed.kind}:${order}:${normalizeImportName(parsed.title)}`;
+
+  if(parsed.kind==="project"){
+   projectKey=key;arcKey=null;chapterKey=null;sceneKey=null;
+  }else if(parsed.kind==="arc"){
+   arcKey=key;chapterKey=null;sceneKey=null;
+  }else if(parsed.kind==="chapter"){
+   chapterKey=key;sceneKey=null;
+  }else if(parsed.kind==="scene"){
+   sceneKey=key;
+  }
+
+  current={
+   kind:parsed.kind,
+   title:parsed.title,
+   code:parsed.code,
+   subtype:parsed.subtype,
+   body:"",
+   sortOrder:order,
+   projectKey,
+   arcKey,
+   chapterKey,
+   sceneKey
+  };
+
+  if(parsed.kind==="project")current.projectKey=key;
+  if(parsed.kind==="arc")current.arcKey=key;
+  if(parsed.kind==="chapter")current.chapterKey=key;
+  if(parsed.kind==="scene")current.sceneKey=key;
+ }
+
+ flush();
+
+ const structuralKinds=new Set(nodes.map(node=>node.kind));
+ const hasManuscriptStructure=
+  nodes.some(node=>node.kind==="chapter"||node.kind==="scene")&&
+  (nodes.length>=2||structuralKinds.size>=2);
+
+ return hasManuscriptStructure?nodes:[];
+}
+
+function smartImportCharacterAliases(character:StudioCharacterRow){
+ const identity:any=character.identity||{};
+ const values=[
+  character.name,
+  identity.name,
+  identity.alias,
+  identity.nicknames
+ ];
+
+ return [...new Set(
+  values.flatMap(value=>
+   Array.isArray(value)
+    ?value
+    :String(value||"").split(/[\n,|;/]+/)
+  )
+  .map(value=>String(value||"").trim())
+  .filter(value=>value.length>=2)
+ )].sort((a,b)=>b.length-a.length);
+}
+
+function smartImportEscapeRegex(value:string){
+ return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+}
+
+function smartImportPhraseRegex(value:string){
+ const escaped=smartImportEscapeRegex(value);
+ return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`,"giu");
+}
+
+function smartImportCharacterMentions(raw:string){
+ const text=String(raw||"");
+ const results=new Map<string,{character:StudioCharacterRow;relation:"appears"|"mentioned";index:number}>();
+ const referenceContext=/\b(remembered|remembering|thought of|thinking of|spoke of|speaking of|mentioned|letter from|message from|told .{0,30} years ago|years ago)\b/i;
+
+ for(const character of studioCharacters){
+  for(const alias of smartImportCharacterAliases(character)){
+   const regex=smartImportPhraseRegex(alias);
+   let match:RegExpExecArray|null;
+
+   while((match=regex.exec(text))){
+    const index=match.index+String(match[1]||"").length;
+    const before=text.slice(Math.max(0,index-90),index);
+    const relation=referenceContext.test(before)?"mentioned":"appears";
+    const previous=results.get(character.id);
+
+    if(!previous||previous.relation==="mentioned"&&relation==="appears"){
+     results.set(character.id,{character,relation,index});
+    }
+
+    if(regex.lastIndex===match.index)regex.lastIndex++;
+   }
+  }
+ }
+
+ return [...results.values()].sort((a,b)=>a.index-b.index);
+}
+
+function smartImportPovCharacter(raw:string){
+ const match=String(raw||"").match(/^\s*POV\s*:\s*([^\n]+)$/im);
+ if(!match)return null;
+ const wanted=normalizeImportName(match[1]);
+
+ return studioCharacters.find(character=>
+  smartImportCharacterAliases(character).some(alias=>
+   normalizeImportName(alias)===wanted
+  )
+ )||null;
+}
+
+function smartImportLocationMatch(title:string,body:string){
+ const active=worldLocations.filter(location=>!location.archived_at);
+ const heading=normalizeImportName(title);
+ const exact=active.find(location=>normalizeImportName(location.name)===heading);
+ if(exact)return exact;
+
+ const text=String(body||"");
+ return active
+  .map(location=>({
+   location,
+   index:text.search(smartImportPhraseRegex(location.name))
+  }))
+  .filter(item=>item.index>=0)
+  .sort((a,b)=>a.index-b.index||b.location.name.length-a.location.name.length)[0]?.location||null;
+}
+
+function smartImportUnknownProperNames(raw:string,knownCharacterIds:Set<string>){
+ const knownAliases=new Set(
+  studioCharacters
+   .filter(character=>knownCharacterIds.has(character.id))
+   .flatMap(character=>smartImportCharacterAliases(character))
+   .map(normalizeImportName)
+ );
+ const ignored=new Set(["POV","BOOK","PROJECT","SEASON","VOLUME","ARC","CHAPTER","EPISODE","SCENE","BEAT"]);
+ const matches=String(raw||"").match(/\b[A-Z][A-Za-z'’.-]{2,}(?:\s+[A-Z][A-Za-z'’.-]{2,}){0,2}\b/g)||[];
+
+ return [...new Set(matches.filter(name=>
+  !ignored.has(name.toUpperCase())&&
+  !knownAliases.has(normalizeImportName(name))
+ ))].slice(0,12);
+}
+
+async function routeSmartImportManuscript(raw:string){
+ const nodes=parseSmartImportManuscript(raw);
+ if(!nodes.length)return null;
+
+ let created=0;
+ let updated=0;
+ let kept=0;
+ let failed=0;
+ const warnings:string[]=[];
+ const projectIds=new Map<string,string>();
+ const arcIds=new Map<string,string>();
+ const chapterIds=new Map<string,string>();
+ const sceneIds=new Map<string,string>();
+ const chapterCharacters=new Map<string,Map<string,"appears"|"mentioned"|"pov">>();
+ const chapterPovs=new Map<string,StudioCharacterRow>();
+ const chapterLocations=new Map<string,Set<string>>();
+ const knownLinks=new Set(
+  storyLinks.map(link=>
+   [link.story_entity_type,link.story_entity_id,link.linked_entity_type,link.linked_entity_id,link.relation_label||""].join("|")
+  )
+ );
+
+ const getCreatedId=(response:any,key:string)=>
+  String(response?.[key]?.id||response?.id||"");
+
+ const addLink=async(
+  storyType:"story_chapter"|"story_scene",
+  storyId:string,
+  linkedType:"character"|"location",
+  linkedId:string,
+  relation:string
+ )=>{
+  if(!storyId||!linkedId)return;
+  const key=[storyType,storyId,linkedType,linkedId,relation].join("|");
+  if(knownLinks.has(key))return;
+
+  await umbraCloudFetch("/api/production/links",{
+   method:"POST",
+   body:JSON.stringify({
+    story_entity_type:storyType,
+    story_entity_id:storyId,
+    linked_entity_type:linkedType,
+    linked_entity_id:linkedId,
+    relation_label:relation,
+    notes:"Smart Ingest manuscript recognition"
+   })
+  });
+  knownLinks.add(key);
+ };
+
+ const chapterFullBody=(chapterNode:SmartManuscriptNode)=>{
+  const start=nodes.indexOf(chapterNode);
+  const collected:string[]=[];
+  for(let index=start;index<nodes.length;index++){
+   const node=nodes[index];
+   if(index>start&&(node.kind==="chapter"||node.kind==="arc"||node.kind==="project"))break;
+   if(node.kind==="chapter")collected.push(node.body);
+   else collected.push(`${node.kind.toUpperCase()}${node.code?` ${node.code}`:""} — ${node.title}\n${node.body}`.trim());
+  }
+  return collected.filter(Boolean).join("\n\n").trim();
+ };
+
+ for(const node of nodes){
+  try{
+   const projectId=node.projectKey?projectIds.get(node.projectKey)||null:null;
+   const arcId=node.arcKey?arcIds.get(node.arcKey)||null:null;
+   const chapterId=node.chapterKey?chapterIds.get(node.chapterKey)||null:null;
+   const sceneId=node.sceneKey?sceneIds.get(node.sceneKey)||null:null;
+   const normalized=normalizeImportName(node.title);
+
+   if(node.kind==="project"){
+    const existing=storyProjects.find(project=>normalizeImportName(project.title)===normalized);
+    if(existing){
+     await umbraCloudFetch(`/api/production/projects/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({title:existing.title,summary:node.body||existing.summary||null,status:existing.status})
+     });
+     projectIds.set(node.projectKey!,existing.id);updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/projects",{method:"POST",body:JSON.stringify({
+      title:node.title,project_type:node.subtype||"story",summary:node.body||null,status:"planning"
+     })});
+     const id=getCreatedId(response,"project");
+     if(id)projectIds.set(node.projectKey!,id);
+     created++;
+    }
+    continue;
+   }
+
+   if(node.kind==="arc"){
+    const existing=storyArcs.find(arc=>
+     normalizeImportName(arc.title)===normalized&&
+     (!projectId||arc.project_id===projectId)
+    );
+    if(existing){
+     await umbraCloudFetch(`/api/production/arcs/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({project_id:projectId??existing.project_id,title:existing.title,summary:node.body||existing.summary||null,sort_order:node.sortOrder,status:existing.status})
+     });
+     arcIds.set(node.arcKey!,existing.id);updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/arcs",{method:"POST",body:JSON.stringify({
+      project_id:projectId,title:node.title,summary:node.body||null,sort_order:node.sortOrder,status:"planned"
+     })});
+     const id=getCreatedId(response,"arc");
+     if(id)arcIds.set(node.arcKey!,id);
+     created++;
+    }
+    continue;
+   }
+
+   if(node.kind==="chapter"){
+    const fullBody=chapterFullBody(node);
+    const chapterType=node.subtype==="episode"?"episode":"chapter";
+    const existing=storyChapters.find(chapter=>
+     ((!node.code&&normalizeImportName(chapter.title)===normalized)||
+      (node.code&&normalizeImportName(chapter.chapter_code)===normalizeImportName(node.code)))&&
+     (!projectId||chapter.project_id===projectId)&&
+     (!arcId||chapter.arc_id===arcId)
+    );
+    if(existing){
+     await umbraCloudFetch(`/api/production/chapters/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({
+       project_id:projectId??existing.project_id,
+       arc_id:arcId??existing.arc_id,
+       title:node.title,
+       chapter_code:node.code,
+       chapter_type:chapterType,
+       summary:node.body||existing.summary||null,
+       body_notes:fullBody||existing.body_notes||null,
+       sort_order:node.sortOrder,
+       status:existing.status,
+       source_label:"Smart Ingest manuscript",
+       source_text:fullBody||null
+      })
+     });
+     chapterIds.set(node.chapterKey!,existing.id);const chapterPov=smartImportPovCharacter(fullBody);if(chapterPov)chapterPovs.set(existing.id,chapterPov);updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/chapters",{method:"POST",body:JSON.stringify({
+      project_id:projectId,
+      arc_id:arcId,
+      title:node.title,
+      chapter_code:node.code,
+      chapter_type:chapterType,
+      summary:node.body||null,
+      body_notes:fullBody||null,
+      sort_order:node.sortOrder,
+      status:"draft",
+      source_label:"Smart Ingest manuscript",
+      source_text:fullBody||null
+     })});
+     const id=getCreatedId(response,"chapter");
+     if(id){chapterIds.set(node.chapterKey!,id);const chapterPov=smartImportPovCharacter(fullBody);if(chapterPov)chapterPovs.set(id,chapterPov);}
+     created++;
+    }
+    continue;
+   }
+
+   if(node.kind==="scene"){
+    const pov=smartImportPovCharacter(node.body)||(chapterId?chapterPovs.get(chapterId)||null:null);
+    const location=smartImportLocationMatch(node.title,node.body);
+    const mentions=smartImportCharacterMentions(node.body);
+    if(pov&&!mentions.some(item=>item.character.id===pov.id)){
+     mentions.unshift({character:pov,relation:"appears",index:0});
+    }
+
+    const existing=storyScenes.find(scene=>
+     normalizeImportName(scene.title)===normalized&&
+     (!chapterId||scene.chapter_id===chapterId)&&
+     (!arcId||scene.arc_id===arcId)&&
+     (!projectId||scene.project_id===projectId)
+    );
+
+    let resolvedSceneId="";
+    if(existing){
+     await umbraCloudFetch(`/api/production/scenes/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({
+       project_id:projectId??existing.project_id,
+       arc_id:arcId??existing.arc_id,
+       chapter_id:chapterId??existing.chapter_id,
+       title:node.title,
+       scene_code:node.code,
+       summary:existing.summary||null,
+       body_notes:node.body||existing.body_notes||null,
+       pov_character_id:pov?.id??existing.pov_character_id??null,
+       location_id:location?.id??existing.location_id??null,
+       timeline_event_id:existing.timeline_event_id??null,
+       era:existing.era??null,
+       story_date:existing.story_date??null,
+       sort_order:node.sortOrder,
+       status:existing.status
+      })
+     });
+     resolvedSceneId=existing.id;updated++;
+    }else{
+     const response:any=await umbraCloudFetch("/api/production/scenes",{method:"POST",body:JSON.stringify({
+      project_id:projectId,
+      arc_id:arcId,
+      chapter_id:chapterId,
+      title:node.title,
+      scene_code:node.code,
+      summary:null,
+      body_notes:node.body||null,
+      pov_character_id:pov?.id||null,
+      location_id:location?.id||null,
+      era:null,
+      story_date:null,
+      sort_order:node.sortOrder,
+      status:"idea"
+     })});
+     resolvedSceneId=getCreatedId(response,"scene");created++;
+    }
+
+    if(node.sceneKey&&resolvedSceneId)sceneIds.set(node.sceneKey,resolvedSceneId);
+
+    for(const mention of mentions){
+     const relation=pov?.id===mention.character.id?"pov":mention.relation;
+     await addLink("story_scene",resolvedSceneId,"character",mention.character.id,relation);
+     if(chapterId){
+      const map=chapterCharacters.get(chapterId)||new Map<string,"appears"|"mentioned"|"pov">();
+      const previous=map.get(mention.character.id);
+      const rank={mentioned:1,appears:2,pov:3};
+      if(!previous||rank[relation]>rank[previous])map.set(mention.character.id,relation);
+      chapterCharacters.set(chapterId,map);
+     }
+    }
+
+    if(location){
+     await addLink("story_scene",resolvedSceneId,"location",location.id,"setting");
+     if(chapterId){
+      const locations=chapterLocations.get(chapterId)||new Set<string>();
+      locations.add(location.id);chapterLocations.set(chapterId,locations);
+     }
+    }
+
+    const unknown=smartImportUnknownProperNames(node.body,new Set(mentions.map(item=>item.character.id)));
+    if(unknown.length)warnings.push(`${node.title}: review possible unmatched names — ${unknown.join(", ")}`);
+    continue;
+   }
+
+   if(node.kind==="beat"){
+    const existing=storyBeats.find(beat=>
+     normalizeImportName(beat.title)===normalized&&
+     (!sceneId||beat.scene_id===sceneId)
+    );
+    if(existing){
+     await umbraCloudFetch(`/api/production/beats/${encodeURIComponent(existing.id)}`,{
+      method:"PATCH",
+      body:JSON.stringify({
+       project_id:projectId??existing.project_id,
+       arc_id:arcId??existing.arc_id,
+       scene_id:sceneId??existing.scene_id,
+       title:node.title,
+       description:node.body||existing.description||null,
+       beat_type:existing.beat_type||"plot",
+       status:existing.status,
+       sort_order:node.sortOrder
+      })
+     });
+     updated++;
+    }else{
+     await umbraCloudFetch("/api/production/beats",{method:"POST",body:JSON.stringify({
+      project_id:projectId,arc_id:arcId,scene_id:sceneId,title:node.title,
+      description:node.body||null,beat_type:"plot",status:"idea",sort_order:node.sortOrder
+     })});
+     created++;
+    }
+   }
+  }catch(error:any){
+   failed++;
+   warnings.push(`${node.kind} "${node.title}": ${error?.message||"routing failed"}`);
+  }
+ }
+
+ for(const [chapterId,characters] of chapterCharacters){
+  for(const [characterId,relation] of characters){
+   await addLink("story_chapter",chapterId,"character",characterId,relation);
+  }
+ }
+ for(const [chapterId,locations] of chapterLocations){
+  for(const locationId of locations){
+   await addLink("story_chapter",chapterId,"location",locationId,"setting");
+  }
+ }
+
+ await loadV9Production();
+
+ return {nodes:nodes.length,created,updated,kept,failed,warnings};
+}
+
+function smartImportDatabaseSubtitle(
+ kind:SmartImportKind
+){
+ const subtitles:Partial<Record<SmartImportKind,string>>={
+  cosmology:"Cosmology / Foundation",
+  power_magic:"Power / Magic",
+  artifact:"Artifact / Item",
+  religion_tradition:"Learned Magical Tradition",
+  general_lore:"General Lore"
+ };
+
+ return subtitles[kind]||"Imported Lore";
+}
+async function routeSmartImportSections(){
+ setImportError("");
+
+ const manuscriptNodes=parseSmartImportManuscript(importText);
+ if(manuscriptNodes.length){
+  try{
+   const result=await routeSmartImportManuscript(importText);
+   if(!result)throw new Error("No manuscript structure was found.");
+   const summary=[
+    `${result.nodes} manuscript sections`,
+    result.created?`${result.created} created`:"",
+    result.updated?`${result.updated} updated`:"",
+    result.failed?`${result.failed} failed`:""
+   ].filter(Boolean).join(" • ");
+   const warningText=result.warnings.length
+    ?` Review: ${result.warnings.slice(0,6).join(" | ")}${result.warnings.length>6?" | …":""}`
+    :"";
+   setImportError(`Smart Ingest manuscript routing complete: ${summary}.${warningText}`);
+   setSmartImportChunks(current=>current.map(chunk=>
+    chunk.kind==="story_chronology"
+     ?{...chunk,routeStatus:result.failed?"failed":"updated",routeMessage:`Manuscript routed into Production • ${summary}.`}
+     :chunk
+   ));
+   return;
+  }catch(error:any){
+   setImportError(error?.message||"The manuscript could not be routed.");
+   return;
+  }
+ }
+
+ const selected=smartImportChunks.filter(
+  chunk=>chunk.selected&&!chunk.isContainer
+ );
+
+ if(!selected.length){
+  setImportError("Select at least one Smart Ingest section to route.");
+  return;
+ }
+
+ let created=0;
+ let updated=0;
+ let kept=0;
+ let skipped=0;
+ let deferred=0;
+ let failed=0;
+
+ const nextChunks=[...smartImportChunks];
+
+ function setResult(
+  id:string,
+  routeStatus:string,
+  routeMessage:string,
+  patch:Record<string,any>={}
+ ){
+  const index=nextChunks.findIndex(chunk=>chunk.id===id);
+  if(index<0)return;
+
+  nextChunks[index]={
+   ...nextChunks[index],
+   ...patch,
+   routeStatus,
+   routeMessage
+  };
+ }
+
+ for(const chunk of smartImportChunks){
+  if(chunk.isContainer){
+   setResult(
+    chunk.id,
+    "section",
+    "Section heading — not saved."
+   );
+   continue;
+  }
+
+  if(!chunk.selected){
+   skipped++;
+   setResult(
+    chunk.id,
+    "skipped",
+    "Skipped — not selected for import."
+   );
+   continue;
+  }
+
+  if(chunk.resolution==="skip"){
+   skipped++;
+   setResult(
+    chunk.id,
+    "skipped",
+    "Skipped by import decision."
+   );
+   continue;
+  }
+
+  if(chunk.existing&&chunk.resolution==="existing"){
+   kept++;
+   setResult(
+    chunk.id,
+    "kept",
+    `Kept existing ${chunk.existing.area} record unchanged.`
+   );
+   continue;
+  }
+
+  const name=String(chunk.heading||"").trim();
+  const description=String(chunk.content||"").trim();
+
+  if(!name){
+   failed++;
+   setResult(
+    chunk.id,
+    "failed",
+    "This section has no record name."
+   );
+   continue;
+  }
+
+  /*
+   * PHASE 2B — PHYSICAL LOCATIONS
+   *
+   * Realms remain Codex during Phase 2.
+   * Only chunks explicitly classified as Location enter Explorer Locations.
+   */
+  if(chunk.kind==="location"){
+   try{
+    const normalizedName=normalizeImportName(name);
+
+    const matchedByClassifier=
+     chunk.existing&&
+     String(chunk.existing.area||"").toLowerCase().startsWith("location")
+      ?worldLocations.find(
+        location=>location.id===chunk.existing.id
+       )
+      :null;
+
+    const matchedByName=
+     matchedByClassifier||
+     worldLocations.find(
+      location=>
+       !location.archived_at&&
+       normalizeImportName(location.name)===normalizedName
+     );
+
+    if(matchedByName){
+     await umbraCloudFetch(
+      `/api/locations/${encodeURIComponent(matchedByName.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        name:matchedByName.name||name,
+        location_type:
+         matchedByName.location_type||
+         smartImportLocationType(name,description),
+        description:
+         description||
+         matchedByName.description||
+         null,
+        parent_location_id:
+         matchedByName.parent_location_id??null,
+        codex_record_id:
+         matchedByName.codex_record_id??null,
+        map_x:Number(matchedByName.map_x??50),
+        map_y:Number(matchedByName.map_y??50),
+        tags:Array.isArray(matchedByName.tags)
+         ?matchedByName.tags
+         :[],
+        updated_at:new Date().toISOString()
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      `Updated existing Location • ${matchedByName.location_type||"other"}.`,
+      {
+       existing:{
+        id:matchedByName.id,
+        area:"Location",
+        name:matchedByName.name||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }else{
+     const locationType=
+      smartImportLocationType(name,description);
+
+     const createdLocation:any=
+      await umbraCloudFetch(
+       "/api/locations",
+       {
+        method:"POST",
+        body:JSON.stringify({
+         name,
+         location_type:locationType,
+         description:description||null,
+         parent_location_id:null,
+         codex_record_id:null,
+         map_x:50,
+         map_y:50,
+         tags:[],
+         is_public:false
+        })
+       }
+      );
+
+     created++;
+
+     setResult(
+      chunk.id,
+      "created",
+      `Created Location • ${locationType}.`,
+      {
+       existing:{
+        id:
+         createdLocation?.location?.id||
+         createdLocation?.id||
+         "",
+        area:"Location",
+        name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "This Location could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * PHASE 2B — HISTORICAL EVENTS
+   *
+   * Story chronology remains deferred until Phase 2C.
+   * Only History / Historical Event routes directly to Timeline.
+   */
+  if(chunk.kind==="history_event"){
+   try{
+    const normalizedName=normalizeImportName(name);
+
+    const matchedByClassifier=
+     chunk.existing&&
+     String(chunk.existing.area||"").toLowerCase().startsWith("timeline")
+      ?timelineEvents.find(
+        event=>event.id===chunk.existing.id
+       )
+      :null;
+
+    const matchedByName=
+     matchedByClassifier||
+     timelineEvents.find(
+      event=>
+       !event.archived_at&&
+       normalizeImportName(event.title)===normalizedName
+     );
+
+    if(matchedByName){
+     await umbraCloudFetch(
+      `/api/timeline/${encodeURIComponent(matchedByName.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        title:matchedByName.title||name,
+        era:matchedByName.era??null,
+        display_date:
+         matchedByName.display_date??null,
+        sort_order:
+         Number(matchedByName.sort_order??0),
+        description:
+         description||
+         matchedByName.description||
+         null,
+        location_id:
+         matchedByName.location_id??null,
+        codex_record_id:
+         matchedByName.codex_record_id??null,
+        character_id:
+         matchedByName.character_id??null,
+        tags:Array.isArray(matchedByName.tags)
+         ?matchedByName.tags
+         :[],
+        updated_at:new Date().toISOString()
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      "Updated existing Timeline event.",
+      {
+       existing:{
+        id:matchedByName.id,
+        area:"Timeline",
+        name:matchedByName.title||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }else{
+     const createdEvent:any=
+      await umbraCloudFetch(
+       "/api/timeline",
+       {
+        method:"POST",
+        body:JSON.stringify({
+         title:name,
+         era:null,
+         display_date:null,
+         sort_order:0,
+         description:description||null,
+         location_id:null,
+         codex_record_id:null,
+         character_id:null,
+         tags:[],
+         is_public:false
+        })
+       }
+      );
+
+     created++;
+
+     setResult(
+      chunk.id,
+      "created",
+      "Created Timeline event.",
+      {
+       existing:{
+        id:
+         createdEvent?.event?.id||
+         createdEvent?.id||
+         "",
+        area:"Timeline",
+        name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "This Timeline event could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * PHASE 2C — CHARACTERS
+   *
+   * Characters intentionally do not use the old
+   * stageImportedConnectedDrafts() path.
+   *
+   * Smart Ingest keeps the source intact and places the character
+   * into review instead of creating junk Location / Timeline /
+   * Production placeholders.
+   */
+  if(chunk.kind==="character"){
+   const existingCharacter=
+    studioCharacters.find(character=>
+     normalizeImportName(character.name)===
+     normalizeImportName(name)
+    );
+
+   deferred++;
+
+   setResult(
+    chunk.id,
+    "deferred",
+    existingCharacter
+     ?`Character Review • "${existingCharacter.name}" already exists. Open this section in Character Creator to review imported changes before updating it.`
+     :`Character Review • "${name}" is ready for Character Creator. Review the imported profile before creating it.`,
+    {
+     existing:existingCharacter
+      ?{
+        id:existingCharacter.id,
+        area:"Character",
+        name:existingCharacter.name
+       }
+      :chunk.existing,
+     typeConflict:false
+    }
+   );
+
+   continue;
+  }
+
+  /*
+   * PHASE 2C — STORY CHRONOLOGY
+   *
+   * Explicit Project / Arc / Scene / Beat material routes to
+   * Production. General chronology routes to Timeline.
+   */
+  if(chunk.kind==="story_chronology"){
+   try{
+    const productionType=
+     smartImportStoryProductionType(
+      name,
+      description
+     );
+
+    if(productionType){
+     const normalizedName=
+      normalizeImportName(name);
+
+     if(productionType==="project"){
+      const existingProject=
+       storyProjects.find(project=>
+        normalizeImportName(project.title)===
+        normalizedName
+       );
+
+      if(existingProject){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Project "${existingProject.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingProject.id,
+          area:"Production • Project",
+          name:existingProject.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdProject:any=
+       await umbraCloudFetch(
+        "/api/production/projects",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          title:name,
+          project_type:"story",
+          summary:description||null,
+          status:"planning"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Project.",
+       {
+        existing:{
+         id:
+          createdProject?.project?.id||
+          createdProject?.id||
+          "",
+         area:"Production • Project",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+
+     if(productionType==="arc"){
+      const existingArc=
+       storyArcs.find(arc=>
+        normalizeImportName(arc.title)===
+        normalizedName
+       );
+
+      if(existingArc){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Arc "${existingArc.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingArc.id,
+          area:"Production • Arc",
+          name:existingArc.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdArc:any=
+       await umbraCloudFetch(
+        "/api/production/arcs",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          project_id:null,
+          title:name,
+          summary:description||null,
+          status:"planned"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Arc.",
+       {
+        existing:{
+         id:
+          createdArc?.arc?.id||
+          createdArc?.id||
+          "",
+         area:"Production • Arc",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+
+     if(productionType==="scene"){
+      const existingScene=
+       storyScenes.find(scene=>
+        normalizeImportName(scene.title)===
+        normalizedName
+       );
+
+      if(existingScene){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Scene "${existingScene.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingScene.id,
+          area:"Production • Scene",
+          name:existingScene.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdScene:any=
+       await umbraCloudFetch(
+        "/api/production/scenes",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          project_id:null,
+          arc_id:null,
+          title:name,
+          summary:description||null,
+          pov_character_id:null,
+          location_id:null,
+          era:null,
+          story_date:null,
+          status:"idea"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Scene.",
+       {
+        existing:{
+         id:
+          createdScene?.scene?.id||
+          createdScene?.id||
+          "",
+         area:"Production • Scene",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+
+     if(productionType==="beat"){
+      const existingBeat=
+       storyBeats.find(beat=>
+        normalizeImportName(beat.title)===
+        normalizedName
+       );
+
+      if(existingBeat){
+       kept++;
+
+       setResult(
+        chunk.id,
+        "kept",
+        `Production Beat "${existingBeat.title}" already exists. Duplicate creation was blocked.`,
+        {
+         existing:{
+          id:existingBeat.id,
+          area:"Production • Beat",
+          name:existingBeat.title
+         },
+         typeConflict:false
+        }
+       );
+
+       continue;
+      }
+
+      const createdBeat:any=
+       await umbraCloudFetch(
+        "/api/production/beats",
+        {
+         method:"POST",
+         body:JSON.stringify({
+          project_id:null,
+          arc_id:null,
+          scene_id:null,
+          title:name,
+          description:description||null,
+          beat_type:"plot",
+          status:"idea"
+         })
+        }
+       );
+
+      created++;
+
+      setResult(
+       chunk.id,
+       "created",
+       "Created Production • Story Beat.",
+       {
+        existing:{
+         id:
+          createdBeat?.beat?.id||
+          createdBeat?.id||
+          "",
+         area:"Production • Beat",
+         name
+        },
+        typeConflict:false,
+        resolution:"auto"
+       }
+      );
+
+      continue;
+     }
+    }
+
+    /*
+     * General chronology becomes Timeline rather than an
+     * unstructured Production placeholder.
+     */
+    const normalizedName=
+     normalizeImportName(name);
+
+    const existingTimeline=
+     timelineEvents.find(event=>
+      !event.archived_at&&
+      normalizeImportName(event.title)===
+      normalizedName
+     );
+
+    if(existingTimeline){
+     await umbraCloudFetch(
+      `/api/timeline/${encodeURIComponent(existingTimeline.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        title:existingTimeline.title||name,
+        era:existingTimeline.era??null,
+        display_date:
+         existingTimeline.display_date??null,
+        sort_order:
+         Number(existingTimeline.sort_order??0),
+        description:
+         description||
+         existingTimeline.description||
+         null,
+        location_id:
+         existingTimeline.location_id??null,
+        codex_record_id:
+         existingTimeline.codex_record_id??null,
+        character_id:
+         existingTimeline.character_id??null,
+        tags:Array.isArray(existingTimeline.tags)
+         ?existingTimeline.tags
+         :[],
+        updated_at:new Date().toISOString()
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      "Updated existing Timeline chronology entry.",
+      {
+       existing:{
+        id:existingTimeline.id,
+        area:"Timeline",
+        name:existingTimeline.title||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }else{
+     const createdTimeline:any=
+      await umbraCloudFetch(
+       "/api/timeline",
+       {
+        method:"POST",
+        body:JSON.stringify({
+         title:name,
+         era:null,
+         display_date:null,
+         sort_order:0,
+         description:description||null,
+         location_id:null,
+         codex_record_id:null,
+         character_id:null,
+         tags:[],
+         is_public:false
+        })
+       }
+      );
+
+     created++;
+
+     setResult(
+      chunk.id,
+      "created",
+      "Created Timeline • Story Chronology.",
+      {
+       existing:{
+        id:
+         createdTimeline?.event?.id||
+         createdTimeline?.id||
+         "",
+        area:"Timeline",
+        name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+    }
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "Story chronology could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * PHASE 2C — LEARNED MAGICAL TRADITIONS
+   *
+   * A true religion remains Codex.
+   * A magical discipline/tradition belongs in Expanded Records.
+   */
+  const learnedTradition=
+   chunk.kind==="religion_tradition"&&
+   smartImportIsLearnedTradition(
+    name,
+    description
+   );
+
+  /*
+   * PHASE 2C — EXPANDED WORLD DATABASE
+   */
+  const databaseKind=
+   chunk.kind==="cosmology"||
+   chunk.kind==="power_magic"||
+   chunk.kind==="artifact"||
+   chunk.kind==="general_lore"||
+   learnedTradition;
+
+  if(databaseKind){
+   try{
+    const databaseType=
+     smartImportDatabaseTypeForKind(
+      chunk.kind
+     );
+
+    if(!databaseType){
+     deferred++;
+
+     setResult(
+      chunk.id,
+      "deferred",
+      `No compatible Expanded Record type currently exists for ${chunk.label}. Create or choose an appropriate World Database type before routing this section.`
+     );
+
+     continue;
+    }
+
+    const normalizedName=
+     normalizeImportName(name);
+
+    const existingDatabase=
+     databaseRecords.find(record=>
+      !record.archived_at&&
+      normalizeImportName(record.name)===
+      normalizedName
+     );
+
+    if(existingDatabase){
+     await umbraCloudFetch(
+      `/api/world-database/records/${encodeURIComponent(existingDatabase.id)}`,
+      {
+       method:"PUT",
+       body:JSON.stringify({
+        name:existingDatabase.name||name,
+        subtitle:
+         existingDatabase.subtitle||
+         smartImportDatabaseSubtitle(chunk.kind),
+        summary:
+         description||
+         existingDatabase.summary||
+         null,
+        image_url:
+         existingDatabase.image_url??null,
+        notes:
+         existingDatabase.notes??null,
+        workflow_status:
+         existingDatabase.workflow_status||
+         "draft",
+        details:{
+         ...(existingDatabase.details||{}),
+         smart_ingest:{
+          classification:chunk.kind,
+          classification_label:chunk.label,
+          source_heading:name,
+          imported_source:description,
+          imported_at:new Date().toISOString()
+         }
+        }
+       })
+      }
+     );
+
+     updated++;
+
+     setResult(
+      chunk.id,
+      "updated",
+      `Updated Expanded Record • ${databaseType.name}.`,
+      {
+       existing:{
+        id:existingDatabase.id,
+        area:`World Database • ${databaseType.name}`,
+        name:existingDatabase.name||name
+       },
+       typeConflict:false,
+       resolution:"auto"
+      }
+     );
+
+     continue;
+    }
+
+    const createdDatabase:any=
+     await umbraCloudFetch(
+      "/api/world-database/records",
+      {
+       method:"POST",
+       body:JSON.stringify({
+        record_type_id:databaseType.id,
+        name,
+        subtitle:
+         smartImportDatabaseSubtitle(
+          chunk.kind
+         ),
+        summary:description||null
+       })
+      }
+     );
+
+    const createdDatabaseId=
+     createdDatabase?.record?.id||
+     createdDatabase?.id||
+     "";
+
+    /*
+     * Creation endpoint accepts the core record first.
+     * Add Smart Ingest source metadata afterward when an ID is
+     * returned.
+     */
+    if(createdDatabaseId){
+     try{
+      await umbraCloudFetch(
+       `/api/world-database/records/${encodeURIComponent(createdDatabaseId)}`,
+       {
+        method:"PUT",
+        body:JSON.stringify({
+         name,
+         subtitle:
+          smartImportDatabaseSubtitle(
+           chunk.kind
+          ),
+         summary:description||null,
+         workflow_status:"draft",
+         details:{
+          smart_ingest:{
+           classification:chunk.kind,
+           classification_label:chunk.label,
+           source_heading:name,
+           imported_source:description,
+           imported_at:new Date().toISOString()
+          }
+         }
+        })
+       }
+      );
+     }catch{
+      /*
+       * The core record already exists. Metadata enrichment
+       * failure must not create a duplicate.
+       */
+     }
+    }
+
+    created++;
+
+    setResult(
+     chunk.id,
+     "created",
+     `Created Expanded Record • ${databaseType.name}.`,
+     {
+      existing:{
+       id:createdDatabaseId,
+       area:`World Database • ${databaseType.name}`,
+       name
+      },
+      typeConflict:false,
+      resolution:"auto"
+     }
+    );
+
+    continue;
+   }catch(error:any){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     error?.message||
+     "Expanded World Database record could not be routed."
+    );
+
+    continue;
+   }
+  }
+
+  /*
+   * Codex routing remains responsible for:
+   * Realm / Civilization
+   * People / Species
+   * Religion
+   * Organization / Faction
+   */
+  if(!smartImportIsCodexKind(chunk.kind)){
+   deferred++;
+
+   setResult(
+    chunk.id,
+    "deferred",
+    `${chunk.label} remains classified but requires manual review because no safe destination was resolved.`
+   );
+
+   continue;
+  }
+
+  const codexType=String(
+   chunk.codexType||
+   smartImportCodexTypeForKind(chunk.kind)
+  ).trim().toLowerCase();
+
+  if(!(smartImportCodexTypes as readonly string[]).includes(codexType)){
+   failed++;
+   setResult(
+    chunk.id,
+    "failed",
+    "No valid Codex type is selected."
+   );
+   continue;
+  }
+
+
+  try{
+   const existingCodex=
+    chunk.existing&&
+    String(chunk.existing.area||"").toLowerCase().startsWith("codex")
+     ?worldRecords.find(
+       record=>record.id===chunk.existing.id
+      )
+     :null;
+
+   if(existingCodex){
+    const oldType=String(existingCodex.record_type||"").toLowerCase();
+
+    await umbraCloudFetch(
+     `/api/world-records/${encodeURIComponent(existingCodex.id)}`,
+     {
+      method:"PUT",
+      body:JSON.stringify({
+       record_type:codexType,
+       name:existingCodex.name||name,
+       subtype:existingCodex.subtype??null,
+       description:description||existingCodex.description||null,
+       cover_url:existingCodex.cover_url??null,
+       emblem_url:existingCodex.emblem_url??null,
+       lore_details:existingCodex.lore_details??{},
+       updated_at:new Date().toISOString()
+      })
+     }
+    );
+
+    updated++;
+
+    setResult(
+     chunk.id,
+     "updated",
+     oldType&&oldType!==codexType
+      ?`Updated existing Codex record: ${oldType} → ${codexType}.`
+      :`Updated existing Codex ${codexType} record.`,
+     {
+      existing:{
+       ...chunk.existing,
+       area:`Codex • ${codexType}`,
+       name:existingCodex.name||name
+      },
+      typeConflict:false,
+      resolution:"auto"
+     }
+    );
+
+    continue;
+   }
+
+   /*
+    * Duplicate guard:
+    * classification may have matched another Studio area,
+    * so independently check Codex before POSTing.
+    */
+   const normalizedName=normalizeImportName(name);
+
+   const duplicateCodex=worldRecords.find(
+    record=>
+     normalizeImportName(record.name)===normalizedName
+   );
+
+   if(duplicateCodex){
+    failed++;
+
+    setResult(
+     chunk.id,
+     "failed",
+     `A Codex record named "${duplicateCodex.name}" already exists. Automatic duplicate creation was blocked.`
+    );
+
+    continue;
+   }
+
+   const createdRecord:any=await umbraCloudFetch(
+    "/api/world-records",
+    {
+     method:"POST",
+     body:JSON.stringify({
+      record_type:codexType,
+      name,
+      subtype:null,
+      description:description||null,
+      is_public:false
+     })
+    }
+   );
+
+   created++;
+
+   setResult(
+    chunk.id,
+    "created",
+    `Created Codex • ${codexType}.`,
+    {
+     existing:{
+      id:createdRecord?.id||createdRecord?.record?.id||"",
+      area:`Codex • ${codexType}`,
+      name
+     },
+     typeConflict:false,
+     resolution:"auto"
+    }
+   );
+  }catch(error:any){
+   failed++;
+
+   setResult(
+    chunk.id,
+    "failed",
+    error?.message||"This section could not be routed."
+   );
+  }
+ }
+
+ setSmartImportChunks(nextChunks);
+
+ /*
+  * Refresh the authoritative Codex list from Cloudflare.
+  * Do not depend on optimistic local records.
+  */
+ try{
+  const refreshed:any=await umbraCloudFetch<any>("/api/world-records");
+  const records=Array.isArray(refreshed)
+   ?refreshed
+   :Array.isArray(refreshed?.records)
+    ?refreshed.records
+    :null;
+
+  if(records){
+   setWorldRecords(records);
+  }
+ }catch{
+  // Routing results remain valid even if the follow-up refresh fails.
+ }
+
+ const summary=[
+  created?`${created} created`:"",
+  updated?`${updated} updated`:"",
+  kept?`${kept} kept existing`:"",
+  skipped?`${skipped} skipped`:"",
+  deferred?`${deferred} deferred for review or missing record types`:"",
+  failed?`${failed} failed`:""
+ ].filter(Boolean).join(" • ");
+
+ setImportError(
+  failed
+   ?`Smart Ingest finished with issues: ${summary}.`
+   :`Smart Ingest routing complete: ${summary}.`
+ );
+}
+function previewImport(){
+ setImportError("");
+ setCharacterImportPreview(null);
+ setSmartImportChunks([]);
+
+ try{
+  let parsed:any;
+
+  try{
+   parsed=JSON.parse(importText);
+  }catch{
+   const smartChunks=analyzeSmartImportDocument(importText);
+
+   const meaningfulKinds=
+    new Set(smartChunks.map(x=>x.kind));
+
+   const looksLikeFoundationDocument=
+    smartChunks.length>1 &&
+    (
+     meaningfulKinds.size>1 ||
+     smartChunks.some(
+      x=>
+       x.kind!=="character" &&
+       x.kind!=="general_lore"
+     )
+    );
+
+   if(looksLikeFoundationDocument){
+    setSmartImportChunks(smartChunks);
+    setImportPreview([]);
+    return;
+   }
+
+   parsed=parseLabelledCharacterText(importText);
+
+   if(!parsed.name){
+    if(smartChunks.length){
+     setSmartImportChunks(smartChunks);
+     setImportPreview([]);
+     return;
+    }
+
+    throw new Error(
+     "Add labeled information or choose a supported import file."
+    );
+   }
+  }
 const looksLikeCharacter = !Array.isArray(parsed) && parsed && typeof parsed==="object" && (
   parsed.identity || parsed.appearance || parsed.abilities || parsed.relationships || parsed.media ||
   parsed.character || parsed.fullName || parsed.name
@@ -709,9 +3592,9 @@ if(looksLikeCharacter){
     mediaNotes:pick(c.mediaNotes,media.mediaNotes), importLocations:lines(c.importLocations), importTimeline:lines(c.importTimeline), importStoryProjects:lines(c.importStoryProjects), importScenes:lines(c.importScenes)
   };
   if(!preview.name)throw new Error("Character import needs at least a name.");
-  setCharacterImportPreview(preview);setImportPreview([]);return;
+  setCharacterImportPreview(preview);setImportPreview([]);setSmartImportChunks([]);return;
 }
-const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);}catch(e){setImportPreview([]);setImportError(e instanceof Error?e.message:"Import JSON could not be read.");}}
+const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.expanded_records)?parsed.expanded_records:[];if(!rows.length)throw new Error("No records found. Paste a JSON array or an Umbra Studio export containing expanded_records.");const normalized=rows.map((r:any,i:number)=>({row:i+1,record_type_slug:r.record_type_slug||r.type_slug||r.type||"",name:String(r.name||"").trim(),subtitle:r.subtitle||null,summary:r.summary||null,details:r.details&&typeof r.details==="object"?r.details:{},workflow_status:["draft","in_review","approved","published"].includes(r.workflow_status)?r.workflow_status:"draft"}));const invalid=normalized.filter((r:any)=>!r.name||!r.record_type_slug);if(invalid.length)throw new Error(`${invalid.length} row(s) are missing name or record_type_slug.`);setImportPreview(normalized);setSmartImportChunks([]);}catch(e){setImportPreview([]);setSmartImportChunks([]);setImportError(e instanceof Error?e.message:"Import could not be analyzed.");}}
 function normalizeImportName(value:any){return String(value??"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"");}
 function importedNameList(value:any){return String(value??"").split(/[\n|]+/).map(x=>x.replace(/^[-*•\d.\s]+/,"").trim()).filter(Boolean);}
 function namedCharactersInText(options:StudioCharacterRow[],raw:string){
@@ -810,16 +3693,103 @@ function sitewideDuplicateGroups(){
 async function deleteDuplicateEntity(table:string,id:string,label:string){if(!window.confirm(`Delete ${label}? This permanently deletes this record. Use this only after confirming it is a duplicate.`))return;try{await umbraCloudFetch("/api/duplicates",{method:"DELETE",body:JSON.stringify({table,id})});await Promise.all([loadWorldDatabase(),loadWorldRecords(),loadWorldExplorer(),loadV9Production(),loadMyCharacters()]);}catch(f){setDatabaseError(f instanceof Error?f.message:"Duplicate could not be deleted.");}}
 async function loadV9Production(){
  if(!session)return;setProductionBusy(true);setProductionError("");
- try{const data=await umbraCloudFetch<any>("/api/production");setStoryProjects((data.projects??[]) as StoryProject[]);setStoryArcs((data.arcs??[]) as StoryArc[]);setStoryScenes((data.scenes??[]) as StoryScene[]);setStoryBeats((data.beats??[]) as StoryBeat[]);setStoryLinks((data.links??[]) as StoryEntityLink[]);setReviewComments((data.comments??[]) as ReviewComment[]);setStudioAssignments((data.assignments??[]) as StudioAssignment[]);setStudioNotifications((data.notifications??[]) as StudioNotification[]);setCharacterJourney((data.journey??[]) as CharacterJourney[]);setChangesSinceVisit((data.changes??[]) as ChangeSinceVisit[]);if(data.health)setV9Health(data.health as V9Health);}catch(f){setProductionError(f instanceof Error?f.message:"Story Production could not be loaded.");}finally{setProductionBusy(false);}
+ try{const data=await umbraCloudFetch<any>("/api/production");setStoryProjects((data.projects??[]) as StoryProject[]);setStoryArcs((data.arcs??[]) as StoryArc[]);setStoryChapters((data.chapters??[]) as StoryChapter[]);setStoryScenes((data.scenes??[]) as StoryScene[]);setStoryBeats((data.beats??[]) as StoryBeat[]);setStoryLinks((data.links??[]) as StoryEntityLink[]);setReviewComments((data.comments??[]) as ReviewComment[]);setStudioAssignments((data.assignments??[]) as StudioAssignment[]);setStudioNotifications((data.notifications??[]) as StudioNotification[]);setCharacterJourney((data.journey??[]) as CharacterJourney[]);setChangesSinceVisit((data.changes??[]) as ChangeSinceVisit[]);if(data.health)setV9Health(data.health as V9Health);}catch(f){setProductionError(f instanceof Error?f.message:"Story Production could not be loaded.");}finally{setProductionBusy(false);}
 }
 async function openProduction(tab:typeof productionTab="overview"){setProductionTab(tab);setPage("production");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadV9Production(),loadAdminCenter(),loadWorldDatabase()]);}
 async function createStoryProject(){if(!session||!projectForm.title.trim())return;try{await umbraCloudFetch("/api/production/projects",{method:"POST",body:JSON.stringify({title:projectForm.title.trim(),project_type:projectForm.projectType,summary:projectForm.summary.trim()||null,status:projectForm.status})});setProjectForm({title:"",projectType:"story",summary:"",status:"planning"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Project could not be created.");}}
 async function createStoryArc(){if(!session||!arcForm.title.trim())return;try{await umbraCloudFetch("/api/production/arcs",{method:"POST",body:JSON.stringify({project_id:arcForm.projectId||null,title:arcForm.title.trim(),summary:arcForm.summary.trim()||null,status:arcForm.status})});setArcForm({projectId:"",title:"",summary:"",status:"planned"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Arc could not be created.");}}
-async function createStoryScene(){if(!session||!sceneForm.title.trim())return;try{await umbraCloudFetch("/api/production/scenes",{method:"POST",body:JSON.stringify({project_id:sceneForm.projectId||null,arc_id:sceneForm.arcId||null,title:sceneForm.title.trim(),summary:sceneForm.summary.trim()||null,pov_character_id:sceneForm.povId||null,location_id:sceneForm.locationId||null,era:sceneForm.era.trim()||null,story_date:sceneForm.storyDate.trim()||null,status:sceneForm.status})});setSceneForm({projectId:"",arcId:"",title:"",summary:"",povId:"",locationId:"",era:"",storyDate:"",status:"idea"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Scene could not be created.");}}
+async function createStoryChapter(){
+ if(!session||!chapterForm.title.trim())return;
+
+ try{
+  await umbraCloudFetch("/api/production/chapters",{
+   method:"POST",
+   body:JSON.stringify({
+    project_id:chapterForm.projectId||null,
+    arc_id:chapterForm.arcId||null,
+    title:chapterForm.title.trim(),
+    chapter_code:chapterForm.chapterCode.trim()||null,
+    chapter_type:chapterForm.chapterType,
+    summary:chapterForm.summary.trim()||null,
+    body_notes:chapterForm.bodyNotes.trim()||null,
+    sort_order:Number(chapterForm.sortOrder||0),
+    status:chapterForm.status
+   })
+  });
+
+  setChapterForm({
+   projectId:"",
+   arcId:"",
+   title:"",
+   chapterCode:"",
+   chapterType:"chapter",
+   summary:"",
+   bodyNotes:"",
+   sortOrder:"0",
+   status:"draft"
+  });
+
+  await loadV9Production();
+
+ }catch(f){
+  setProductionError(
+   f instanceof Error
+    ?f.message
+    :"Chapter could not be created."
+  );
+ }
+}
+
+async function createStoryScene(){
+ if(!session||!sceneForm.title.trim())return;
+
+ try{
+  await umbraCloudFetch("/api/production/scenes",{
+   method:"POST",
+   body:JSON.stringify({
+    project_id:sceneForm.projectId||null,
+    arc_id:sceneForm.arcId||null,
+    chapter_id:sceneForm.chapterId||null,
+    title:sceneForm.title.trim(),
+    summary:sceneForm.summary.trim()||null,
+    body_notes:sceneForm.bodyNotes.trim()||null,
+    pov_character_id:sceneForm.povId||null,
+    location_id:sceneForm.locationId||null,
+    era:sceneForm.era.trim()||null,
+    story_date:sceneForm.storyDate.trim()||null,
+    status:sceneForm.status
+   })
+  });
+
+  setSceneForm({
+   projectId:"",
+   arcId:"",
+   chapterId:"",
+   title:"",
+   summary:"",
+   bodyNotes:"",
+   povId:"",
+   locationId:"",
+   era:"",
+   storyDate:"",
+   status:"idea"
+  });
+
+  await loadV9Production();
+
+ }catch(f){
+  setProductionError(
+   f instanceof Error
+    ?f.message
+    :"Scene could not be created."
+  );
+ }
+}
+
 async function createStoryBeat(){if(!session||!beatForm.title.trim())return;try{await umbraCloudFetch("/api/production/beats",{method:"POST",body:JSON.stringify({project_id:beatForm.projectId||null,arc_id:beatForm.arcId||null,scene_id:beatForm.sceneId||null,title:beatForm.title.trim(),description:beatForm.description.trim()||null,beat_type:beatForm.beatType,status:beatForm.status})});setBeatForm({projectId:"",arcId:"",sceneId:"",title:"",description:"",beatType:"plot",status:"idea"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Beat could not be created.");}}
 async function createStoryEntityLink(){if(!session||!storyLinkForm.storyId||!storyLinkForm.linkedId)return;try{await umbraCloudFetch("/api/production/links",{method:"POST",body:JSON.stringify({story_entity_type:storyLinkForm.storyType,story_entity_id:storyLinkForm.storyId,linked_entity_type:storyLinkForm.linkedType,linked_entity_id:storyLinkForm.linkedId,relation_label:storyLinkForm.label.trim()||null,notes:storyLinkForm.notes.trim()||null})});setStoryLinkForm(x=>({...x,linkedId:"",label:"",notes:""}));await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story link could not be created.");}}
 async function deleteStoryEntityLink(id:string){try{await umbraCloudFetch(`/api/production/links/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story link could not be deleted.");}}
-async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){if(!confirm(`Delete "${label}"? This cannot be undone.`))return;const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story item could not be deleted.");}}
+async function deleteStoryItem(table:"studio_story_projects"|"studio_story_arcs"|"studio_story_chapters"|"studio_story_scenes"|"studio_story_beats",id:string,label:string){if(!confirm(`Delete "${label}"? This cannot be undone.`))return;const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"DELETE"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Story item could not be deleted.");}}
 async function updateProductionStatus(table:string,id:string,status:string){const kind=table.replace("studio_story_","");try{await umbraCloudFetch(`/api/production/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({status})});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Status could not be updated.");}}
 async function addReviewCommentV9(){if(!commentForm.entityId||!commentForm.body.trim())return;try{await umbraCloudFetch("/api/production/reviews",{method:"POST",body:JSON.stringify({entity_type:commentForm.entityType,entity_id:commentForm.entityId,body:commentForm.body.trim(),notify_user_id:commentForm.notifyUserId||null})});setCommentForm(x=>({...x,body:"",notifyUserId:""}));await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Review comment could not be added.");}}
 async function resolveReviewComment(id:string){try{await umbraCloudFetch(`/api/production/reviews/${encodeURIComponent(id)}`,{method:"PATCH"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Review comment could not be resolved.");}}
@@ -827,7 +3797,7 @@ async function createAssignmentV9(){if(!assignmentForm.title.trim()||!assignment
 async function markNotificationRead(id:string){try{await umbraCloudFetch(`/api/production/notifications/${encodeURIComponent(id)}`,{method:"PATCH"});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Notification could not be updated.");}}
 async function createJourneyEvent(){if(!session||!journeyForm.characterId||!journeyForm.title.trim())return;try{await umbraCloudFetch("/api/production/journey",{method:"POST",body:JSON.stringify({character_id:journeyForm.characterId,project_id:journeyForm.projectId||null,arc_id:journeyForm.arcId||null,scene_id:journeyForm.sceneId||null,journey_type:journeyForm.journeyType,title:journeyForm.title.trim(),description:journeyForm.description.trim()||null,before_value:journeyForm.beforeValue.trim()||null,after_value:journeyForm.afterValue.trim()||null})});setJourneyForm({characterId:"",projectId:"",arcId:"",sceneId:"",journeyType:"development",title:"",description:"",beforeValue:"",afterValue:""});await loadV9Production();}catch(f){setProductionError(f instanceof Error?f.message:"Journey event could not be created.");}}
 
-function productionEntityOptions(type:string){if(type==="story_project")return storyProjects.map(x=>({id:x.id,label:x.title}));if(type==="story_arc")return storyArcs.map(x=>({id:x.id,label:x.title}));if(type==="story_scene")return storyScenes.map(x=>({id:x.id,label:x.title}));if(type==="database")return databaseRecords.map(x=>({id:x.id,label:x.name}));if(type==="character")return studioCharacters.map(x=>({id:x.id,label:x.name}));if(type==="codex")return worldRecords.map(x=>({id:x.id,label:x.name}));if(type==="location")return worldLocations.map(x=>({id:x.id,label:x.name}));return timelineEvents.map(x=>({id:x.id,label:x.title}));}
+function productionEntityOptions(type:string){if(type==="story_project")return storyProjects.map(x=>({id:x.id,label:x.title}));if(type==="story_arc")return storyArcs.map(x=>({id:x.id,label:x.title}));if(type==="story_chapter")return storyChapters.map(x=>({id:x.id,label:x.title}));if(type==="story_scene")return storyScenes.map(x=>({id:x.id,label:x.title}));if(type==="database")return databaseRecords.map(x=>({id:x.id,label:x.name}));if(type==="character")return studioCharacters.map(x=>({id:x.id,label:x.name}));if(type==="codex")return worldRecords.map(x=>({id:x.id,label:x.name}));if(type==="location")return worldLocations.map(x=>({id:x.id,label:x.name}));return timelineEvents.map(x=>({id:x.id,label:x.title}));}
 
 async function loadStudioSettings(){try{const data=await umbraCloudFetch<{ok:true;settings:StudioSettings|null}>("/api/settings");if(data.settings)setStudioSettings({...data.settings,autosave_enabled:Boolean((data.settings as any).autosave_enabled),show_dashboard_activity:Boolean((data.settings as any).show_dashboard_activity),show_help_descriptions:Boolean((data.settings as any).show_help_descriptions)} as StudioSettings);}catch(failure){setSettingsError(failure instanceof Error?failure.message:"Studio settings could not be loaded.");}}
 // Keep the global help preference in sync when another administrator changes it.
@@ -841,15 +3811,459 @@ useEffect(()=>{
 async function openStudioSettings(){setPage("settings");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadStudioSettings(),loadAdminCenter(),loadV9Production()]);}
 async function loadDirectMessages(){if(!session)return;setMessagesBusy(true);setMessagesError("");try{const data=await umbraCloudFetch<any>("/api/messages");setDirectMessages((data.messages??[]) as StudioDirectMessage[]);}catch(f){setMessagesError(f instanceof Error?f.message:"Messages could not be loaded.");}finally{setMessagesBusy(false);}}
 async function openMessages(){setPage("messages");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadAdminCenter(),loadDirectMessages()]);}
-async function sendDirectMessage(){const targetUserId=messageRecipientId||adminMembers.find(m=>m.user_id!==session?.user.id)?.user_id||"";if(!session||!targetUserId||!messageBody.trim()||messagesBusy)return;const body=messageBody.trim();setMessagesBusy(true);setMessagesError("");try{await umbraCloudFetch("/api/messages",{method:"POST",body:JSON.stringify({recipient_user_id:targetUserId,body})});setMessageRecipientId(targetUserId);setMessageBody("");await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Message could not be sent.");}finally{setMessagesBusy(false);}}
+async function sendDirectMessage(){
+ const targetUserId=messageRecipientId||adminMembers.find(m=>m.user_id!==session?.user.id)?.user_id||"";
+ if(!session||!targetUserId||(!messageBody.trim()&&!messageAttachmentFile)||messagesBusy)return;
+ const body=messageBody.trim();
+ setMessagesBusy(true);
+ setMessagesError("");
+ try{
+   let attachmentUrl:string|null=null;
+   let attachmentName:string|null=null;
+   let attachmentType:string|null=null;
+   let attachmentSize:number|null=null;
+
+   if(messageAttachmentFile){
+     if(messageAttachmentFile.size>20*1024*1024)throw new Error("Message attachments must be 20 MB or smaller.");
+     const uploaded=await uploadUmbraCloudMedia(
+       messageAttachmentFile,
+       `messages/${session.user.id}`,
+       session.user.id
+     );
+     attachmentUrl=uploaded.url;
+     attachmentName=messageAttachmentFile.name;
+     attachmentType=uploaded.contentType||messageAttachmentFile.type||"application/octet-stream";
+     attachmentSize=uploaded.size;
+   }
+
+   await umbraCloudFetch("/api/messages",{
+     method:"POST",
+     body:JSON.stringify({
+       recipient_user_id:targetUserId,
+       body,
+       attachment_url:attachmentUrl,
+       attachment_name:attachmentName,
+       attachment_type:attachmentType,
+       attachment_size:attachmentSize
+     })
+   });
+
+   setMessageRecipientId(targetUserId);
+   setMessageBody("");
+   setMessageAttachmentFile(null);
+   await loadDirectMessages();
+ }catch(f){
+   setMessagesError(f instanceof Error?f.message:"Message could not be sent.");
+ }finally{
+   setMessagesBusy(false);
+ }
+}
 async function markConversationRead(otherUserId:string){if(!session)return;try{await umbraCloudFetch(`/api/messages/read/${encodeURIComponent(otherUserId)}`,{method:"PATCH"});await loadDirectMessages();}catch(f){setMessagesError(f instanceof Error?f.message:"Conversation could not be marked read.");}}
 async function openTransferCenter(){setPage("transfer");window.scrollTo({top:0,behavior:"smooth"});await Promise.all([loadWorldDatabase(),loadAdminCenter(),loadV9Production(),loadStudioSettings(),loadDirectMessages()]);}
-function validateBackupFile(file:File|null){setBackupValidation(null);if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const payload=JSON.parse(String(reader.result||"{}"));if(!payload||typeof payload!=="object")throw new Error("This is not a Studio backup object.");const version=String(payload.version||"");if(!version.startsWith("v10"))throw new Error(`Unsupported backup version: ${version||"unknown"}.`);const counts=[['characters',payload.characters],['codex',payload.codex],['locations',payload.locations],['timeline',payload.timeline],['lore records',payload.expanded_records],['story projects',payload.story_projects],['story scenes',payload.story_scenes]].map(([label,rows]:any)=>`${Array.isArray(rows)?rows.length:0} ${label}`).join(" • ");setBackupValidation({ok:true,message:"Valid Umbra Studio 1.0 backup.",summary:counts});}catch(e){setBackupValidation({ok:false,message:e instanceof Error?e.message:"Backup could not be validated."});}};reader.readAsText(file);}
+function validateBackupFile(file:File|null){setBackupValidation(null);if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const payload=JSON.parse(String(reader.result||"{}"));if(!payload||typeof payload!=="object")throw new Error("This is not a Studio backup object.");const version=String(payload.version||"");if(!version.startsWith("v10"))throw new Error(`Unsupported backup version: ${version||"unknown"}.`);const counts=[['characters',payload.characters],['codex',payload.codex],['locations',payload.locations],['timeline',payload.timeline],['lore records',payload.expanded_records],['story projects',payload.story_projects],['story chapters',payload.story_chapters],['story scenes',payload.story_scenes]].map(([label,rows]:any)=>`${Array.isArray(rows)?rows.length:0} ${label}`).join(" • ");setBackupValidation({ok:true,message:"Valid Umbra Studio 1.0 backup.",summary:counts});}catch(e){setBackupValidation({ok:false,message:e instanceof Error?e.message:"Backup could not be validated."});}};reader.readAsText(file);}
 
 async function saveStudioSettings(){if(!studioSettings||adminRole!=="primary_admin")return;setSettingsBusy(true);setSettingsError("");try{await umbraCloudFetch("/api/settings",{method:"PUT",body:JSON.stringify(studioSettings)});await loadStudioSettings();}catch(failure){setSettingsError(failure instanceof Error?failure.message:"Studio settings could not be saved.");}finally{setSettingsBusy(false);}}
 async function registerStudioSession(){if(!session?.user.id||activeStudioSessionId)return;try{const data=await umbraCloudFetch<{ok:true;id:string}>("/api/sessions",{method:"POST"});setActiveStudioSessionId(data.id);}catch(failure){console.error("Studio session registration failed:",failure);}}
 async function touchStudioSession(){if(!activeStudioSessionId)return;try{await umbraCloudFetch(`/api/sessions/${encodeURIComponent(activeStudioSessionId)}`,{method:"PATCH"});}catch(failure){console.error("Studio session heartbeat failed:",failure);}}
 async function setMyDisplayName(){if(!myStudioDisplayName.trim())return;try{await umbraCloudFetch("/api/me/display-name",{method:"PATCH",body:JSON.stringify({display_name:myStudioDisplayName.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
+async function loadMyProfile(){
+  setMyProfileBusy(true);
+  setMyProfileError("");
+  try{
+    const [profileData,meData]=await Promise.all([
+      umbraCloudFetch<{ok:true;profile:StudioUserProfile}>("/api/me/profile"),
+      umbraCloudFetch<{ok:true;user:{id:string;email:string|null;displayName:string|null;role:string|null}}>("/api/me")
+    ]);
+
+    setMyProfile(profileData.profile);
+    setMyProfileNotes(profileData.profile.personal_notes??"");
+    setMyProfileDisplayName(meData.user.displayName??"");
+    setMyProfileEmail(meData.user.email??"");
+    setMyProfileRole(meData.user.role??"member");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Your profile could not be loaded.");
+  }finally{
+    setMyProfileBusy(false);
+  }
+}
+
+async function openMyProfile(){
+  setPage("my-profile");
+  setMyProfileMessage("");
+  window.scrollTo({top:0,behavior:"smooth"});
+  await Promise.all([loadMyProfile(),loadV9Production(),loadMyTraining()]);
+}
+
+async function saveMyProfile(){
+  setMyProfileBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+  try{
+    await umbraCloudFetch("/api/me/profile",{
+      method:"PATCH",
+      body:JSON.stringify({
+        profile_image_url:myProfile?.profile_image_url??null,
+        personal_notes:myProfileNotes
+      })
+    });
+    await loadMyProfile();
+    setMyProfileMessage("Personal notes saved.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Your profile could not be saved.");
+  }finally{
+    setMyProfileBusy(false);
+  }
+}
+
+async function saveMyProfileDisplayName(){
+  const displayName=myProfileDisplayName.trim();
+  if(!displayName){
+    setMyProfileError("Display name is required.");
+    return;
+  }
+
+  setMyProfileBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    await umbraCloudFetch("/api/me/display-name",{
+      method:"PATCH",
+      body:JSON.stringify({display_name:displayName})
+    });
+    await loadMyProfile();
+    setMyProfileMessage("Display name updated.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Display name could not be saved.");
+  }finally{
+    setMyProfileBusy(false);
+  }
+}
+
+async function uploadMyProfileImage(file:File){
+  if(!session?.user.id)return;
+
+  if(!file.type.startsWith("image/")){
+    setMyProfileError("Choose an image file for your profile picture.");
+    return;
+  }
+
+  if(file.size>15*1024*1024){
+    setMyProfileError("Profile images must be 15 MB or smaller.");
+    return;
+  }
+
+  setMyProfileImageBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    const uploaded=await uploadUmbraCloudMedia(
+      file,
+      `profiles/${session.user.id}`,
+      session.user.id
+    );
+
+    await umbraCloudFetch("/api/me/profile",{
+      method:"PATCH",
+      body:JSON.stringify({
+        profile_image_url:uploaded.url,
+        personal_notes:myProfileNotes
+      })
+    });
+
+    await loadMyProfile();
+    setMyProfileMessage("Profile picture updated.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Profile picture could not be uploaded.");
+  }finally{
+    setMyProfileImageBusy(false);
+  }
+}
+
+async function removeMyProfileImage(){
+  setMyProfileImageBusy(true);
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    await umbraCloudFetch("/api/me/profile",{
+      method:"PATCH",
+      body:JSON.stringify({
+        profile_image_url:null,
+        personal_notes:myProfileNotes
+      })
+    });
+
+    await loadMyProfile();
+    setMyProfileMessage("Profile picture removed.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Profile picture could not be removed.");
+  }finally{
+    setMyProfileImageBusy(false);
+  }
+}
+
+async function changeMyProfilePassword(){
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  if(!myProfilePasswordCurrent){
+    setMyProfileError("Enter your current password.");
+    return;
+  }
+
+  if(myProfilePasswordNew.length<8){
+    setMyProfileError("New password must be at least 8 characters.");
+    return;
+  }
+
+  if(myProfilePasswordNew!==myProfilePasswordConfirm){
+    setMyProfileError("New passwords do not match.");
+    return;
+  }
+
+  if(myProfilePasswordCurrent===myProfilePasswordNew){
+    setMyProfileError("New password must be different from your current password.");
+    return;
+  }
+
+  setMyProfilePasswordBusy(true);
+
+  try{
+    await umbraCloudFetch("/api/me/password",{
+      method:"PATCH",
+      body:JSON.stringify({
+        current_password:myProfilePasswordCurrent,
+        new_password:myProfilePasswordNew
+      })
+    });
+
+    setMyProfilePasswordCurrent("");
+    setMyProfilePasswordNew("");
+    setMyProfilePasswordConfirm("");
+    setMyProfileMessage("Password changed successfully.");
+  }catch(f){
+    setMyProfileError(f instanceof Error?f.message:"Password could not be changed.");
+  }finally{
+    setMyProfilePasswordBusy(false);
+  }
+}
+async function loadMyTraining(){
+  try{
+    const data=await umbraCloudFetch<{
+      ok:true;
+      training:MyTrainingAssignment[];
+    }>("/api/me/training");
+
+    setMyTraining(data.training??[]);
+  }catch(f){
+    setMyProfileError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be loaded."
+    );
+  }
+}
+
+async function loadAdminTraining(){
+  setTrainingBusy(true);
+  setTrainingError("");
+
+  try{
+    const data=await umbraCloudFetch<{
+      ok:true;
+      items:StudioTrainingItem[];
+      assignments:StudioTrainingAssignment[];
+    }>("/api/training");
+
+    setTrainingItems(data.items??[]);
+    setTrainingAssignments(data.assignments??[]);
+  }catch(f){
+    setTrainingError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be loaded."
+    );
+  }finally{
+    setTrainingBusy(false);
+  }
+}
+
+function toggleTrainingMember(userId:string){
+  setTrainingSelectedMembers(current=>
+    current.includes(userId)
+      ?current.filter(id=>id!==userId)
+      :[...current,userId]
+  );
+}
+
+async function createTraining(){
+  const title=trainingTitle.trim();
+
+  if(!title){
+    setTrainingError("Training title is required.");
+    return;
+  }
+
+  if(!trainingSelectedMembers.length){
+    setTrainingError("Choose at least one team member.");
+    return;
+  }
+
+  if(!session?.user.id){
+    setTrainingError("Your Studio session is unavailable.");
+    return;
+  }
+
+  if(trainingVideoFile&&trainingVideoFile.size>20*1024*1024){
+    setTrainingError("Training videos must be 20 MB or smaller.");
+    return;
+  }
+
+  if(trainingResourceFile&&trainingResourceFile.size>20*1024*1024){
+    setTrainingError("Training resources must be 20 MB or smaller.");
+    return;
+  }
+
+  setTrainingBusy(true);
+  setTrainingError("");
+  setTrainingMessage("");
+
+  try{
+    let videoUrl:string|null=null;
+    let resourceUrl:string|null=null;
+    let resourceName:string|null=null;
+
+    if(trainingVideoFile){
+      const uploaded=await uploadUmbraCloudMedia(
+        trainingVideoFile,
+        `training/videos/${session.user.id}`,
+        session.user.id
+      );
+
+      videoUrl=uploaded.url;
+    }
+
+    if(trainingResourceFile){
+      const uploaded=await uploadUmbraCloudMedia(
+        trainingResourceFile,
+        `training/resources/${session.user.id}`,
+        session.user.id
+      );
+
+      resourceUrl=uploaded.url;
+      resourceName=trainingResourceFile.name;
+    }
+
+    const created=await umbraCloudFetch<{
+      ok:true;
+      id:string;
+    }>("/api/training",{
+      method:"POST",
+      body:JSON.stringify({
+        title,
+        description:trainingDescription.trim()||null,
+        video_url:videoUrl,
+        resource_url:resourceUrl,
+        resource_name:resourceName
+      })
+    });
+
+    await umbraCloudFetch(
+      `/api/training/${encodeURIComponent(created.id)}/assign`,
+      {
+        method:"POST",
+        body:JSON.stringify({
+          assigned_to:trainingSelectedMembers
+        })
+      }
+    );
+
+    setTrainingTitle("");
+    setTrainingDescription("");
+    setTrainingVideoFile(null);
+    setTrainingResourceFile(null);
+    setTrainingSelectedMembers([]);
+
+    await loadAdminTraining();
+
+    setTrainingMessage("Training created and assigned.");
+  }catch(f){
+    setTrainingError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be created."
+    );
+  }finally{
+    setTrainingBusy(false);
+  }
+}
+
+async function deleteTraining(
+  trainingId:string,
+  title:string
+){
+  if(!confirm(
+    `Delete training "${title}" and its assigned progress records?`
+  ))return;
+
+  setTrainingBusy(true);
+  setTrainingError("");
+  setTrainingMessage("");
+
+  try{
+    await umbraCloudFetch(
+      `/api/training/${encodeURIComponent(trainingId)}`,
+      {method:"DELETE"}
+    );
+
+    await loadAdminTraining();
+
+    setTrainingMessage("Training deleted.");
+  }catch(f){
+    setTrainingError(
+      f instanceof Error
+        ?f.message
+        :"Training could not be deleted."
+    );
+  }finally{
+    setTrainingBusy(false);
+  }
+}
+
+async function updateMyTrainingStatus(
+  assignmentId:string,
+  status:MyTrainingAssignment["status"]
+){
+  setMyProfileError("");
+  setMyProfileMessage("");
+
+  try{
+    await umbraCloudFetch(
+      `/api/me/training/${encodeURIComponent(assignmentId)}`,
+      {
+        method:"PATCH",
+        body:JSON.stringify({status})
+      }
+    );
+
+    await loadMyTraining();
+
+    setMyProfileMessage(
+      status==="completed"
+        ?"Training marked complete."
+        :"Training progress updated."
+    );
+  }catch(f){
+    setMyProfileError(
+      f instanceof Error
+        ?f.message
+        :"Training progress could not be updated."
+    );
+  }
+}
+
 async function setMemberDisplayName(userId:string,name:string){try{await umbraCloudFetch(`/api/collaborators/${encodeURIComponent(userId)}`,{method:"PATCH",body:JSON.stringify({display_name:name.trim()})});await loadAdminCenter();}catch(f){setAdminError(f instanceof Error?f.message:"Display name could not be saved.");}}
 async function changeCanonStatus(recordId:string,status:string){try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/canon`,{method:"PATCH",body:JSON.stringify({status,reason:canonReason.trim()||null})});setCanonReason("");await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Canon status could not be changed.");}}
 async function toggleRecordPublic(recordId:string,value:boolean){const record=databaseRecords.find(r=>r.id===recordId);if(!record)return;if(value&&record.workflow_status!=="published"){setDatabaseError("Publish the editorial workflow first, then enable encyclopedia visibility.");return;}if(value&&!['draft_canon','canon'].includes(record.canon_status||'concept')){setDatabaseError("Only Draft Canon or Canon records can be exposed to the encyclopedia.");return;}const slug=(record.public_slug||record.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+record.record_code.toLowerCase()).slice(0,120);try{await umbraCloudFetch(`/api/world-database/records/${encodeURIComponent(recordId)}/public`,{method:"PATCH",body:JSON.stringify({is_public:value,public_slug:slug})});await loadWorldDatabase();}catch(f){setDatabaseError(f instanceof Error?f.message:"Public visibility could not be changed.");}}
@@ -941,6 +4355,7 @@ function openCharacterProfile(saved: StudioCharacterRow, _from: "characters" | "
 setSelectedCharacter(saved);
 setPage("profile");
 void loadConnectedRelationships(saved.id);
+void loadV9Production();
 void loadWorldRecords();
 window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1178,7 +4593,8 @@ function downloadCharacterProfile(saved:StudioCharacterRow){
  const sections:[string,Record<string,any>|null][]=[["Identity",saved.identity],["Appearance",saved.appearance],["Origin & Lore",saved.origin_lore],["Abilities & Combat",saved.abilities],["Written Relationships",saved.relationships],["Production & Media",saved.media]];
  const rows=(data:Record<string,any>|null)=>Object.entries(data||{}).filter(([,v])=>Array.isArray(v)?v.length:String(v??"").trim()).map(([k,v])=>`<div class="row"><b>${esc(k.replace(/([A-Z])/g," $1").replace(/^./,c=>c.toUpperCase()))}</b><div>${esc(Array.isArray(v)?v.join("\n"):v).replace(/\n/g,"<br>")}</div></div>`).join("");
  const portrait=saved.portrait_url||saved.media?.portraitUrl||"";
- const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(saved.name)} — Umbra Studio</title><style>body{font-family:Georgia,serif;background:#0a0710;color:#eadfec;max-width:980px;margin:auto;padding:48px}h1,h2{color:#efd37d}header{display:grid;grid-template-columns:${portrait?"220px 1fr":"1fr"};gap:28px;align-items:center;margin-bottom:34px}img{width:220px;height:290px;object-fit:cover;border-radius:18px}.section{border:1px solid #3a2140;border-radius:18px;padding:22px;margin:18px 0;background:#120b16}.row{display:grid;grid-template-columns:210px 1fr;gap:18px;padding:10px 0;border-bottom:1px solid #29172e}.row:last-child{border:0}.row b{color:#c67bd3}small{color:#a58ca8}@media print{body{background:white;color:#222}.section{background:white;border-color:#ddd}h1,h2{color:#6a3b74}}</style></head><body><header>${portrait?`<img src="${esc(portrait)}" alt="${esc(saved.name)} portrait">`:""}<div><small>UMBRA STUDIO CHARACTER DOSSIER</small><h1>${esc(saved.name)}</h1><p>${esc(saved.identity?.summary||"")}</p></div></header>${sections.map(([title,data])=>`<section class="section"><h2>${title}</h2>${rows(data)}</section>`).join("")}<small>Exported from Umbra Studio • ${new Date().toLocaleString()}</small></body></html>`;
+ const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(saved.name)} — Umbra Studio</title><style>body{font-family:Georgia,serif;background:#0a0710;color:#eadfec;max-width:980px;margin:auto;padding:48px}h1,h2{color:#efd37d}header{display:grid;grid-template-columns:${portrait?"220px 1fr":"1fr"};gap:28px;align-items:center;margin-bottom:34px}img{width:220px;height:290px;object-fit:cover;border-radius:18px}.section{border:1px solid #3a2140;border-radius:18px;padding:22px;margin:18px 0;background:#120b16}.row{display:grid;grid-template-columns:210px 1fr;gap:18px;padding:10px 0;border-bottom:1px solid #29172e}.row:last-child{border:0}.row b{color:#c67bd3}small{color:#a58ca8}@media print{body{background:white;color:#222}.section{background:white;border-color:#ddd}h1,h2{color:#6a3b74}}
+</style></head><body><header>${portrait?`<img src="${esc(portrait)}" alt="${esc(saved.name)} portrait">`:""}<div><small>UMBRA STUDIO CHARACTER DOSSIER</small><h1>${esc(saved.name)}</h1><p>${esc(saved.identity?.summary||"")}</p></div></header>${sections.map(([title,data])=>`<section class="section"><h2>${title}</h2>${rows(data)}</section>`).join("")}<small>Exported from Umbra Studio • ${new Date().toLocaleString()}</small></body></html>`;
  const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${saved.name.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")||"character"}-Umbra-Profile.html`;a.click();URL.revokeObjectURL(url);
 }
 
@@ -1670,6 +5086,7 @@ const StudioTopNav = () => (
         <button onClick={()=>void openMessages()}>Messages{studioNotifications.filter(x=>!x.is_read).length>0?<b>{studioNotifications.filter(x=>!x.is_read).length}</b>:null}</button>
         <button onClick={()=>void openAdminCenter()}>Admin</button>
         <button onClick={()=>void openStudioSettings()}>Settings</button>
+        <button onClick={()=>void openMyProfile()}>My Profile</button>
         <button type="button" onClick={()=>void handleSignOut()}>Sign Out</button>
       </div>
     </header>
@@ -2104,7 +5521,8 @@ return (
         .my-characters-grid { grid-template-columns: 1fr; }
         .saved-character-actions { grid-template-columns: 1fr; }
       }
-    `}</style>
+    `}
+</style>
     <StudioTopNav />
 
     <section className="dashboard-content">
@@ -2253,7 +5671,8 @@ return (
       .library-results{margin-top:14px;color:#9f8ba2;font-size:13px}
       @media(max-width:900px){.library-controls{grid-template-columns:1fr 1fr}}
       @media(max-width:700px){.library-grid{grid-template-columns:1fr}.library-controls{grid-template-columns:1fr}}
-    `}</style>
+    `}
+</style>
     <StudioTopNav />
     <section className="dashboard-content">
       <div className="character-workspace-head">
@@ -2358,7 +5777,8 @@ return (
   <main className="dashboard-shell codex-page">
     <style>{`
       .world-layout{width:min(1240px,calc(100% - 48px));margin:0 auto;padding:52px 0 100px}.world-toolbar{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin:28px 0}.world-toolbar input,.world-toolbar select,.world-form input,.world-form select,.world-form textarea,.codex-editor input,.codex-editor textarea,.codex-editor select{width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.24);background:#110914;color:#e8dfea}.world-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}.world-card{padding:0;overflow:hidden;text-align:left;border:1px solid rgba(185,92,209,.22);border-radius:20px;background:linear-gradient(180deg,rgba(30,13,33,.96),rgba(10,6,14,.98));color:#ddd}.world-card-cover{height:130px;background:radial-gradient(circle,rgba(105,35,119,.3),#09060c);position:relative;overflow:hidden}.world-card-cover img{width:100%;height:100%;object-fit:cover}.world-card-emblem{position:absolute;left:16px;bottom:12px;width:54px;height:54px;border-radius:14px;object-fit:cover;border:1px solid rgba(232,201,111,.45);background:#0d0811}.world-card-body{padding:20px}.world-card h3{font-family:Georgia,serif;color:#f0d481;font-size:25px;margin:8px 0}.world-card p{color:#a991ad;line-height:1.6;min-height:50px}.world-type{color:#b96ac6;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.world-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.world-form{margin:34px 0;padding:24px;border:1px solid rgba(232,201,111,.2);border-radius:22px;background:rgba(18,8,21,.7)}.world-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.world-form textarea{grid-column:1/-1}.codex-hero{position:relative;min-height:360px;border-radius:28px;overflow:hidden;border:1px solid rgba(232,201,111,.25);margin-bottom:26px;background:radial-gradient(circle at 70% 20%,rgba(102,37,112,.4),#0a0710 70%)}.codex-hero-bg{position:absolute;inset:0}.codex-hero-bg img{width:100%;height:100%;object-fit:cover;opacity:.45}.codex-hero-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,5,10,.96),rgba(7,5,10,.5)),linear-gradient(0deg,rgba(7,5,10,.9),transparent 70%)}.codex-hero-content{position:relative;z-index:2;min-height:300px;padding:34px;display:flex;align-items:flex-end;gap:24px}.codex-emblem{width:120px;height:120px;border-radius:22px;border:1px solid rgba(232,201,111,.45);background:#0d0811;display:grid;place-items:center;overflow:hidden;color:#e5bd57;font-size:44px;flex:0 0 auto}.codex-emblem img{width:100%;height:100%;object-fit:cover}.codex-title h2{font-family:Georgia,serif;color:#f0d481;font-size:clamp(38px,6vw,64px);margin:5px 0}.codex-title p{max-width:760px;color:#c0afc2;line-height:1.7}.codex-editor{padding:26px;border:1px solid rgba(185,92,209,.18);border-radius:22px;background:rgba(16,9,20,.8);margin-bottom:26px}.codex-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.codex-editor-grid textarea{grid-column:1/-1}.codex-media-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}.codex-upload{padding:16px;border:1px dashed rgba(185,92,209,.3);border-radius:16px}.codex-upload strong{display:block;color:#e8c96f;margin-bottom:8px}.codex-section{padding:28px 0;border-top:1px solid rgba(185,92,209,.14)}.codex-section h3{font-family:Georgia,serif;color:#edd080;font-size:28px;margin:0 0 16px}.codex-lore-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.codex-lore-card{padding:20px;border:1px solid rgba(185,92,209,.16);border-radius:17px;background:rgba(20,9,23,.55)}.codex-lore-card strong{display:block;color:#b96ac6;font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}.codex-lore-card p{white-space:pre-wrap;color:#c5b5c7;line-height:1.75;margin:0}.world-character-strip,.related-codex-grid{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}.world-character-chip,.related-codex-card{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid rgba(185,92,209,.22);border-radius:14px;background:#0d0811;color:#ddd;cursor:pointer}.world-character-chip img,.related-codex-card img{width:46px;height:46px;border-radius:10px;object-fit:cover}.related-codex-card div{text-align:left}.related-codex-card small{display:block;color:#a978b0;text-transform:uppercase;font-size:9px;letter-spacing:.1em}.relation-builder{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-top:18px}.related-remove{margin-left:6px;color:#d79aa7}.codex-profile-links{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0 4px}.codex-profile-link{padding:7px 11px;border-radius:999px;border:1px solid rgba(232,201,111,.28);background:rgba(22,10,25,.72);color:#e7cc78;cursor:pointer}@media(max-width:700px){.world-layout{width:min(100% - 28px,1240px)}.world-toolbar,.world-form-grid,.codex-editor-grid,.codex-media-row,.codex-lore-grid,.relation-builder{grid-template-columns:1fr}.codex-hero-content{flex-direction:column;align-items:flex-start}.codex-emblem{width:90px;height:90px}}
-    `}</style>
+    `}
+</style>
     <StudioTopNav />
     <section className="world-layout">
       <div className="welcome-section"><p className="eyebrow">CONNECTED WORLD WORKSPACE</p><h1>World & Codex</h1><p>Build the peoples, bloodlines, factions, realms, places, artifacts, creatures, magic, history, and lore that shape your universe.</p><div className="v104-world-switcher"><button type="button" onClick={()=>{setSelectedWorldRecord(null);void loadWorldRecords()}}>Codex</button><button type="button" onClick={()=>void openWorldExplorer("locations")}>Places & Map</button><button type="button" onClick={()=>void openWorldExplorer("timeline")}>Timeline</button><button type="button" onClick={()=>void openWorldDatabase("records")}>Artifacts & Lore</button><button type="button" onClick={()=>void openWorldDatabase("canon")}>Canon</button></div></div>
@@ -2433,7 +5853,8 @@ const LinkNode=({link}:{link:CharacterRelationship})=>link.target?<button type="
 return <main className="dashboard-shell connections-page">
 <style>{`
 .connections-page{min-height:100vh;background:#07050a;color:#eee}.connections-content{width:min(1500px,calc(100% - 30px));margin:0 auto;padding:42px 0 100px}.connections-heading{text-align:center;max-width:900px;margin:0 auto 18px}.connections-heading h1{font-family:Georgia,serif;color:#f0d481;font-size:clamp(42px,6vw,68px);margin:8px 0}.connections-heading p{color:#aa94ae;line-height:1.6}.connection-character-picker{display:flex;gap:10px;justify-content:center;margin:18px auto 0;max-width:720px}.connection-character-picker input,.connection-character-picker select{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid rgba(185,92,209,.28);background:#100914;color:#eadfec}.connection-tabs,.tree-toolbar{display:flex;justify-content:center;gap:9px;flex-wrap:wrap;margin:18px 0}.connection-tab,.tree-tool{padding:10px 15px;border-radius:999px;border:1px solid rgba(185,92,209,.24);background:#120914;color:#bbaabd}.connection-tab.active,.tree-tool.active{border-color:rgba(232,201,111,.55);color:#f0d481}.tree-tool.danger{border-color:rgba(202,75,86,.38);color:#e99}.tree-canvas-shell{border:1px solid rgba(185,92,209,.2);border-radius:28px;overflow:auto;background:radial-gradient(circle at 50% 35%,rgba(65,24,72,.2),rgba(8,5,11,.96));padding:18px}.tree-canvas{position:relative;width:1400px;height:820px;min-width:1400px}.tree-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.tree-line{stroke:rgba(224,190,111,.72);stroke-width:2;fill:none}.tree-line.partner{stroke:#b96ac6;stroke-dasharray:8 5}.tree-card{position:absolute;width:154px;transform:translate3d(0,0,0);padding:9px 8px 12px;border:1px solid rgba(185,92,209,.22);border-radius:18px;background:rgba(15,8,19,.96);color:#eee;text-align:center;user-select:none;touch-action:none;box-shadow:0 10px 28px rgba(0,0,0,.24)}.tree-card.unlocked{cursor:grab}.tree-card.dragging{cursor:grabbing;z-index:20;box-shadow:0 16px 40px rgba(0,0,0,.5)}.tree-card.selected{border-color:#f0d481;box-shadow:0 0 0 3px rgba(232,201,111,.12)}.tree-card.hidden-card{opacity:.38}.tree-portrait{width:92px;height:92px;margin:0 auto 7px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:32px}.tree-portrait img{width:100%;height:100%;object-fit:cover}.tree-card strong{display:block;color:#ead7ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tree-card small{display:block;color:#b66ec3;text-transform:uppercase;font-size:9px;letter-spacing:.08em;margin-top:3px}.tree-card-actions{display:flex;gap:4px;justify-content:center;margin-top:7px}.tree-card-actions button{padding:4px 7px;border-radius:7px;border:1px solid rgba(185,92,209,.22);background:#0c0710;color:#bfaec2;font-size:9px}.all-connections-map{display:flex;flex-wrap:wrap;gap:22px;justify-content:center;padding:38px;border:1px solid rgba(185,92,209,.18);border-radius:24px}.gene-node{width:150px;padding:0 0 11px;border:0;background:transparent;color:#eee;text-align:center;cursor:pointer}.gene-image{width:118px;height:118px;margin:0 auto 8px;border-radius:50%;overflow:hidden;background:#140b18;border:3px solid rgba(232,201,111,.34);display:grid;place-items:center;color:#e5bd57;font-size:38px}.gene-image img{width:100%;height:100%;object-fit:cover}.gene-node strong{display:block}.gene-node small{color:#b66ec3}.connections-empty{text-align:center;padding:50px;color:#aa94ae}.connections-hint{text-align:center;color:#8e7b91;font-size:12px;margin-top:18px}@media(max-width:700px){.connections-content{width:calc(100% - 14px)}.connection-character-picker{flex-direction:column}}
-`}</style>
+`}
+</style>
 <header className="studio-header"><div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div><div className="account-area"><button type="button" className="sign-out-button" onClick={()=>void goBackConnectionCenter()}>← Back</button></div></header>
 <section className="connections-content"><div className="connections-heading"><p className="eyebrow">BONDS OF THE UMBRAL WORLD</p><h1>{connectionView==="family"?"Family Tree":"Relationship Map"}</h1><p>Canon relationships stay intact while you arrange the tree exactly how you want it.</p><div className="connection-character-picker"><input value={connectionCharacterSearch} onChange={e=>setConnectionCharacterSearch(e.target.value)} placeholder="Search any character..."/><select value={connectionCenter.id} onChange={e=>{const target=studioCharacters.find(x=>x.id===e.target.value);if(target){void moveConnectionCenter(target);setTimeout(()=>void loadTreeLayout(),0)}}}><option value={connectionCenter.id}>{connectionCenter.name}</option>{studioCharacters.filter(x=>x.id!==connectionCenter.id&&(!connectionCharacterSearch.trim()||x.name.toLowerCase().includes(connectionCharacterSearch.toLowerCase()))).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div></div>
 <div className="connection-tabs"><button type="button" className={`connection-tab ${connectionView==="family"?"active":""}`} onClick={()=>{setConnectionView("family");setTimeout(()=>void loadTreeLayout(),0)}}>Family Tree</button><button type="button" className={`connection-tab ${connectionView==="all"?"active":""}`} onClick={()=>setConnectionView("all")}>All Connections</button></div>
@@ -2447,6 +5868,387 @@ return <main className="dashboard-shell connections-page">
 <p className="connections-hint">Unlock Layout to drag cards. Lock protects individual positions. Hide only changes this tree view; it never deletes a character or canon relationship.</p></section></main>;
 }
 
+if (page === "my-profile") {
+const profileName=myProfileDisplayName||myProfileEmail||session?.user.email||"Studio Member";
+const myAssignments=studioAssignments.filter(assignment=>assignment.assigned_to===session?.user.id);
+
+return (
+<main className="dashboard-shell my-profile-page">
+  <StudioTopNav />
+
+  <section className="admin-center-shell">
+    <div className="admin-center-hero">
+      <div>
+        <p className="eyebrow">UMBRA STUDIO TEAM</p>
+        <h1>My Profile</h1>
+        <p>Your Studio identity, private workspace, assignments, training, and account security.</p>
+      </div>
+
+      <button
+        className="secondary-action"
+        disabled={myProfileBusy}
+        onClick={()=>void Promise.all([loadMyProfile(),loadV9Production(),loadMyTraining()])}
+      >
+        {myProfileBusy?"Refreshing...":"Refresh"}
+      </button>
+    </div>
+
+    {myProfileError&&<p className="login-error">{myProfileError}</p>}
+    {myProfileMessage&&<p className="my-profile-success">{myProfileMessage}</p>}
+
+    <div className="admin-overview-grid">
+
+      <section className="admin-panel my-profile-main-card">
+        <span className="card-label">PROFILE</span>
+
+        <div className="my-profile-identity">
+          <div className="my-profile-avatar">
+            {myProfile?.profile_image_url
+              ?<img src={myProfile.profile_image_url} alt={`${profileName} profile`}/>
+              :<span>☾</span>}
+          </div>
+
+          <div className="my-profile-identity-copy">
+            <h2>{profileName}</h2>
+            <p>{myProfileEmail||session?.user.email||"No email available"}</p>
+            <span className="admin-role-pill">
+              {(myProfileRole||studioAccessRole||"member").replace(/_/g," ")}
+            </span>
+          </div>
+        </div>
+
+        <div className="my-profile-photo-actions">
+          <label className="secondary-action my-profile-file-button">
+            {myProfileImageBusy?"Uploading...":"Change Photo"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={myProfileImageBusy}
+              onChange={e=>{
+                const file=e.target.files?.[0];
+                if(file)void uploadMyProfileImage(file);
+                e.currentTarget.value="";
+              }}
+            />
+          </label>
+
+          {myProfile?.profile_image_url&&
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={myProfileImageBusy}
+              onClick={()=>void removeMyProfileImage()}
+            >
+              Remove Photo
+            </button>
+          }
+        </div>
+
+        <p className="admin-help">
+          Profile pictures are stored in Umbra Studio Cloud. Images may be up to 15 MB.
+        </p>
+      </section>
+
+      <section className="admin-panel">
+        <span className="card-label">IDENTITY</span>
+        <h2>Account Information</h2>
+
+        <div className="my-profile-form">
+          <label>
+            <span>Display Name</span>
+            <input
+              type="text"
+              value={myProfileDisplayName}
+              onChange={e=>setMyProfileDisplayName(e.target.value)}
+              placeholder="Your Studio display name"
+            />
+          </label>
+
+          <button
+            type="button"
+            className="primary-action"
+            disabled={myProfileBusy||!myProfileDisplayName.trim()}
+            onClick={()=>void saveMyProfileDisplayName()}
+          >
+            {myProfileBusy?"Saving...":"Save Display Name"}
+          </button>
+
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              value={myProfileEmail||session?.user.email||""}
+              readOnly
+            />
+          </label>
+
+          <label>
+            <span>Studio Role</span>
+            <input
+              type="text"
+              value={(myProfileRole||studioAccessRole||"member").replace(/_/g," ")}
+              readOnly
+            />
+          </label>
+        </div>
+
+        <p className="admin-help">
+          Email and Studio role are managed through the existing Umbra Studio team system.
+        </p>
+      </section>
+
+      <section className="admin-panel">
+        <span className="card-label">PRIVATE</span>
+        <h2>Personal Notes</h2>
+
+        <p className="admin-help">
+          This is your private Studio workspace. These notes are separate from Admin Center team notes.
+        </p>
+
+        <textarea
+          value={myProfileNotes}
+          onChange={e=>setMyProfileNotes(e.target.value)}
+          placeholder="Write private Studio notes for yourself..."
+          rows={8}
+        />
+
+        <button
+          type="button"
+          className="primary-action"
+          disabled={myProfileBusy}
+          onClick={()=>void saveMyProfile()}
+        >
+          {myProfileBusy?"Saving...":"Save Notes"}
+        </button>
+      </section>
+
+      <section className="admin-panel my-profile-work-card">
+        <span className="card-label">WORK</span>
+        <h2>Training & Assignments</h2>
+
+        <p className="admin-help">
+          Your existing Umbra Studio assignments appear here. Training will use this same profile workspace.
+        </p>
+
+        <div className="my-profile-training">
+  <div className="training-section-heading">
+    <div>
+      <span className="card-label">TRAINING</span>
+      <h3>Assigned Training</h3>
+    </div>
+
+    <small>
+      {myTraining.filter(item=>item.status==="completed").length}
+      /{myTraining.length} completed
+    </small>
+  </div>
+
+  {myTraining.length===0&&
+    <div className="my-profile-empty">
+      <strong>No training assigned yet.</strong>
+      <span>
+        Training assigned by a Studio administrator will appear here.
+      </span>
+    </div>
+  }
+
+  <div className="my-training-list">
+    {myTraining.map(training=>
+      <article
+        className="my-training-card"
+        key={training.assignment_id}
+      >
+        <div className="my-training-heading">
+          <div>
+            <span className={`training-status ${training.status}`}>
+              {training.status.replace(/_/g," ")}
+            </span>
+
+            <h3>{training.title}</h3>
+          </div>
+
+          <select
+            value={training.status}
+            onChange={e=>
+              void updateMyTrainingStatus(
+                training.assignment_id,
+                e.target.value as MyTrainingAssignment["status"]
+              )
+            }
+          >
+            <option value="not_started">Not Started</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+
+        {training.description&&<p>{training.description}</p>}
+
+        {training.video_url&&
+          <div className="my-training-video">
+            <video controls preload="metadata">
+              <source src={training.video_url}/>
+              Your device could not play this training video.
+            </video>
+          </div>
+        }
+
+        <div className="training-resource-links">
+          {training.video_url&&
+            <a
+              href={training.video_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open Video
+            </a>
+          }
+
+          {training.resource_url&&
+            <a
+              href={training.resource_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {training.resource_name||"Open Training Resource"}
+            </a>
+          }
+        </div>
+
+        <small className="training-assigned-date">
+          Assigned {new Date(training.assigned_at).toLocaleString()}
+
+          {training.completed_at
+            ?` • Completed ${new Date(
+                training.completed_at
+              ).toLocaleString()}`
+            :""}
+        </small>
+      </article>
+    )}
+  </div>
+</div>
+
+<div className="my-profile-assignment-section">
+  <div className="training-section-heading">
+    <div>
+      <span className="card-label">ASSIGNMENTS</span>
+      <h3>Work Assignments</h3>
+    </div>
+
+    <small>
+      {myAssignments.length} assignment{myAssignments.length===1?"":"s"}
+    </small>
+  </div>
+<div className="my-profile-assignments">
+          {myAssignments.length===0&&
+            <div className="my-profile-empty">
+              <strong>No assignments yet.</strong>
+              <span>Studio work assigned to you will appear here.</span>
+            </div>
+          }
+
+          {myAssignments.map(assignment=>
+            <article className="my-profile-assignment" key={assignment.id}>
+              <div className="my-profile-assignment-heading">
+                <div>
+                  <h3>{assignment.title}</h3>
+                  {assignment.description&&<p>{assignment.description}</p>}
+                </div>
+
+                <span className={`my-profile-priority priority-${assignment.priority}`}>
+                  {assignment.priority||"normal"}
+                </span>
+              </div>
+
+              <div className="my-profile-assignment-meta">
+                {assignment.entity_type&&
+                  <span>Type: {assignment.entity_type.replace(/_/g," ")}</span>
+                }
+
+                {assignment.due_at&&
+                  <span>Due: {new Date(assignment.due_at).toLocaleDateString()}</span>
+                }
+              </div>
+
+              <label className="my-profile-assignment-status">
+                <span>Status</span>
+                <select
+                  value={assignment.status}
+                  onChange={e=>void updateProductionStatus(
+                    "studio_assignments",
+                    assignment.id,
+                    e.target.value
+                  )}
+                >
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="review">Review</option>
+                  <option value="done">Done</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+            </article>
+          )}
+        </div>
+      </div>
+      </section>
+
+<section className="admin-panel my-profile-security-card">
+        <span className="card-label">SECURITY</span>
+        <h2>Change Password</h2>
+
+        <p className="admin-help">
+          Changing your password requires your current password and does not alter your Studio role or account.
+        </p>
+
+        <div className="my-profile-form">
+          <label>
+            <span>Current Password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={myProfilePasswordCurrent}
+              onChange={e=>setMyProfilePasswordCurrent(e.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>New Password</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={myProfilePasswordNew}
+              onChange={e=>setMyProfilePasswordNew(e.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>Confirm New Password</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={myProfilePasswordConfirm}
+              onChange={e=>setMyProfilePasswordConfirm(e.target.value)}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="primary-action"
+            disabled={myProfilePasswordBusy}
+            onClick={()=>void changeMyProfilePassword()}
+          >
+            {myProfilePasswordBusy?"Changing Password...":"Change Password"}
+          </button>
+        </div>
+      </section>
+
+    </div>
+  </section>
+</main>
+);
+}
 if (page === "profile" && selectedCharacter) {
 const saved = selectedCharacter;
 const identity = saved.identity ?? {};
@@ -2462,6 +6264,24 @@ const mediaItems = [
   { label: "Alternate / True Form", url: media.alternateFormUrl || "" },
 ].filter((item) => item.url);
 const galleryImages = Array.isArray(media.galleryUrls) ? media.galleryUrls : [];
+const storyAppearances = storyLinks
+  .filter(link=>link.linked_entity_type==="character"&&link.linked_entity_id===saved.id&&["story_chapter","story_scene"].includes(link.story_entity_type))
+  .map(link=>{
+    const chapter=link.story_entity_type==="story_chapter"?storyChapters.find(x=>x.id===link.story_entity_id):null;
+    const scene=link.story_entity_type==="story_scene"?storyScenes.find(x=>x.id===link.story_entity_id):null;
+    const chapterForScene=scene?.chapter_id?storyChapters.find(x=>x.id===scene.chapter_id):null;
+    const projectId=chapter?.project_id||scene?.project_id||chapterForScene?.project_id||null;
+    const arcId=chapter?.arc_id||scene?.arc_id||chapterForScene?.arc_id||null;
+    return {
+      key:link.id,
+      type:chapter?(chapter.chapter_type==="episode"?"Episode":"Chapter"):"Scene",
+      title:chapter?.title||scene?.title||"Story record",
+      relation:(link.relation_label||"appears").replace(/_/g," "),
+      project:storyProjects.find(x=>x.id===projectId)?.title||"",
+      arc:storyArcs.find(x=>x.id===arcId)?.title||"",
+    };
+  })
+  .filter((row,index,all)=>all.findIndex(x=>x.type===row.type&&x.title===row.title&&x.relation===row.relation)===index);
 const displayProfileValue = (value: unknown): string => {
   if (Array.isArray(value)) {
     return value
@@ -2519,7 +6339,8 @@ return (
       .profile-media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}.profile-media-card{overflow:hidden;border-radius:18px;border:1px solid rgba(185,92,209,.18);background:#100914}.profile-media-card img{width:100%;height:300px;object-fit:cover;display:block}.profile-media-card span{display:block;padding:13px 15px;color:#d8c0db;font-weight:700}.profile-gallery-link{margin-top:18px;display:inline-block;color:#e8c96f;word-break:break-all}.profile-media-notes{margin-top:20px;color:#bbaabd;line-height:1.75;white-space:pre-wrap;}
       .library-profile-button{width:100%;margin-top:20px}.saved-character-actions{flex-wrap:wrap}.saved-character-actions .secondary-action{flex:1;min-width:120px}
       @media(max-width:760px){.profile-hero-content{grid-template-columns:1fr;padding-top:40px}.profile-portrait{height:min(70vh,650px);min-height:0;max-width:100%}.profile-detail-grid{grid-template-columns:1fr}.profile-content,.profile-hero-content{width:min(100% - 28px,1180px)}}
-    `}</style>
+    `}
+</style>
     <header className="studio-header">
       <div className="brand"><div className="brand-moon">☾</div><div><p className="header-eyebrow">UMBRA CONNECT</p><h2>Umbra Studio</h2></div></div>
       <div className="account-area"><button type="button" className="sign-out-button" onClick={goBack}>← Back</button></div>
@@ -2553,6 +6374,7 @@ return (
       {connectedRelationships.length > 0 && <section className="profile-section"><div className="profile-section-title"><span>♙</span><h2>Character Connections</h2></div><div className="profile-media-grid">{connectedRelationships.map((link) => { const target=link.target; if(!target) return null; const image=target.portrait_url || target.media?.portraitUrl || ""; return <button type="button" className="profile-media-card" style={{textAlign:"left",cursor:"pointer",color:"inherit"}} key={link.id} onClick={() => void openConnectedCharacterProfile(target)}>{image ? <img src={image} alt={`${target.name} portrait`} /> : <div style={{height:300,display:"grid",placeItems:"center",fontSize:64,color:"#e5bd57"}}>☾</div>}<span style={{textTransform:"capitalize"}}>{target.name} • {link.relationship_type}</span></button>})}</div></section>}
       <ProfileSection title="Written Relationships" symbol="♙" items={relationshipItems} />
       <ProfileSection title="Production & Canon Control" symbol="✧" items={productionItems} />
+      <section className="profile-section"><div className="profile-section-title"><span>⌘</span><h2>Story Appearances</h2></div>{storyAppearances.length>0?<div className="profile-media-grid">{storyAppearances.map(item=><article className="profile-media-card" key={item.key} style={{textAlign:"left"}}><span style={{textTransform:"capitalize"}}>{item.type} • {item.relation}</span><strong>{item.title}</strong><small>{[item.project,item.arc].filter(Boolean).join(" → ")||"Story Production"}</small></article>)}</div>:<p className="profile-media-notes">No recognized chapter or scene appearances yet.</p>}</section>
       {(mediaItems.length > 0 || galleryImages.length > 0 || media.galleryUrl || media.mediaNotes) && <section className="profile-section"><div className="profile-section-title"><span>▣</span><h2>Media & References</h2></div>{(mediaItems.length > 0 || galleryImages.length > 0) && <div className="profile-media-grid">{mediaItems.map((item) => <a className="profile-media-card" href={item.url} target="_blank" rel="noreferrer" key={item.label}><img src={item.url} alt={`${saved.name} ${item.label}`} /><span>{item.label}</span></a>)}{galleryImages.map((url: string, index: number) => <a className="profile-media-card" href={url} target="_blank" rel="noreferrer" key={url}><img src={url} alt={`${saved.name} gallery ${index + 1}`} /><span>Gallery Image {index + 1}</span></a>)}</div>}{media.galleryUrl && <a className="profile-gallery-link" href={media.galleryUrl} target="_blank" rel="noreferrer">Open additional gallery / media →</a>}{media.mediaNotes && <p className="profile-media-notes">{media.mediaNotes}</p>}</section>}
     </div>
   </main>
@@ -2976,7 +6798,7 @@ const renderAbilitiesStep = () => (
 );
 
 const renderRelationshipsStep = () => (
-  <section className="creator-form-card">
+  <section className="creator-form-card relationships-form-card">
     <div className="form-section-heading">
       <span className="form-section-icon">✦</span>
       <div>
@@ -2986,13 +6808,28 @@ const renderRelationshipsStep = () => (
     </div>
 
     <style>{`
+      .relationships-form-card{overflow:visible!important}.relationships-form-card .connection-builder{overflow:visible!important}
       .connection-builder{padding:20px;border:1px solid rgba(229,189,87,.18);border-radius:18px;background:rgba(18,8,21,.5);margin-bottom:24px}
       .connection-builder h4{margin:0 0 6px;color:#f0d481;font-family:Georgia,serif;font-size:22px}.connection-builder>p{margin:0 0 16px;color:#9f8ba2}
       .connection-controls{display:grid;grid-template-columns:1fr 1fr auto;gap:10px}.connection-controls select{padding:12px;border-radius:10px;border:1px solid rgba(185,92,209,.25);background:#110914;color:#eee}
+      .relationship-search-wrap{position:relative;min-width:0}
+      .relationship-search-wrap input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid rgba(185,92,209,.25);background:#110914;color:#eee;outline:none}
+      .relationship-search-wrap input:focus{border-color:rgba(229,189,87,.55);box-shadow:0 0 0 2px rgba(229,189,87,.08)}
+      .relationship-search-wrap input::placeholder{color:#806f84}
+      .relationship-search-menu{position:absolute;z-index:1000;top:calc(100% + 8px);left:0;width:100%;box-sizing:border-box;max-height:220px;overflow-y:auto;padding:6px;background:#110914;border:1px solid rgba(229,189,87,.35);border-radius:12px;box-shadow:0 18px 45px rgba(0,0,0,.6);scrollbar-width:thin;scrollbar-color:#7b3b89 #160b19}
+      .relationship-search-menu::-webkit-scrollbar{width:9px}
+      .relationship-search-menu::-webkit-scrollbar-track{background:#160b19;border-radius:10px}
+      .relationship-search-menu::-webkit-scrollbar-thumb{background:#7b3b89;border-radius:10px;border:2px solid #160b19}
+      .relationship-search-menu::-webkit-scrollbar-thumb:hover{background:#a35ab4}
+      .relationship-search-option{display:block;width:100%;padding:11px 12px;border:0;border-radius:8px;background:transparent;color:#eee;text-align:left;cursor:pointer;font:inherit}
+      .relationship-search-option:hover,.relationship-search-option:focus{background:rgba(185,92,209,.16);color:#f0d481;outline:none}
+      .relationship-search-option strong{color:#ead180;font-weight:600}
+      .relationship-search-alias{color:#b68abe}
       .connection-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:16px}.connection-chip{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid rgba(185,92,209,.18);border-radius:14px;background:#0d0811}.connection-chip img,.connection-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1b0c20;display:grid;place-items:center;color:#e5bd57}.connection-chip-copy{flex:1}.connection-chip-copy strong{display:block;color:#ead180}.connection-chip-copy span{font-size:12px;color:#b68abe;text-transform:capitalize}.connection-remove{border:0;background:transparent;color:#c98b99;cursor:pointer;font-size:18px}
       .written-relations-title{grid-column:1/-1;margin:8px 0 0;color:#d7bddb;font-family:Georgia,serif;font-size:20px}
       @media(max-width:700px){.connection-controls{grid-template-columns:1fr}}
-    `}</style>
+    `}
+</style>
     <div className="connection-builder">
       <h4>Connected Characters</h4>
       <p>These direct links are the source of truth for the Family Tree. Reciprocal links are created automatically, but Written Relationship notes will never overwrite your manual corrections.</p>
@@ -3006,7 +6843,41 @@ const renderRelationshipsStep = () => (
           <optgroup label="Rank & Service"><option value="king">King / Ruler</option><option value="subject">Subject</option><option value="lord">Lord</option><option value="underling">Underling</option><option value="master">Master</option><option value="servant">Servant</option><option value="captain">Captain</option><option value="lieutenant">Lieutenant</option><option value="commander">Commander</option><option value="subordinate">Subordinate</option><option value="leader">Leader</option><option value="member">Member</option></optgroup>
           <optgroup label="Identity"><option value="same_person">Same Person</option><option value="alter_ego">Alter Ego / Persona</option><option value="true_identity">True Identity</option></optgroup>
         </select>
-        <div><input list="relationship-character-options" value={relationshipCharacterSearch} onChange={(e)=>{const value=e.target.value;setRelationshipCharacterSearch(value);const match=relationshipOptions.find(x=>x.name===value||`${x.name}${x.identity?.alias?` — ${x.identity.alias}`:""}`===value);setRelationshipTargetId(match?.id||"");}} placeholder="Search characters by name or alias..."/><datalist id="relationship-character-options">{relationshipOptions.filter(item=>!relationshipCharacterSearch.trim()||`${item.name} ${item.identity?.alias||""}`.toLowerCase().includes(relationshipCharacterSearch.toLowerCase())).map(item=><option key={item.id} value={`${item.name}${item.identity?.alias?` — ${item.identity.alias}`:""}`}/>)}</datalist></div>
+        <div className="relationship-search-wrap">
+          <input
+            value={relationshipCharacterSearch}
+            onFocus={() => setRelationshipSearchOpen(true)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setRelationshipCharacterSearch(value);
+              setRelationshipTargetId("");
+              setRelationshipSearchOpen(true);
+            }}
+            placeholder="Search characters by name or alias..."
+            autoComplete="off"
+          />
+          {relationshipSearchOpen && (
+            <div className="relationship-search-menu">
+              {relationshipOptions
+                .filter(item => !relationshipCharacterSearch.trim() || `${item.name} ${item.identity?.alias || ""}`.toLowerCase().includes(relationshipCharacterSearch.toLowerCase()))
+                .map(item => (
+                  <button
+                    type="button"
+                    className="relationship-search-option"
+                    key={item.id}
+                    onClick={() => {
+                      setRelationshipCharacterSearch(`${item.name}${item.identity?.alias ? ` — ${item.identity.alias}` : ""}`);
+                      setRelationshipTargetId(item.id);
+                      setRelationshipSearchOpen(false);
+                    }}
+                  >
+                    <strong>{item.name}</strong>
+                    {item.identity?.alias && <span className="relationship-search-alias"> — {item.identity.alias}</span>}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
         <button type="button" className="primary-action" disabled={!relationshipTargetId || relationshipBusy} onClick={() => void addConnectedRelationship()}>{relationshipBusy ? "Saving..." : "Connect"}</button>
       </div>
       <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:12,flexWrap:"wrap"}}>
@@ -3074,7 +6945,8 @@ const renderMediaStep = () => (
       .media-gallery-item button{position:absolute;right:8px;top:8px;border:0;border-radius:999px;background:rgba(8,5,12,.88);color:#fff;width:30px;height:30px;cursor:pointer}
       .upload-help{color:#9f8ba2;font-size:12px;line-height:1.6;margin-top:8px}
       @media(max-width:1050px){.media-upload-grid{grid-template-columns:1fr}.media-thumb{height:min(320px,42vw)}}
-    `}</style>
+    `}
+</style>
     <div className="form-section-heading">
       <span className="form-section-icon">✦</span>
       <div>
@@ -3331,7 +7203,64 @@ if(page==="messages"){
  const activeMember=others.find(m=>m.user_id===activeId);
  const thread=directMessages.filter(m=>activeId&&(m.sender_user_id===activeId||m.recipient_user_id===activeId));
  const unreadFrom=(id:string)=>directMessages.filter(m=>m.sender_user_id===id&&m.recipient_user_id===session?.user.id&&!m.read_at).length;
- return <main className="dashboard-shell studio-messages-page"><StudioTopNav /><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">PRIVATE STUDIO COMMUNICATION</p><h1>Studio Messages</h1><p>Direct conversations between authorized Umbra Studio collaborators. Notifications and review comments remain separate.</p></div><button className="secondary-action" onClick={()=>void loadDirectMessages()}>{messagesBusy?"Refreshing...":"Refresh"}</button></div>{messagesError&&<p className="login-error">{messagesError}</p>}<div className="v101-message-layout"><aside className="v101-conversations"><h3>Collaborators</h3>{others.map(m=><button key={m.user_id} className={activeId===m.user_id?"active":""} onClick={()=>{setMessageRecipientId(m.user_id);void markConversationRead(m.user_id)}}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><small>{m.role.replace(/_/g," ")}</small></div>{unreadFrom(m.user_id)>0&&<span>{unreadFrom(m.user_id)}</span>}</button>)}{others.length===0&&<p className="admin-empty">Add another Studio collaborator to begin messaging.</p>}</aside><section className="v101-thread"><div className="v101-thread-head"><div><span>CONVERSATION</span><h2>{activeMember?.display_name||activeMember?.email||"Choose a collaborator"}</h2></div></div><div className="v101-message-scroll">{thread.map(m=>{const mine=m.sender_user_id===session?.user.id;return <article key={m.id} className={mine?"mine":"theirs"}><p>{m.body}</p><small>{new Date(m.created_at).toLocaleString()}{mine?m.read_at?" • Read":" • Sent":""}</small></article>})}{activeId&&thread.length===0&&<p className="admin-empty">No messages yet. Start the conversation below.</p>}</div>{activeId&&<div className="v101-compose"><textarea placeholder={`Message ${activeMember?.display_name||activeMember?.email||"collaborator"}...`} value={messageBody} onChange={e=>setMessageBody(e.target.value)} maxLength={10000}/><button className="primary-action" disabled={!messageBody.trim()||messagesBusy} onClick={()=>void sendDirectMessage()}>Send Message</button></div>}</section></div></section></main>;
+ return <main className="dashboard-shell studio-messages-page"><StudioTopNav /><section className="v101-shell"><div className="production-v9-hero"><div><p className="eyebrow">PRIVATE STUDIO COMMUNICATION</p><h1>Studio Messages</h1><p>Direct conversations between authorized Umbra Studio collaborators. Notifications and review comments remain separate.</p></div><button className="secondary-action" onClick={()=>void loadDirectMessages()}>{messagesBusy?"Refreshing...":"Refresh"}</button></div>{messagesError&&<p className="login-error">{messagesError}</p>}<div className="v101-message-layout"><aside className="v101-conversations"><h3>Collaborators</h3>{others.map(m=><button key={m.user_id} className={activeId===m.user_id?"active":""} onClick={()=>{setMessageRecipientId(m.user_id);void markConversationRead(m.user_id)}}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><small>{m.role.replace(/_/g," ")}</small></div>{unreadFrom(m.user_id)>0&&<span>{unreadFrom(m.user_id)}</span>}</button>)}{others.length===0&&<p className="admin-empty">Add another Studio collaborator to begin messaging.</p>}</aside><section className="v101-thread"><div className="v101-thread-head"><div><span>CONVERSATION</span><h2>{activeMember?.display_name||activeMember?.email||"Choose a collaborator"}</h2></div></div><div className="v101-message-scroll">{thread.map(m=>{const mine=m.sender_user_id===session?.user.id;return <article key={m.id} className={mine?"mine":"theirs"}>
+  {m.body&&<p>{m.body}</p>}
+  {m.attachment_url&&(
+    m.attachment_type?.startsWith("image/")
+      ? <a className="v101-message-image-link" href={m.attachment_url} target="_blank" rel="noreferrer">
+          <img className="v101-message-image" src={m.attachment_url} alt={m.attachment_name||"Message attachment"}/>
+        </a>
+      : <a className="v101-message-file" href={m.attachment_url} target="_blank" rel="noreferrer">
+          <span className="v101-message-file-icon">FILE</span>
+          <span>
+            <strong>{m.attachment_name||"Attachment"}</strong>
+            <small>{m.attachment_size!=null?`${(m.attachment_size/1024/1024).toFixed(m.attachment_size>=1024*1024?1:2)} MB`:"Open attachment"}</small>
+          </span>
+        </a>
+  )}
+  <small>{new Date(m.created_at).toLocaleString()}{mine?m.read_at?" • Read":" • Sent":""}</small>
+</article>})}{activeId&&thread.length===0&&<p className="admin-empty">No messages yet. Start the conversation below.</p>}</div>{activeId&&<div className="v101-compose">
+  <textarea
+    placeholder={`Message ${activeMember?.display_name||activeMember?.email||"collaborator"}...`}
+    value={messageBody}
+    onChange={e=>setMessageBody(e.target.value)}
+    maxLength={10000}
+  />
+  {messageAttachmentFile&&<div className="v101-selected-attachment">
+    <div>
+      <strong>{messageAttachmentFile.name}</strong>
+      <small>{(messageAttachmentFile.size/1024/1024).toFixed(messageAttachmentFile.size>=1024*1024?1:2)} MB</small>
+    </div>
+    <button type="button" onClick={()=>setMessageAttachmentFile(null)} disabled={messagesBusy}>Remove</button>
+  </div>}
+  <div className="v101-compose-actions">
+    <label className={`secondary-action v101-attach-button ${messagesBusy?"disabled":""}`}>
+      Attach File
+      <input
+        type="file"
+        disabled={messagesBusy}
+        onChange={e=>{
+          const file=e.target.files?.[0]??null;
+          if(file&&file.size>20*1024*1024){
+            setMessagesError("Message attachments must be 20 MB or smaller.");
+            e.currentTarget.value="";
+            return;
+          }
+          setMessagesError("");
+          setMessageAttachmentFile(file);
+          e.currentTarget.value="";
+        }}
+      />
+    </label>
+    <button
+      className="primary-action"
+      disabled={(!messageBody.trim()&&!messageAttachmentFile)||messagesBusy}
+      onClick={()=>void sendDirectMessage()}
+    >
+      {messagesBusy?"Sending...":"Send Message"}
+    </button>
+  </div>
+</div>}</section></div></section></main>;
 }
 
 if(page==="transfer"){
@@ -3347,20 +7276,47 @@ if(page==="production"){
  const arcName=(id:string|null)=>storyArcs.find(x=>x.id===id)?.title||"No arc";
  const personName=(id:string|null)=>adminMembers.find(x=>x.user_id===id)?.display_name||adminMembers.find(x=>x.user_id===id)?.email||"Studio Member";
  const filteredScenes=storyScenes.filter(x=>[x.title,x.summary,x.era,x.story_date,projectName(x.project_id),arcName(x.arc_id)].filter(Boolean).join(" ").toLowerCase().includes(productionSearch.toLowerCase()));
- const graphNodes=[...storyProjects.map(x=>({id:x.id,label:x.title,type:"Project"})),...storyArcs.map(x=>({id:x.id,label:x.title,type:"Arc"})),...storyScenes.map(x=>({id:x.id,label:x.title,type:"Scene"})),...databaseRecords.slice(0,80).map(x=>({id:x.id,label:x.name,type:"Lore"}))];
+ const chapterName=(id:string|null)=>storyChapters.find(x=>x.id===id)?.title||"No chapter";
+ const inspectorChapter=storyInspector?.type==="story_chapter"?storyChapters.find(x=>x.id===storyInspector.id)||null:null;
+ const inspectorScene=storyInspector?.type==="story_scene"?storyScenes.find(x=>x.id===storyInspector.id)||null:null;
+ const inspectorLinks=storyInspector?storyLinks.filter(x=>x.story_entity_type===storyInspector.type&&x.story_entity_id===storyInspector.id):[];
+ const inspectorLinkedLabel=(l:StoryEntityLink)=>l.linked_entity_type==="character"?(studioCharacters.find(x=>x.id===l.linked_entity_id)?.name||"Character"):l.linked_entity_type==="location"?(worldLocations.find(x=>x.id===l.linked_entity_id)?.name||"Location"):l.linked_entity_type==="codex"?(worldRecords.find(x=>x.id===l.linked_entity_id)?.name||"Codex record"):l.linked_entity_type==="database"?(databaseRecords.find(x=>x.id===l.linked_entity_id)?.name||"Lore record"):l.linked_entity_type.replace(/_/g," ");
+ const graphStoryLinks=storyLinks.filter(l=>["story_project","story_arc","story_chapter","story_scene"].includes(l.story_entity_type));
+ const graphCharacterIds=new Set(graphStoryLinks.filter(l=>l.linked_entity_type==="character").map(l=>l.linked_entity_id));
+ const graphLocationIds=new Set(graphStoryLinks.filter(l=>l.linked_entity_type==="location").map(l=>l.linked_entity_id));
+ const graphNodes=[
+  ...storyProjects.map((x,i)=>({key:`project:${x.id}`,id:x.id,label:x.title,type:"Project",x:40,y:60+i*110,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}})),
+  ...storyArcs.map((x,i)=>({key:`arc:${x.id}`,id:x.id,label:x.title,type:"Arc",x:310,y:60+i*110,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}})),
+  ...storyChapters.map((x,i)=>({key:`chapter:${x.id}`,id:x.id,label:x.title,type:x.chapter_type==="episode"?"Episode":"Chapter",x:580,y:60+i*110,inspect:{type:"story_chapter" as const,id:x.id}})),
+  ...storyScenes.map((x,i)=>({key:`scene:${x.id}`,id:x.id,label:x.title,type:"Scene",x:850,y:60+i*110,inspect:{type:"story_scene" as const,id:x.id}})),
+  ...studioCharacters.filter(x=>graphCharacterIds.has(x.id)).map((x,i)=>({key:`character:${x.id}`,id:x.id,label:x.name,type:"Character",x:1120,y:60+i*100,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}})),
+  ...worldLocations.filter(x=>graphLocationIds.has(x.id)).map((x,i)=>({key:`location:${x.id}`,id:x.id,label:x.name,type:"Location",x:1390,y:60+i*100,inspect:null as null|{type:"story_chapter"|"story_scene";id:string}}))
+ ];
+ const graphEdges=[
+  ...storyArcs.filter(x=>x.project_id).map(x=>({from:`project:${x.project_id}`,to:`arc:${x.id}`,label:"contains"})),
+  ...storyChapters.flatMap(x=>x.arc_id?[{from:`arc:${x.arc_id}`,to:`chapter:${x.id}`,label:"contains"}]:x.project_id?[{from:`project:${x.project_id}`,to:`chapter:${x.id}`,label:"contains"}]:[]),
+  ...storyScenes.flatMap(x=>x.chapter_id?[{from:`chapter:${x.chapter_id}`,to:`scene:${x.id}`,label:"contains"}]:x.arc_id?[{from:`arc:${x.arc_id}`,to:`scene:${x.id}`,label:"contains"}]:x.project_id?[{from:`project:${x.project_id}`,to:`scene:${x.id}`,label:"contains"}]:[]),
+  ...graphStoryLinks.flatMap(l=>{const from=l.story_entity_type==="story_project"?`project:${l.story_entity_id}`:l.story_entity_type==="story_arc"?`arc:${l.story_entity_id}`:l.story_entity_type==="story_chapter"?`chapter:${l.story_entity_id}`:`scene:${l.story_entity_id}`;const to=l.linked_entity_type==="character"?`character:${l.linked_entity_id}`:l.linked_entity_type==="location"?`location:${l.linked_entity_id}`:"";return to?[{from,to,label:l.relation_label||"linked"}]:[]})
+ ];
+ const graphPos=(n:(typeof graphNodes)[number])=>graphPositions[n.key]||{x:n.x,y:n.y};
+ const graphNodeByKey=new Map(graphNodes.map(n=>[n.key,n]));
  return <main className="dashboard-shell production-v9-page"><StudioTopNav /><section className="production-v9-shell"><div className="production-v9-hero"><div><p className="eyebrow">STORY • COLLABORATION • WORLD INTELLIGENCE</p><h1>Story Production Center</h1><p>Plan stories without duplicating your lore. Connect projects, arcs, scenes, plot beats, characters, locations, canon records, reviews, assignments, and collaborator activity.</p></div><button className="secondary-action" onClick={()=>void loadV9Production()}>{productionBusy?"Refreshing...":"Refresh Production"}</button></div>{productionError&&<p className="login-error">{productionError}</p>}
  <div className="v9-metrics"><div><strong>{v9Health?.projects??storyProjects.length}</strong><span>Projects</span></div><div><strong>{v9Health?.scenes??storyScenes.length}</strong><span>Scenes</span></div><div><strong>{v9Health?.open_assignments??0}</strong><span>Open Assignments</span></div><div><strong>{v9Health?.my_unread_notifications??studioNotifications.filter(x=>!x.is_read).length}</strong><span>Unread</span></div><div><strong>{v9Health?.continuity_open??continuityIssues.filter(x=>['open','reviewing'].includes(x.status)).length}</strong><span>Continuity Alerts</span></div></div>
- <nav className="admin-tabs v9-tabs">{(["overview","projects","arcs","scenes","plot","journeys","review","assignments","inbox","graph"] as const).map(t=><button key={t} className={productionTab===t?"active":""} onClick={()=>setProductionTab(t)}>{t}</button>)}</nav><StudioGuide title="Story Production">{productionGuide[productionTab]}</StudioGuide>
+ <nav className="admin-tabs v9-tabs">{(["overview","projects","arcs","chapters","scenes","plot","journeys","review","assignments","inbox","graph"] as const).map(t=><button key={t} className={productionTab===t?"active":""} onClick={()=>setProductionTab(t)}>{t}</button>)}</nav><StudioGuide title="Story Production">{productionGuide[productionTab]}</StudioGuide>
  {productionTab==="overview"&&<><div className="v9-overview-grid"><section className="admin-panel"><span className="card-label">WHAT CHANGED?</span><h2>Since Your Last Visit</h2><p className="admin-help">Changes are timestamped and attributed to each collaborator's Studio name.</p><div className="admin-feed">{changesSinceVisit.slice(0,12).map(x=><div className="admin-feed-row" key={x.id}><div><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")}</span></div><small>{x.actor_name} • {new Date(x.created_at).toLocaleString()}</small></div>)}{changesSinceVisit.length===0&&<p className="admin-empty">No collaborator changes since your previous Studio visit.</p>}</div></section><section className="admin-panel"><span className="card-label">PRODUCTION PULSE</span><h2>Work Waiting on the Team</h2><div className="v9-pulse"><p><strong>{reviewComments.filter(x=>x.status==='open').length}</strong> open review comments</p><p><strong>{studioAssignments.filter(x=>!['done','cancelled'].includes(x.status)).length}</strong> active assignments</p><p><strong>{storyBeats.filter(x=>x.status!=='complete').length}</strong> unfinished plot beats</p><p><strong>{storyScenes.filter(x=>x.status==='review').length}</strong> scenes in review</p></div></section></div><section className="admin-panel"><span className="card-label">RECENT STORY WORK</span><h2>Production Activity</h2><div className="v9-card-grid">{storyProjects.slice(0,6).map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><small>{p.status.replace(/_/g,' ')} • {p.canon_status.replace(/_/g,' ')}</small></article>)}</div></section></>}
  {productionTab==="projects"&&<><section className="admin-panel"><span className="card-label">SAGAS • BOOKS • SEASONS • STORIES</span><h2>Create Story Project</h2><div className="v9-form-grid"><input placeholder="Project title" value={projectForm.title} onChange={e=>setProjectForm({...projectForm,title:e.target.value})}/><select value={projectForm.projectType} onChange={e=>setProjectForm({...projectForm,projectType:e.target.value})}><option value="story">Story</option><option value="saga">Saga</option><option value="book">Book</option><option value="season">Season</option><option value="volume">Volume</option><option value="campaign">Campaign</option></select><select value={projectForm.status} onChange={e=>setProjectForm({...projectForm,status:e.target.value})}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><textarea placeholder="Project summary" value={projectForm.summary} onChange={e=>setProjectForm({...projectForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryProject()}>Create Project</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyProjects.map(p=><article className="v9-story-card" key={p.id}><span>{p.project_type}</span><h3>{p.title}</h3><p>{p.summary||"No summary yet."}</p><select value={p.status} onChange={e=>void updateProductionStatus("studio_story_projects",p.id,e.target.value)}><option value="idea">Idea</option><option value="planning">Planning</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option><option value="archived">Archived</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_projects",p.id,p.title)}>Delete</button></article>)}</div></section></>}
  {productionTab==="arcs"&&<><section className="admin-panel"><span className="card-label">STORY STRUCTURE</span><h2>Create Arc</h2><div className="v9-form-grid"><select value={arcForm.projectId} onChange={e=>setArcForm({...arcForm,projectId:e.target.value})}><option value="">No project yet</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Arc title" value={arcForm.title} onChange={e=>setArcForm({...arcForm,title:e.target.value})}/><textarea placeholder="Arc summary" value={arcForm.summary} onChange={e=>setArcForm({...arcForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryArc()}>Create Arc</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyArcs.map(a=><article className="v9-story-card" key={a.id}><span>{projectName(a.project_id)}</span><h3>{a.title}</h3><p>{a.summary||"No summary yet."}</p><select value={a.status} onChange={e=>void updateProductionStatus("studio_story_arcs",a.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_arcs",a.id,a.title)}>Delete</button></article>)}</div></section></>}
- {productionTab==="scenes"&&<><section className="admin-panel"><span className="card-label">SCENE MANAGER</span><h2>Create Scene</h2><div className="v9-form-grid"><select value={sceneForm.projectId} onChange={e=>setSceneForm({...sceneForm,projectId:e.target.value,arcId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.arcId} onChange={e=>setSceneForm({...sceneForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.filter(x=>!sceneForm.projectId||x.project_id===sceneForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Scene title" value={sceneForm.title} onChange={e=>setSceneForm({...sceneForm,title:e.target.value})}/><select value={sceneForm.povId} onChange={e=>setSceneForm({...sceneForm,povId:e.target.value})}><option value="">No POV character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={sceneForm.locationId} onChange={e=>setSceneForm({...sceneForm,locationId:e.target.value})}><option value="">No location</option>{worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input placeholder="Era" value={sceneForm.era} onChange={e=>setSceneForm({...sceneForm,era:e.target.value})}/><input placeholder="Story date / approximate date" value={sceneForm.storyDate} onChange={e=>setSceneForm({...sceneForm,storyDate:e.target.value})}/><textarea placeholder="Scene summary" value={sceneForm.summary} onChange={e=>setSceneForm({...sceneForm,summary:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryScene()}>Create Scene</button></div></section><section className="admin-panel"><div className="database-toolbar"><input type="search" value={productionSearch} onChange={e=>setProductionSearch(e.target.value)} placeholder="Search scenes, projects, arcs, eras..."/></div><div className="v9-scene-list">{filteredScenes.map(s=><article key={s.id}><div><span>{projectName(s.project_id)} → {arcName(s.arc_id)}</span><h3>{s.title}</h3><p>{s.summary||"No summary yet."}</p><small>{s.era||"Era unset"}{s.story_date?` • ${s.story_date}`:""} • POV: {studioCharacters.find(x=>x.id===s.pov_character_id)?.name||"Unset"}</small></div><select value={s.status} onChange={e=>void updateProductionStatus("studio_story_scenes",s.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select></article>)}</div></section></>}
+ {productionTab==="chapters"&&<><section className="admin-panel"><span className="card-label">MANUSCRIPT STRUCTURE</span><h2>Create Chapter / Episode</h2><div className="v9-form-grid"><select value={chapterForm.projectId} onChange={e=>setChapterForm({...chapterForm,projectId:e.target.value,arcId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={chapterForm.arcId} onChange={e=>setChapterForm({...chapterForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.filter(x=>!chapterForm.projectId||x.project_id===chapterForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={chapterForm.chapterType} onChange={e=>setChapterForm({...chapterForm,chapterType:e.target.value})}><option value="chapter">Chapter</option><option value="episode">Episode</option></select><input placeholder="Chapter / Episode code" value={chapterForm.chapterCode} onChange={e=>setChapterForm({...chapterForm,chapterCode:e.target.value})}/><input type="number" placeholder="Order" value={chapterForm.sortOrder} onChange={e=>setChapterForm({...chapterForm,sortOrder:e.target.value})}/><input placeholder="Chapter / Episode title" value={chapterForm.title} onChange={e=>setChapterForm({...chapterForm,title:e.target.value})}/><select value={chapterForm.status} onChange={e=>setChapterForm({...chapterForm,status:e.target.value})}><option value="draft">Draft</option><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><textarea placeholder="Chapter summary" value={chapterForm.summary} onChange={e=>setChapterForm({...chapterForm,summary:e.target.value})}/><textarea rows={16} placeholder="Full chapter / episode manuscript" value={chapterForm.bodyNotes} onChange={e=>setChapterForm({...chapterForm,bodyNotes:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryChapter()}>Create Chapter / Episode</button></div></section><section className="admin-panel"><div className="v9-card-grid">{storyChapters.map(c=><article className="v9-story-card v9-openable-story-card" key={c.id} onClick={()=>setStoryInspector({type:"story_chapter",id:c.id})}><span>{c.chapter_type==="episode"?"Episode":"Chapter"}{c.chapter_code?` • ${c.chapter_code}`:""}</span><h3>{c.title}</h3><p>{c.summary||"No summary yet."}</p>{c.body_notes&&<details><summary>Manuscript</summary><p style={{whiteSpace:"pre-wrap"}}>{c.body_notes}</p></details>}<small>{projectName(c.project_id)}{c.arc_id?` → ${arcName(c.arc_id)}`:""}</small><select value={c.status} onClick={e=>e.stopPropagation()} onChange={e=>void updateProductionStatus("studio_story_chapters",c.id,e.target.value)}><option value="draft">Draft</option><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select><button className="danger-action" onClick={()=>void deleteStoryItem("studio_story_chapters",c.id,c.title)}>Delete</button></article>)}</div></section></>}
+ {productionTab==="scenes"&&<><section className="admin-panel"><span className="card-label">SCENE MANAGER</span><h2>Create Scene</h2><div className="v9-form-grid"><select value={sceneForm.projectId} onChange={e=>setSceneForm({...sceneForm,projectId:e.target.value,arcId:"",chapterId:""})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.arcId} onChange={e=>setSceneForm({...sceneForm,arcId:e.target.value,chapterId:""})}><option value="">No arc</option>{storyArcs.filter(x=>!sceneForm.projectId||x.project_id===sceneForm.projectId).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={sceneForm.chapterId} onChange={e=>setSceneForm({...sceneForm,chapterId:e.target.value})}><option value="">No chapter / episode</option>{storyChapters.filter(x=>(!sceneForm.projectId||x.project_id===sceneForm.projectId)&&(!sceneForm.arcId||x.arc_id===sceneForm.arcId)).map(x=><option key={x.id} value={x.id}>{x.chapter_code?`${x.chapter_code} — ${x.title}`:x.title}</option>)}</select><input placeholder="Scene title" value={sceneForm.title} onChange={e=>setSceneForm({...sceneForm,title:e.target.value})}/><select value={sceneForm.povId} onChange={e=>setSceneForm({...sceneForm,povId:e.target.value})}><option value="">No POV character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={sceneForm.locationId} onChange={e=>setSceneForm({...sceneForm,locationId:e.target.value})}><option value="">No location</option>{worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input placeholder="Era" value={sceneForm.era} onChange={e=>setSceneForm({...sceneForm,era:e.target.value})}/><input placeholder="Story date / approximate date" value={sceneForm.storyDate} onChange={e=>setSceneForm({...sceneForm,storyDate:e.target.value})}/><textarea placeholder="Scene summary" value={sceneForm.summary} onChange={e=>setSceneForm({...sceneForm,summary:e.target.value})}/><textarea rows={14} placeholder="Full scene manuscript" value={sceneForm.bodyNotes} onChange={e=>setSceneForm({...sceneForm,bodyNotes:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryScene()}>Create Scene</button></div></section><section className="admin-panel"><div className="database-toolbar"><input type="search" value={productionSearch} onChange={e=>setProductionSearch(e.target.value)} placeholder="Search scenes, projects, arcs, eras..."/></div><div className="v9-scene-list">{filteredScenes.map(s=><article className="v9-openable-story-card" key={s.id} onClick={()=>setStoryInspector({type:"story_scene",id:s.id})}><div><span>{projectName(s.project_id)} → {arcName(s.arc_id)}{s.chapter_id?` → ${storyChapters.find(c=>c.id===s.chapter_id)?.title||"Chapter"}`:""}</span><h3>{s.title}</h3><p>{s.summary||"No summary yet."}</p><small>{s.era||"Era unset"}{s.story_date?` • ${s.story_date}`:""} • POV: {studioCharacters.find(x=>x.id===s.pov_character_id)?.name||"Unset"}</small></div><select value={s.status} onClick={e=>e.stopPropagation()} onChange={e=>void updateProductionStatus("studio_story_scenes",s.id,e.target.value)}><option value="idea">Idea</option><option value="planned">Planned</option><option value="writing">Writing</option><option value="review">Review</option><option value="complete">Complete</option></select></article>)}</div></section></>}
  {productionTab==="plot"&&<><section className="admin-panel"><span className="card-label">PLOT BOARD</span><h2>Add Story Beat</h2><div className="v9-form-grid"><select value={beatForm.projectId} onChange={e=>setBeatForm({...beatForm,projectId:e.target.value})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={beatForm.arcId} onChange={e=>setBeatForm({...beatForm,arcId:e.target.value})}><option value="">No arc</option>{storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={beatForm.sceneId} onChange={e=>setBeatForm({...beatForm,sceneId:e.target.value})}><option value="">No scene</option>{storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Beat title" value={beatForm.title} onChange={e=>setBeatForm({...beatForm,title:e.target.value})}/><select value={beatForm.beatType} onChange={e=>setBeatForm({...beatForm,beatType:e.target.value})}><option value="plot">Plot</option><option value="character">Character</option><option value="reveal">Reveal</option><option value="conflict">Conflict</option><option value="setup">Setup</option><option value="payoff">Payoff</option></select><textarea placeholder="What happens?" value={beatForm.description} onChange={e=>setBeatForm({...beatForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createStoryBeat()}>Add Beat</button></div></section><section className="v9-kanban">{["idea","planned","writing","review","complete"].map(status=><div className="v9-kanban-column" key={status}><h3>{status.replace(/_/g,' ')}</h3>{storyBeats.filter(x=>x.status===status).map(b=><article key={b.id}><span>{b.beat_type}</span><strong>{b.title}</strong><p>{b.description||""}</p><select value={b.status} onChange={e=>void updateProductionStatus("studio_story_beats",b.id,e.target.value)}>{["idea","planned","writing","review","complete"].map(s=><option key={s} value={s}>{s}</option>)}</select></article>)}</div>)}</section></>}
  {productionTab==="journeys"&&<><section className="admin-panel"><span className="card-label">CHARACTER JOURNEY TRACKER</span><h2>Record Character Change</h2><div className="v9-form-grid"><select value={journeyForm.characterId} onChange={e=>setJourneyForm({...journeyForm,characterId:e.target.value})}><option value="">Choose character</option>{studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select value={journeyForm.journeyType} onChange={e=>setJourneyForm({...journeyForm,journeyType:e.target.value})}><option value="development">Development</option><option value="goal">Goal</option><option value="injury">Injury</option><option value="transformation">Transformation</option><option value="title">Title / Rank</option><option value="allegiance">Allegiance</option><option value="relationship">Relationship</option><option value="power">Power</option></select><select value={journeyForm.projectId} onChange={e=>setJourneyForm({...journeyForm,projectId:e.target.value})}><option value="">No project</option>{storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={journeyForm.sceneId} onChange={e=>setJourneyForm({...journeyForm,sceneId:e.target.value})}><option value="">No scene</option>{storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><input placeholder="Change title" value={journeyForm.title} onChange={e=>setJourneyForm({...journeyForm,title:e.target.value})}/><input placeholder="Before" value={journeyForm.beforeValue} onChange={e=>setJourneyForm({...journeyForm,beforeValue:e.target.value})}/><input placeholder="After" value={journeyForm.afterValue} onChange={e=>setJourneyForm({...journeyForm,afterValue:e.target.value})}/><textarea placeholder="Notes" value={journeyForm.description} onChange={e=>setJourneyForm({...journeyForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createJourneyEvent()}>Add Journey Event</button></div></section><section className="admin-panel"><div className="v9-journey-list">{characterJourney.map(j=><article key={j.id}><span>{j.journey_type}</span><h3>{studioCharacters.find(x=>x.id===j.character_id)?.name||"Character"} — {j.title}</h3>{(j.before_value||j.after_value)&&<p><strong>{j.before_value||"—"}</strong> → <strong>{j.after_value||"—"}</strong></p>}<small>{j.description||""}</small></article>)}</div></section></>}
- {productionTab==="review"&&<><section className="admin-panel"><span className="card-label">COMMENTS & REVIEW THREADS</span><h2>Start Review Comment</h2><div className="v9-form-grid"><select value={commentForm.entityType} onChange={e=>setCommentForm({...commentForm,entityType:e.target.value,entityId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_scene">Scene</option><option value="database">World Database</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><select value={commentForm.entityId} onChange={e=>setCommentForm({...commentForm,entityId:e.target.value})}><option value="">Choose record</option>{productionEntityOptions(commentForm.entityType).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select><select value={commentForm.notifyUserId} onChange={e=>setCommentForm({...commentForm,notifyUserId:e.target.value})}><option value="">No notification</option>{adminMembers.filter(x=>x.user_id!==session.user.id).map(x=><option key={x.user_id} value={x.user_id}>Notify {x.display_name||x.email}</option>)}</select><textarea placeholder="Review comment..." value={commentForm.body} onChange={e=>setCommentForm({...commentForm,body:e.target.value})}/><button className="primary-action" onClick={()=>void addReviewCommentV9()}>Post Comment</button></div></section><section className="admin-panel"><div className="v9-review-list">{reviewComments.map(c=><article className={c.status==='resolved'?"resolved":""} key={c.id}><div><strong>{c.created_by_name||personName(c.created_by)}</strong><span>{c.entity_type} • {new Date(c.created_at).toLocaleString()}</span></div><p>{c.body}</p>{c.status==='open'?<button onClick={()=>void resolveReviewComment(c.id)}>Resolve</button>:<small>Resolved</small>}</article>)}</div></section></>}
+ {productionTab==="review"&&<><section className="admin-panel"><span className="card-label">COMMENTS & REVIEW THREADS</span><h2>Start Review Comment</h2><div className="v9-form-grid"><select value={commentForm.entityType} onChange={e=>setCommentForm({...commentForm,entityType:e.target.value,entityId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_chapter">Chapter / Episode</option>
+<option value="story_scene">Scene</option><option value="database">World Database</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><select value={commentForm.entityId} onChange={e=>setCommentForm({...commentForm,entityId:e.target.value})}><option value="">Choose record</option>{productionEntityOptions(commentForm.entityType).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select><select value={commentForm.notifyUserId} onChange={e=>setCommentForm({...commentForm,notifyUserId:e.target.value})}><option value="">No notification</option>{adminMembers.filter(x=>x.user_id!==session.user.id).map(x=><option key={x.user_id} value={x.user_id}>Notify {x.display_name||x.email}</option>)}</select><textarea placeholder="Review comment..." value={commentForm.body} onChange={e=>setCommentForm({...commentForm,body:e.target.value})}/><button className="primary-action" onClick={()=>void addReviewCommentV9()}>Post Comment</button></div></section><section className="admin-panel"><div className="v9-review-list">{reviewComments.map(c=><article className={c.status==='resolved'?"resolved":""} key={c.id}><div><strong>{c.created_by_name||personName(c.created_by)}</strong><span>{c.entity_type} • {new Date(c.created_at).toLocaleString()}</span></div><p>{c.body}</p>{c.status==='open'?<button onClick={()=>void resolveReviewComment(c.id)}>Resolve</button>:<small>Resolved</small>}</article>)}</div></section></>}
  {productionTab==="assignments"&&<><section className="admin-panel"><span className="card-label">TEAM WORK QUEUE</span><h2>Create Assignment</h2><div className="v9-form-grid"><input placeholder="Assignment title" value={assignmentForm.title} onChange={e=>setAssignmentForm({...assignmentForm,title:e.target.value})}/><select value={assignmentForm.assignedTo} onChange={e=>setAssignmentForm({...assignmentForm,assignedTo:e.target.value})}><option value="">Assign to...</option>{adminMembers.map(x=><option key={x.user_id} value={x.user_id}>{x.display_name||x.email}</option>)}</select><select value={assignmentForm.priority} onChange={e=>setAssignmentForm({...assignmentForm,priority:e.target.value})}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select><input type="datetime-local" value={assignmentForm.dueAt} onChange={e=>setAssignmentForm({...assignmentForm,dueAt:e.target.value})}/><textarea placeholder="Instructions" value={assignmentForm.description} onChange={e=>setAssignmentForm({...assignmentForm,description:e.target.value})}/><button className="primary-action" onClick={()=>void createAssignmentV9()}>Assign Work</button></div></section><section className="admin-panel"><div className="v9-assignment-list">{studioAssignments.map(a=><article key={a.id}><div><span className={`v9-priority ${a.priority}`}>{a.priority}</span><h3>{a.title}</h3><p>{a.description||""}</p><small>{personName(a.assigned_to)}{a.due_at?` • Due ${new Date(a.due_at).toLocaleString()}`:""}</small></div><select value={a.status} onChange={e=>void updateProductionStatus("studio_assignments",a.id,e.target.value)}><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option><option value="cancelled">Cancelled</option></select></article>)}</div></section></>}
  {productionTab==="inbox"&&<section className="admin-panel"><span className="card-label">STUDIO NOTIFICATIONS</span><h2>Inbox</h2><div className="v9-inbox">{studioNotifications.map(n=><article className={n.is_read?"read":"unread"} key={n.id}><div><strong>{n.title}</strong><span>{n.actor_name||"Umbra Studio"} • {new Date(n.created_at).toLocaleString()}</span></div><p>{n.message||""}</p>{!n.is_read&&<button onClick={()=>void markNotificationRead(n.id)}>Mark Read</button>}</article>)}{studioNotifications.length===0&&<p className="admin-empty">Your Studio inbox is clear.</p>}</div></section>}
- {productionTab==="graph"&&<><section className="admin-panel"><span className="card-label">CONNECTED STORY RECORDS</span><h2>Link Story to the World</h2><p className="admin-help">Reference existing characters, locations, Codex pages, artifacts, weapons, creatures, magic systems, and other lore without retyping them.</p><div className="v9-form-grid"><select value={storyLinkForm.storyType} onChange={e=>setStoryLinkForm({...storyLinkForm,storyType:e.target.value,storyId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_scene">Scene</option></select><select value={storyLinkForm.storyId} onChange={e=>setStoryLinkForm({...storyLinkForm,storyId:e.target.value})}><option value="">Choose story record</option>{storyLinkForm.storyType==="story_project"?storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_arc"?storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={storyLinkForm.linkedType} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedType:e.target.value,linkedId:""})}><option value="character">Character</option><option value="location">Location</option><option value="codex">World / Codex</option><option value="database">Artifact / Lore Record</option></select><select value={storyLinkForm.linkedId} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedId:e.target.value})}><option value="">Choose existing record</option>{storyLinkForm.linkedType==="character"?studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="location"?worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="codex"?worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>):databaseRecords.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input value={storyLinkForm.label} onChange={e=>setStoryLinkForm({...storyLinkForm,label:e.target.value})} placeholder="Connection: appears in, carries, discovers..."/><textarea value={storyLinkForm.notes} onChange={e=>setStoryLinkForm({...storyLinkForm,notes:e.target.value})} placeholder="Optional production notes..."/><button className="primary-action" disabled={!storyLinkForm.storyId||!storyLinkForm.linkedId} onClick={()=>void createStoryEntityLink()}>Connect Existing Record</button></div><div className="admin-feed">{storyLinks.slice(0,60).map(l=><div className="admin-feed-row" key={l.id}><div><strong>{l.relation_label||"Connected record"}</strong><span>{l.story_entity_type.replace(/_/g," ")} → {l.linked_entity_type.replace(/_/g," ")}</span></div><button className="secondary-action" onClick={()=>void deleteStoryEntityLink(l.id)}>Remove</button></div>)}{storyLinks.length===0&&<p className="admin-empty">No story-world links yet.</p>}</div></section><section className="admin-panel"><span className="card-label">WORLD INTELLIGENCE</span><h2>Relationship & Dependency Graph</h2><p className="admin-help">A lightweight graph index of story structure and existing lore. Universal links and story links remain the source of truth; this view never changes canon automatically.</p><div className="v9-graph"><div className="v9-graph-nodes">{graphNodes.slice(0,160).map(n=><article key={`${n.type}:${n.id}`}><span>{n.type}</span><strong>{n.label}</strong><small>{universalLinks.filter(l=>l.source_id===n.id||l.target_id===n.id).length+storyLinks.filter(l=>l.story_entity_id===n.id||l.linked_entity_id===n.id).length} connections</small></article>)}</div></div></section></>}
+ {productionTab==="graph"&&<><section className="admin-panel"><span className="card-label">CONNECTED STORY RECORDS</span><h2>Link Story to the World</h2><p className="admin-help">Reference existing characters, locations, Codex pages, artifacts, weapons, creatures, magic systems, and other lore without retyping them.</p><div className="v9-form-grid"><select value={storyLinkForm.storyType} onChange={e=>setStoryLinkForm({...storyLinkForm,storyType:e.target.value,storyId:""})}><option value="story_project">Project</option><option value="story_arc">Arc</option><option value="story_chapter">Chapter / Episode</option>
+<option value="story_scene">Scene</option></select><select value={storyLinkForm.storyId} onChange={e=>setStoryLinkForm({...storyLinkForm,storyId:e.target.value})}><option value="">Choose story record</option>{storyLinkForm.storyType==="story_project"?storyProjects.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_arc"?storyArcs.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyLinkForm.storyType==="story_chapter"?storyChapters.map(x=><option key={x.id} value={x.id}>{x.title}</option>):storyScenes.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select><select value={storyLinkForm.linkedType} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedType:e.target.value,linkedId:""})}><option value="character">Character</option><option value="location">Location</option><option value="codex">World / Codex</option><option value="database">Artifact / Lore Record</option></select><select value={storyLinkForm.linkedId} onChange={e=>setStoryLinkForm({...storyLinkForm,linkedId:e.target.value})}><option value="">Choose existing record</option>{storyLinkForm.linkedType==="character"?studioCharacters.map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="location"?worldLocations.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>):storyLinkForm.linkedType==="codex"?worldRecords.map(x=><option key={x.id} value={x.id}>{x.name}</option>):databaseRecords.filter(x=>!x.archived_at).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><input value={storyLinkForm.label} onChange={e=>setStoryLinkForm({...storyLinkForm,label:e.target.value})} placeholder="Connection: appears in, carries, discovers..."/><textarea value={storyLinkForm.notes} onChange={e=>setStoryLinkForm({...storyLinkForm,notes:e.target.value})} placeholder="Optional production notes..."/><button className="primary-action" disabled={!storyLinkForm.storyId||!storyLinkForm.linkedId} onClick={()=>void createStoryEntityLink()}>Connect Existing Record</button></div><div className="admin-feed">{storyLinks.slice(0,60).map(l=><div className="admin-feed-row" key={l.id}><div><strong>{l.relation_label||"Connected record"}</strong><span>{l.story_entity_type.replace(/_/g," ")} → {l.linked_entity_type.replace(/_/g," ")}</span></div><button className="secondary-action" onClick={()=>void deleteStoryEntityLink(l.id)}>Remove</button></div>)}{storyLinks.length===0&&<p className="admin-empty">No story-world links yet.</p>}</div></section><section className="admin-panel"><span className="card-label">WORLD INTELLIGENCE</span><h2>Relationship & Dependency Graph</h2><p className="admin-help">Project → Arc → Chapter / Episode → Scene, with recognized Character and Location connections. Drag nodes, pan empty space, zoom, and click Chapters or Scenes to inspect them.</p><div className="v9-graph-toolbar"><button onClick={()=>setGraphZoom(z=>Math.min(1.8,Number((z+.1).toFixed(2))))}>Zoom +</button><button onClick={()=>setGraphZoom(z=>Math.max(.45,Number((z-.1).toFixed(2))))}>Zoom −</button><button onClick={()=>{setGraphZoom(1);setGraphPan({x:30,y:30});setGraphPositions({})}}>Reset View</button><span>{Math.round(graphZoom*100)}%</span></div><div className="v9-real-graph" onPointerDown={e=>{const target=e.target as HTMLElement;if(!target.closest(".v9-graph-node"))setGraphPanDrag({x:e.clientX,y:e.clientY,px:graphPan.x,py:graphPan.y})}} onPointerMove={e=>{if(graphDrag){const node=graphNodeByKey.get(graphDrag.key);if(node)setGraphPositions(p=>({...p,[graphDrag.key]:{x:(e.clientX-graphPan.x)/graphZoom-graphDrag.dx,y:(e.clientY-graphPan.y)/graphZoom-graphDrag.dy}}))}else if(graphPanDrag)setGraphPan({x:graphPanDrag.px+e.clientX-graphPanDrag.x,y:graphPanDrag.py+e.clientY-graphPanDrag.y})}} onPointerUp={()=>{setGraphDrag(null);setGraphPanDrag(null)}} onPointerLeave={()=>{setGraphDrag(null);setGraphPanDrag(null)}}><div className="v9-graph-stage" style={{transform:`translate(${graphPan.x}px,${graphPan.y}px) scale(${graphZoom})`}}><svg className="v9-graph-lines" width="1700" height={Math.max(720,graphNodes.length*80)}>{graphEdges.map((edge,i)=>{const a=graphNodeByKey.get(edge.from),b=graphNodeByKey.get(edge.to);if(!a||!b)return null;const ap=graphPos(a),bp=graphPos(b);const x1=ap.x+95,y1=ap.y+31,x2=bp.x+95,y2=bp.y+31;return <g key={`${edge.from}:${edge.to}:${i}`}><line x1={x1} y1={y1} x2={x2} y2={y2}/><text x={(x1+x2)/2} y={(y1+y2)/2-5}>{edge.label}</text></g>})}</svg>{graphNodes.map(n=>{const pos=graphPos(n);return <article key={n.key} className={`v9-graph-node v9-graph-${n.type.toLowerCase()}`} style={{left:pos.x,top:pos.y}} onPointerDown={e=>{e.stopPropagation();const p=graphPos(n);setGraphDrag({key:n.key,dx:(e.clientX-graphPan.x)/graphZoom-p.x,dy:(e.clientY-graphPan.y)/graphZoom-p.y})}} onDoubleClick={()=>{if(n.inspect)setStoryInspector(n.inspect)}}><span>{n.type}</span><strong>{n.label}</strong><small>{graphEdges.filter(e=>e.from===n.key||e.to===n.key).length} connections</small></article>})}</div></div><p className="admin-help">Double-click a Chapter, Episode, or Scene node to open its inspector.</p></section></>}
+ {storyInspector&&(inspectorChapter||inspectorScene)&&<div className="v9-story-inspector-backdrop" onClick={()=>setStoryInspector(null)}><section className="v9-story-inspector" onClick={e=>e.stopPropagation()}><header><div><span className="card-label">{inspectorChapter?(inspectorChapter.chapter_type==="episode"?"EPISODE":"CHAPTER"):"SCENE"} DETAIL</span><h2>{inspectorChapter?.title||inspectorScene?.title}</h2></div><button type="button" onClick={()=>setStoryInspector(null)}>×</button></header><div className="v9-inspector-meta"><span>{projectName((inspectorChapter||inspectorScene)?.project_id||null)}</span><span>{arcName((inspectorChapter||inspectorScene)?.arc_id||null)}</span>{inspectorScene?.chapter_id&&<span>{chapterName(inspectorScene.chapter_id)}</span>}{inspectorScene&&<span>POV: {studioCharacters.find(x=>x.id===inspectorScene.pov_character_id)?.name||"Unset"}</span>}{inspectorScene?.location_id&&<span>Location: {worldLocations.find(x=>x.id===inspectorScene.location_id)?.name||"Unknown"}</span>}</div><section><h3>Summary</h3><p>{(inspectorChapter||inspectorScene)?.summary||"No summary yet."}</p></section><section><h3>Recognized Connections</h3><div className="v9-inspector-links">{inspectorLinks.length?inspectorLinks.map(l=><span key={l.id}><strong>{inspectorLinkedLabel(l)}</strong> • {(l.relation_label||"linked").replace(/_/g," ")}</span>):<p>No recognized connections yet.</p>}</div></section><section><h3>Manuscript</h3><div className="v9-manuscript-reader">{(inspectorChapter||inspectorScene)?.body_notes||"No manuscript text saved."}</div></section></section></div>}
  </section></main>;
 }
 
@@ -3385,20 +7341,573 @@ if(page==="database"){
  {databaseTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Database Record Revisions</h2><p className="admin-help">Every record update is captured automatically. Restore an older version without losing the current one.</p><div className="revision-list">{databaseRevisions.map(r=><article key={r.id}><div><strong>{r.record_code||"Record"} • {r.record_name||"Untitled"}</strong><span>{r.changed_by_email||"Studio admin"} • {new Date(r.created_at).toLocaleString()}</span></div><button onClick={()=>void restoreDatabaseRevision(r)}>Restore</button></article>)}</div></section>}
 {databaseTab==="duplicates"&&<section className="admin-panel"><span className="card-label">SITE-WIDE DATA QUALITY</span><h2>Duplicate & Similar Name Finder</h2><p className="admin-help">Scans Characters, Codex, Locations, Expanded Records, Projects, Arcs, and Scenes. Similar normalized names are review-only and are never merged or deleted automatically.</p><div className="duplicate-grid">{sitewideDuplicateGroups().length===0?<p className="admin-empty">No exact/similar normalized names found across the Studio.</p>:sitewideDuplicateGroups().map((group,i)=><article key={i}><strong>{group[0].name}</strong><span>{group.length} possible matches</span>{group.map(r=><div key={`${r.table}-${r.id}`} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"center",marginTop:8}}><span>{r.type} • {r.name}</span><button type="button" onClick={()=>void deleteDuplicateEntity(r.table,r.id,r.name)}>Delete</button></div>)}</article>)}</div></section>}
 {databaseTab==="templates"&&<section className="admin-panel"><span className="card-label">REUSABLE STRUCTURE</span><h2>Field Templates</h2><p className="admin-help">Templates suggest structured fields without locking your lore into a rigid schema.</p><div className="database-form-grid"><select value={templateForm.recordTypeId} onChange={e=>setTemplateForm({...templateForm,recordTypeId:e.target.value})}><option value="">Record type</option>{recordTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><input placeholder="Template name" value={templateForm.name} onChange={e=>setTemplateForm({...templateForm,name:e.target.value})}/><textarea className="json-editor" value={templateForm.fieldsText} onChange={e=>setTemplateForm({...templateForm,fieldsText:e.target.value})}/><button className="primary-action" onClick={()=>void createFieldTemplate()}>Create Template</button></div><div className="database-simple-grid">{fieldTemplates.map(t=><article key={t.id}><strong>{t.name}</strong><p>{recordTypes.find(x=>x.id===t.record_type_id)?.name||"Record"}</p><small>{t.fields?.length||0} suggested fields</small></article>)}</div></section>}
-{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">No coding required. Paste a normal labeled character profile, upload a TXT, Markdown, JSON, or CSV file, or use JSON only when you need the advanced format. Studio analyzes it and opens the result in Character Creator for review before anything is saved.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Profile</button>{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
+{databaseTab==="import"&&<section className="admin-panel"><span className="card-label">SMART INGEST</span><h2>Import & Autofill Center</h2><p className="admin-help">Paste or upload Umbral Genesis material in one chunk or many. Studio separates characters, cosmology, worlds, lore, powers, peoples, religions, history, factions, artifacts, and story chronology before anything is saved. Character profiles still open in Character Creator; mixed world material is classified for review first.</p><div className="friendly-import-options"><label className="umbra-file-button">Choose Profile File<input type="file" accept=".txt,.md,.json,.csv,text/plain,text/markdown,application/json,text/csv" onChange={e=>{const file=e.target.files?.[0];if(file)void loadImportFile(file);e.currentTarget.value="";}} /></label><span>or paste the profile below</span></div><textarea className="import-editor" placeholder={"Name: Character Name\nRace: ...\nHomeland: ...\nPersonality: ...\n\nFull Backstory:\nWrite normal paragraphs here..."} value={importText} onChange={e=>setImportText(e.target.value)}/><div className="bulk-actions"><button onClick={previewImport}>Analyze Import</button>{smartImportChunks.length>0&&<button className="primary-action" onClick={()=>void routeSmartImportSections()}>Route Selected Sections</button>}{characterImportPreview&&<button className="primary-action" onClick={applyCharacterImport}>Open in Character Creator</button>}{importPreview.length>0&&<button onClick={()=>void commitImport()}>Import {importPreview.length} Records</button>}</div>{importError&&<p className="login-error">{importError}</p>}
+{smartImportChunks.length>0&&
+ <div className="import-preview smart-ingest-preview">
+  <div>
+   <span>SMART INGEST • CLASSIFICATION REVIEW</span>
+   <strong>
+    {smartImportChunks.length} section(s) recognized
+   </strong>
+   <small>Nothing has been saved yet.</small>
+   <p>
+    Review classification, destination, existing matches,
+    conflicts, and which sections should be included.
+   </p>
+  </div>
+
+  {smartImportChunks.map((chunk:any)=>
+   <div
+    key={chunk.id}
+    style={
+     chunk.isContainer
+      ?smartImportReviewStyles.container
+      :smartImportReviewStyles.card
+    }
+   >
+    {/* HEADER */}
+    <div style={smartImportReviewStyles.header}>
+     <div style={smartImportReviewStyles.headerLeft}>
+      <span style={smartImportReviewStyles.number}>
+       #{chunk.row}
+      </span>
+
+      <div style={{display:"grid",gap:3,minWidth:0}}>
+       <span style={smartImportReviewStyles.eyebrow}>
+        {chunk.confidence.toUpperCase()} CONFIDENCE
+       </span>
+
+       <strong style={smartImportReviewStyles.title}>
+        {chunk.heading}
+       </strong>
+      </div>
+     </div>
+
+     <span style={smartImportReviewStyles.badge}>
+      {chunk.isContainer
+       ?"SECTION HEADING • DO NOT SAVE"
+       :chunk.label}
+     </span>
+    </div>
+
+    {/* CONTAINER HEADING */}
+    {chunk.isContainer&&chunk.content&&
+     <div style={smartImportReviewStyles.source}>
+      <span style={smartImportReviewStyles.label}>
+       Section Overview
+      </span>
+      <p style={smartImportReviewStyles.sourceText}>
+       {String(chunk.content).slice(0,260)}
+       {String(chunk.content).length>260?"…":""}
+      </p>
+     </div>
+    }
+
+    {/* ROUTING */}
+    {!chunk.isContainer&&
+     <>
+      <div style={smartImportReviewStyles.sectionLabel}>
+       Routing
+      </div>
+
+      <div style={smartImportReviewStyles.routingRow}>
+       <div style={smartImportReviewStyles.infoBox}>
+        <span style={smartImportReviewStyles.label}>
+         Destination
+        </span>
+        <div style={smartImportReviewStyles.value}>
+         {chunk.destination}
+        </div>
+       </div>
+
+       <div style={smartImportReviewStyles.infoBox}>
+        <span style={smartImportReviewStyles.label}>
+         Existing Record
+        </span>
+        <div style={smartImportReviewStyles.value}>
+         {chunk.existing
+          ?`${chunk.existing.area} — ${chunk.existing.name}`
+          :"NEW / UNMATCHED"}
+        </div>
+       </div>
+      </div>
+     </>
+    }
+
+    {/* CONFLICT */}
+    {chunk.typeConflict&&!chunk.isContainer&&
+     <div style={smartImportReviewStyles.conflict}>
+      <div style={smartImportReviewStyles.conflictTitle}>
+       ⚠ TYPE CONFLICT
+      </div>
+      <div>
+       Incoming classification differs from the existing record.
+       Review the proposed classification before routing.
+      </div>
+
+      {smartImportTypeChangeLabel(chunk)&&
+       <div style={{
+        marginTop:7,
+        fontWeight:700
+       }}>
+        Existing → Proposed:{" "}
+        {smartImportTypeChangeLabel(chunk)}
+       </div>
+      }
+     </div>
+    }
+
+    {/* OVERRIDES */}
+    {!chunk.isContainer&&
+     <>
+      <div style={smartImportReviewStyles.sectionLabel}>
+       Import Decision
+      </div>
+
+      <div style={smartImportReviewStyles.overrideRow}>
+       <label style={smartImportReviewStyles.overrideField}>
+        <small style={smartImportReviewStyles.label}>
+         Classification
+        </small>
+
+        <select
+         style={smartImportReviewStyles.select}
+         value={chunk.kind}
+         onChange={e=>
+          updateSmartImportChunk(
+           chunk.id,
+           {kind:e.target.value as SmartImportKind}
+          )
+         }
+        >
+         {smartImportKindOptions.map(option=>
+          <option
+           key={option.value}
+           value={option.value}
+          >
+           {option.label}
+          </option>
+         )}
+        </select>
+       </label>
+
+       {["people_species","organization_faction",
+         "religion_tradition","realm"].includes(chunk.kind)&&
+        <label style={smartImportReviewStyles.codexField}>
+         <small style={smartImportReviewStyles.label}>
+          Codex Type
+         </small>
+
+         <select
+          style={smartImportReviewStyles.smallSelect}
+          value={chunk.codexType||""}
+          onChange={e=>
+           updateSmartImportChunk(
+            chunk.id,
+            {
+             codexType:e.target.value,
+             resolution:"imported"
+            }
+           )
+          }
+         >
+          {smartImportCodexTypes.map(type=>
+           <option key={type} value={type}>
+            {type.charAt(0).toUpperCase()+type.slice(1)}
+           </option>
+          )}
+         </select>
+        </label>
+       }
+
+       {chunk.typeConflict&&
+        <label style={smartImportReviewStyles.resolutionField}>
+         <small style={smartImportReviewStyles.label}>
+          Resolution
+         </small>
+
+         <select
+          style={smartImportReviewStyles.resolutionSelect}
+          value={chunk.resolution||"imported"}
+          onChange={e=>
+           updateSmartImportChunk(
+            chunk.id,
+            {resolution:e.target.value}
+           )
+          }
+         >
+          <option value="imported">Use Imported</option>
+          <option value="existing">Keep Existing</option>
+          <option value="skip">Skip</option>
+         </select>
+        </label>
+       }
+      </div>
+     </>
+    }
+
+    {/* OPERATION PREVIEW */}
+    {chunk.typeConflict&&
+     !chunk.isContainer&&
+     chunk.resolution==="imported"&&
+     smartImportTypeChangeLabel(chunk)&&
+     <div style={smartImportReviewStyles.success}>
+      ✓ Update existing record — no duplicate.{" "}
+      <strong>
+       {smartImportTypeChangeLabel(chunk)}
+      </strong>
+     </div>
+    }
+
+    {/* INCLUDE */}
+    {!chunk.isContainer&&
+     <div style={smartImportReviewStyles.fullRow}>
+      <label style={smartImportReviewStyles.includeWrap}>
+       <input
+        type="checkbox"
+        checked={Boolean(chunk.selected)}
+        onChange={e=>
+         toggleSmartImportChunk(
+          chunk.id,
+          e.target.checked
+         )
+        }
+       />
+
+       <span>
+        {chunk.selected
+         ?"Include in future import"
+         :"Skip this section"}
+       </span>
+      </label>
+     </div>
+    }
+
+    {chunk.routeStatus&&
+     <div style={{
+      width:"100%",
+      boxSizing:"border-box",
+      padding:"10px 12px",
+      borderRadius:10,
+      marginTop:4,
+      border:
+       chunk.routeStatus==="failed"
+        ?"1px solid rgba(255,105,115,.42)"
+        :chunk.routeStatus==="created"||
+          chunk.routeStatus==="updated"
+         ?"1px solid rgba(110,220,155,.38)"
+         :"1px solid rgba(173,132,198,.30)",
+      background:
+       chunk.routeStatus==="failed"
+        ?"rgba(125,35,45,.18)"
+        :chunk.routeStatus==="created"||
+          chunk.routeStatus==="updated"
+         ?"rgba(40,105,70,.16)"
+         :"rgba(82,57,100,.18)"
+     }}>
+      <strong style={{
+       display:"block",
+       marginBottom:4,
+       fontSize:12,
+       letterSpacing:".08em",
+       textTransform:"uppercase",
+       color:
+        chunk.routeStatus==="failed"
+         ?"#ffaaaa"
+         :chunk.routeStatus==="created"||
+           chunk.routeStatus==="updated"
+          ?"#9be1b5"
+          :"#cdb0dc"
+      }}>
+       {chunk.routeStatus==="created"
+        ?"✓ CREATED"
+        :chunk.routeStatus==="updated"
+         ?"✓ UPDATED"
+         :chunk.routeStatus==="kept"
+          ?"— KEPT EXISTING"
+          :chunk.routeStatus==="skipped"
+           ?"— SKIPPED"
+           :chunk.routeStatus==="deferred"
+            ?"⏳ DEFERRED"
+            :chunk.routeStatus==="section"
+             ?"— SECTION HEADING"
+             :"✕ FAILED"}
+      </strong>
+
+      <span style={{
+       color:"#d9cddd",
+       fontSize:13,
+       lineHeight:1.5
+      }}>
+       {chunk.routeMessage}
+      </span>
+     </div>
+    }
+
+    {/* SOURCE */}
+    {!chunk.isContainer&&chunk.content&&
+     <div style={smartImportReviewStyles.sourceWrap}>
+      <span style={smartImportReviewStyles.label}>
+       Source Preview
+      </span>
+
+      <p style={smartImportReviewStyles.sourceText}>
+       {String(chunk.content).slice(0,260)}
+       {String(chunk.content).length>260?"…":""}
+      </p>
+     </div>
+    }
+   </div>
+  )}
+ </div>
+}{characterImportPreview&&<div className="import-preview"><div><span>CHARACTER • REVIEW BEFORE SAVE</span><strong>{characterImportPreview.name}</strong><small>{[characterImportPreview.race,characterImportPreview.homeland,characterImportPreview.canonStatus].filter(Boolean).join(" • ")||"Ready for creator review"}</small><p>{Object.values(characterImportPreview).filter(v=>Array.isArray(v)?v.length:String(v??"").trim()).length} recognized profile fields. Existing Codex names and character relationships will be matched when possible; missing Race/Homeland/Faction/Bloodline records stay private drafts until you choose to publish them.</p></div></div>}{importPreview.length>0&&<div className="import-preview">{importPreview.slice(0,50).map((r:any)=><div key={r.row}><span>#{r.row}</span><strong>{r.name}</strong><small>{r.record_type_slug} • {r.workflow_status}</small></div>)}</div>}</section>}
 {databaseTab==="backup"&&<section className="admin-panel"><span className="card-label">PORTABILITY & RECOVERY</span><h2>Export & Backup Center</h2><p className="admin-help">Export the current operational database locally or create a named server snapshot before a major editing session.</p><div className="database-backup-actions"><button className="secondary-action" onClick={exportStudioData}>Export Full JSON</button>{adminRole==="primary_admin"&&<><input placeholder="Backup label — e.g. Before Moonwood Import" value={backupLabel} onChange={e=>setBackupLabel(e.target.value)}/><button className="primary-action" onClick={()=>void createStudioBackup()}>Create Named Snapshot</button></>}</div><div className="admin-feed">{backups.map(b=><div className="admin-feed-row" key={b.id}><strong>{b.label}</strong><span>{new Date(b.created_at).toLocaleString()}</span></div>)}</div></section>}
  </section></main>;
 }
 
 if(page==="admin"){
 const pending=adminContent.filter(x=>x.workflow_status==="in_review").length;
-return <main className="dashboard-shell admin-center-page"><StudioTopNav /><section className="admin-center-shell"><div className="admin-center-hero"><div><p className="eyebrow">COLLABORATIVE DATABASE CONTROL</p><h1>Admin Center</h1><p>Manage your team, review content, follow changes, preserve revisions, and keep private production notes.</p></div><button className="secondary-action" onClick={()=>void loadAdminCenter()}>{adminBusy?"Refreshing...":"Refresh"}</button></div>{adminError&&<p className="login-error">{adminError}</p>}<div className="admin-metrics"><div><strong>{adminMembers.length}</strong><span>Team Members</span></div><div><strong>{adminContent.length}</strong><span>Managed Records</span></div><div><strong>{pending}</strong><span>In Review</span></div><div><strong>{adminRevisions.length}</strong><span>Recent Revisions</span></div></div><nav className="admin-tabs">{(["overview","content","activity","sessions","revisions","notes","team"] as const).map(tab=><button key={tab} className={adminTab===tab?"active":""} onClick={()=>setAdminTab(tab)}>{tab}</button>)}</nav><StudioGuide title={`${adminTab[0].toUpperCase()+adminTab.slice(1)} tab`}>{adminGuide[adminTab]}</StudioGuide>
+return <main className="dashboard-shell admin-center-page"><StudioTopNav /><section className="admin-center-shell"><div className="admin-center-hero"><div><p className="eyebrow">COLLABORATIVE DATABASE CONTROL</p><h1>Admin Center</h1><p>Manage your team, review content, follow changes, preserve revisions, and keep private production notes.</p></div><button className="secondary-action" onClick={()=>void loadAdminCenter()}>{adminBusy?"Refreshing...":"Refresh"}</button></div>{adminError&&<p className="login-error">{adminError}</p>}<div className="admin-metrics"><div><strong>{adminMembers.length}</strong><span>Team Members</span></div><div><strong>{adminContent.length}</strong><span>Managed Records</span></div><div><strong>{pending}</strong><span>In Review</span></div><div><strong>{adminRevisions.length}</strong><span>Recent Revisions</span></div></div><nav className="admin-tabs">{(["overview","content","activity","sessions","revisions","notes","team","training"] as const)
+.filter(tab=>tab!=="training"||adminRole==="primary_admin"||adminRole==="admin")
+.map(tab=><button key={tab} className={adminTab===tab?"active":""} onClick={()=>{setAdminTab(tab);if(tab==="training")void loadAdminTraining();}}>{tab}</button>)}</nav><StudioGuide title={`${adminTab[0].toUpperCase()+adminTab.slice(1)} tab`}>{adminGuide[adminTab]}</StudioGuide>
 {adminTab==="overview"&&<div className="admin-overview-grid"><section className="admin-panel"><span className="card-label">WORKFLOW</span><h2>Editorial Queue</h2><p>{pending?`${pending} record${pending===1?" is":"s are"} waiting for review.`:"Nothing is waiting for review."}</p><button className="secondary-action" onClick={()=>setAdminTab("content")}>Open Content Manager</button></section><section className="admin-panel"><span className="card-label">RECENT ACTIVITY</span><h2>Latest Changes</h2>{adminActivity.slice(0,6).map(x=><div className="admin-feed-row" key={x.id}><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")} • {adminMembers.find(m=>m.user_id===x.actor_user_id)?.display_name||x.actor_email||"system"}</span></div>)}</section></div>}
 {adminTab==="content"&&<section className="admin-panel"><div className="admin-panel-heading"><div><span className="card-label">DATABASE WORKFLOW</span><h2>Content Manager</h2></div><small>Draft → In Review → Approved → Published</small></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Record</th><th>Type</th><th>Creator</th><th>Workflow</th><th>Updated</th></tr></thead><tbody>{adminContent.map(row=><tr key={`${row.entity_type}:${row.id}`}><td><strong>{row.label}</strong></td><td>{row.entity_type}</td><td>{adminMembers.find(x=>x.user_id===row.user_id)?.display_name||adminMembers.find(x=>x.user_id===row.user_id)?.email||"Creator"}</td><td><select value={row.workflow_status} onChange={e=>void setWorkflowStatus(row,e.target.value)}><option value="draft">Draft</option><option value="in_review">In Review</option><option value="approved">Approved</option><option value="published">Published</option></select></td><td>{row.updated_at?new Date(row.updated_at).toLocaleString():"—"}</td></tr>)}</tbody></table></div></section>}
 {adminTab==="activity"&&<section className="admin-panel"><span className="card-label">AUDIT TRAIL</span><h2>Activity Log</h2><div className="admin-feed">{adminActivity.map(x=><div className="admin-feed-row" key={x.id}><div><strong>{x.entity_label||x.entity_type}</strong><span>{x.action.replace(/_/g," ")}</span></div><small>{adminMembers.find(m=>m.user_id===x.actor_user_id)?.display_name||x.actor_email||"system"} • {new Date(x.created_at).toLocaleString()}</small></div>)}</div></section>}
 {adminTab==="sessions"&&<section className="admin-panel"><span className="card-label">LOGIN & PRESENCE HISTORY</span><h2>Collaborator Sessions</h2><p className="admin-help">Every authorized Studio login is timestamped. Last seen updates while Studio remains open.</p><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Collaborator</th><th>Role</th><th>Signed In</th><th>Last Seen</th><th>Signed Out</th></tr></thead><tbody>{collaboratorSessions.map(x=><tr key={x.id}><td><strong>{x.display_name||adminMembers.find(m=>m.user_id===x.user_id)?.display_name||x.email||"Studio Member"}</strong></td><td>{x.role||"member"}</td><td>{new Date(x.signed_in_at).toLocaleString()}</td><td>{new Date(x.last_seen_at).toLocaleString()}</td><td>{x.signed_out_at?new Date(x.signed_out_at).toLocaleString():<span className="presence-live">● Active / no logout recorded</span>}</td></tr>)}</tbody></table></div></section>}
 {adminTab==="revisions"&&<section className="admin-panel"><span className="card-label">VERSION HISTORY</span><h2>Recent Revisions</h2><p className="admin-help">A snapshot is captured before tracked records are changed or deleted, giving you a history independent of the live record.</p><div className="admin-feed">{adminRevisions.map(x=><details className="revision-row" key={x.id}><summary><strong>{x.entity_label||x.entity_type}</strong><span>{adminMembers.find(m=>m.user_id===x.changed_by)?.display_name||x.changed_by_email||"system"} • {new Date(x.created_at).toLocaleString()}</span></summary><pre>{JSON.stringify(x.snapshot,null,2)}</pre></details>)}</div></section>}
 {adminTab==="notes"&&<section className="admin-panel"><span className="card-label">PRIVATE PRODUCTION NOTES</span><h2>Admin Notes</h2><div className="admin-note-form"><select value={adminNoteEntityType} onChange={e=>setAdminNoteEntityType(e.target.value)}><option value="general">General Studio</option><option value="character">Character</option><option value="codex">Codex</option><option value="location">Location</option><option value="timeline">Timeline</option></select><input value={adminNoteEntityId} onChange={e=>setAdminNoteEntityId(e.target.value)} placeholder="Record ID or studio"/><textarea value={adminNoteText} onChange={e=>setAdminNoteText(e.target.value)} placeholder="Private note for the admin team..."/><button className="primary-action" onClick={()=>void addAdminNote()}>Add Private Note</button></div><div className="admin-feed">{adminNotes.map(n=><div className="admin-note-card" key={n.id}><div><span>{n.entity_type} • {n.entity_id}</span><small>{n.created_by_email||"admin"} • {new Date(n.updated_at).toLocaleString()}</small></div><p>{n.note}</p><button onClick={()=>void deleteAdminNote(n.id)}>Delete</button></div>)}</div></section>}
+{adminTab==="training"&&
+<section className="admin-panel training-admin-panel">
+  <div className="admin-panel-heading">
+    <div>
+      <span className="card-label">TEAM DEVELOPMENT</span>
+      <h2>Studio Training</h2>
+    </div>
+
+    <button
+      className="secondary-action"
+      disabled={trainingBusy}
+      onClick={()=>void loadAdminTraining()}
+    >
+      {trainingBusy?"Refreshing...":"Refresh Training"}
+    </button>
+  </div>
+
+  {trainingError&&<p className="login-error">{trainingError}</p>}
+  {trainingMessage&&<p className="my-profile-success">{trainingMessage}</p>}
+
+  {(adminRole==="primary_admin"||adminRole==="admin")&&
+  <div className="training-admin-grid">
+
+    <section className="training-create-card">
+      <span className="card-label">NEW TRAINING</span>
+      <h3>Create & Assign</h3>
+
+      <label>
+        <span>Training Title</span>
+        <input
+          value={trainingTitle}
+          onChange={e=>setTrainingTitle(e.target.value)}
+          placeholder="Example: Character Import Workflow"
+        />
+      </label>
+
+      <label>
+        <span>Instructions</span>
+        <textarea
+          value={trainingDescription}
+          onChange={e=>setTrainingDescription(e.target.value)}
+          placeholder="Explain what the team member should learn or complete..."
+        />
+      </label>
+
+      <div className="training-upload-grid">
+        <label className="training-file-field">
+          <span>Training Video</span>
+          <input
+            type="file"
+            accept="video/*"
+            onChange={e=>setTrainingVideoFile(e.target.files?.[0]??null)}
+          />
+          <small>
+            {trainingVideoFile
+              ?trainingVideoFile.name
+              :"Optional video • 20 MB maximum"}
+          </small>
+        </label>
+
+        <label className="training-file-field">
+          <span>Resource File</span>
+          <input
+            type="file"
+            onChange={e=>setTrainingResourceFile(e.target.files?.[0]??null)}
+          />
+          <small>
+            {trainingResourceFile
+              ?trainingResourceFile.name
+              :"Optional resource • 20 MB maximum"}
+          </small>
+        </label>
+      </div>
+
+      <div className="training-member-picker">
+        <div className="training-section-heading">
+          <div>
+            <span className="card-label">ASSIGN TO</span>
+            <h3>Team Members</h3>
+          </div>
+
+          <small>{trainingSelectedMembers.length} selected</small>
+        </div>
+
+        <div className="training-member-list">
+          {adminMembers.map(member=>
+            <label
+              className="training-member-option"
+              key={member.user_id}
+            >
+              <input
+                type="checkbox"
+                checked={trainingSelectedMembers.includes(member.user_id)}
+                onChange={()=>toggleTrainingMember(member.user_id)}
+              />
+
+              <span>
+                <strong>
+                  {member.display_name||member.email||"Studio Member"}
+                </strong>
+
+                <small>
+                  {member.email} • {member.role.replace(/_/g," ")}
+                </small>
+              </span>
+            </label>
+          )}
+        </div>
+      </div>
+
+      <button
+        className="primary-action"
+        disabled={trainingBusy}
+        onClick={()=>void createTraining()}
+      >
+        {trainingBusy
+          ?"Creating Training..."
+          :"Create & Assign Training"}
+      </button>
+    </section>
+
+    <section className="training-library-card">
+      <div className="training-section-heading">
+        <div>
+          <span className="card-label">TRAINING LIBRARY</span>
+          <h3>Lessons & Progress</h3>
+        </div>
+
+        <small>
+          {trainingItems.length} lesson{trainingItems.length===1?"":"s"}
+        </small>
+      </div>
+
+      {trainingItems.length===0&&
+        <div className="my-profile-empty">
+          <strong>No training created yet.</strong>
+          <span>Create the first Studio training lesson.</span>
+        </div>
+      }
+
+      <div className="training-library-list">
+        {trainingItems.map(item=>{
+          const assigned=trainingAssignments.filter(
+            assignment=>assignment.training_id===item.id
+          );
+
+          return (
+            <article className="training-library-item" key={item.id}>
+              <div className="training-library-heading">
+                <div>
+                  <h3>{item.title}</h3>
+
+                  <small>
+                    Created by {item.created_by_name||"Studio Admin"}
+                    {" • "}
+                    {new Date(item.created_at).toLocaleString()}
+                  </small>
+                </div>
+
+                <button
+                  className="danger-action"
+                  disabled={trainingBusy}
+                  onClick={()=>void deleteTraining(item.id,item.title)}
+                >
+                  Delete
+                </button>
+              </div>
+
+              {item.description&&<p>{item.description}</p>}
+
+              <div className="training-resource-links">
+                {item.video_url&&
+                  <a
+                    href={item.video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Training Video
+                  </a>
+                }
+
+                {item.resource_url&&
+                  <a
+                    href={item.resource_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {item.resource_name||"Open Resource"}
+                  </a>
+                }
+              </div>
+
+              <div className="training-progress-list">
+                {assigned.length===0&&
+                  <small>No team members assigned.</small>
+                }
+
+                {assigned.map(assignment=>
+                  <div
+                    className="training-progress-row"
+                    key={assignment.id}
+                  >
+                    <div>
+                      <strong>
+                        {assignment.assigned_to_name||
+                         assignment.assigned_to_email||
+                         "Studio Member"}
+                      </strong>
+
+                      <small>
+                        Assigned {new Date(
+                          assignment.assigned_at
+                        ).toLocaleDateString()}
+                      </small>
+                    </div>
+
+                    <span className={`training-status ${assignment.status}`}>
+                      {assignment.status.replace(/_/g," ")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+
+  </div>
+  }
+</section>
+}
 {adminTab==="team"&&<section className="admin-panel"><span className="card-label">ACCESS & ROLES</span><h2>Studio Team</h2>{adminRole==="primary_admin"&&<div className="admin-add-member"><input type="email" value={adminMemberEmail} onChange={e=>setAdminMemberEmail(e.target.value)} placeholder="Existing Umbra Studio account email"/><select value={adminMemberRole} onChange={e=>setAdminMemberRole(e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button className="primary-action" onClick={()=>void addStudioAdmin()}>Add Collaborator</button></div>}<div className="admin-team-grid">{adminMembers.map(m=><article className="admin-member-card" key={m.user_id}><div><strong>{m.display_name||m.email||"Studio Member"}</strong><span>{m.email}</span></div><span className="admin-role-pill">{m.role}</span><small>Last login: {m.last_login_at?new Date(m.last_login_at).toLocaleString():"Never recorded"} • {Boolean(m.password_set)?"Account Active":"Setup Required"}</small>{adminRole==="primary_admin"&&<div className="admin-member-actions"><button onClick={()=>{const n=prompt("Studio display name",m.display_name||"");if(n)void setMemberDisplayName(m.user_id,n)}}>Rename</button>{Boolean(m.password_set)?<span className="admin-role-pill">Account Active</span>:<button onClick={()=>void generateMemberSetupCode(m.user_id)}>Generate Setup Code</button>}<select value={m.role} disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onChange={e=>void changeAdminRole(m.user_id,e.target.value as StudioAdminMember["role"])}><option value="editor">Editor</option><option value="admin">Admin</option><option value="primary_admin">Primary Admin</option></select><button disabled={m.user_id===session?.user.id&&adminMembers.filter(x=>x.role==="primary_admin").length===1} onClick={()=>void removeStudioAdmin(m.user_id)}>Remove</button></div>}{memberSetupCodes[m.user_id]&&<div className="admin-help"><strong>One-time setup code: {memberSetupCodes[m.user_id].code}</strong><br/><small>Expires {new Date(memberSetupCodes[m.user_id].expiresAt).toLocaleString()}. Share this code privately with this member.</small></div>}</article>)}</div></section>}</section></main>;
 }
 
