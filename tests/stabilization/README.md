@@ -20,3 +20,7 @@ node tests/stabilization/stabilization-browser-tests.cjs
 The browser routes the configured production API hostname to the disposable local server. Speech synthesis is instrumented for deterministic control tests; this does not measure audible voice quality. Close the test servers afterward. Restarting the API server resets all fixture data.
 
 The SQLite adapter verifies real SQL, migrations, referential cleanup and handler behavior, but does not replace a final Cloudflare runtime staging check. No migration or deployment runs against production through these tests.
+
+## Actual Cloudflare runtime
+
+The same suites also pass against local Miniflare/workerd D1 and R2. Instead of the SQLite adapter, start `node tests/stabilization/stabilization-cloudflare-server.cjs` after installing the Worker dependencies. Use only one fixture server at a time; both listen on port 8787. This server applies migration 0014 to an isolated, disposable D1 database and uses synthetic sessions. Run the API suites followed by the browser suite as above. This is a local Cloudflare runtime check, not a remote staging or production deployment.
