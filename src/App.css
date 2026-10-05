@@ -2849,3 +2849,11 @@ select optgroup {
 .v9-real-graph:active{cursor:grabbing}
 .v9-real-graph .v9-graph-node{cursor:grab}
 .v9-real-graph .v9-graph-node:active{cursor:grabbing}
+/* v1.2.1 Production multi-select + bulk delete */
+.v121-production-selection{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:12px}
+.v121-production-selection>span{opacity:.78;margin-right:auto}
+.v121-select-all,.v121-record-check{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.v121-record-check{font-size:.82rem;margin-bottom:8px}
+.v121-record-check input,.v121-select-all input{width:16px;height:16px}
+.v121-selected{outline:2px solid rgba(191,156,255,.65);outline-offset:2px}
+.v121-production-selection button:disabled{opacity:.45;cursor:not-allowed}
