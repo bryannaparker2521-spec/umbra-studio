@@ -1,3 +1,4 @@
+import { entityType, resolveRecord, cleanFavorites, searchRecords, importResults, submitImport } from './navigation';
 interface Env {
 	umbra_studio_production: D1Database;
 	umbra_studio_media: R2Bucket;
@@ -189,7 +190,7 @@ async function getAll(
 	return result.results ?? [];
 }
 
-export default {
+const studioHandler = {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
 
@@ -342,6 +343,32 @@ export default {
 			}
 
 			const user = await authenticate(request, env);
+            const navRecord = url.pathname.match(/^\/api\/navigation\/records\/([^/]+)\/([^/]+)$/);
+            if (request.method === 'GET' && navRecord) {
+                const type=entityType(decodeURIComponent(navRecord[1]));
+                const live=type?await resolveRecord(env.umbra_studio_production,type,decodeURIComponent(navRecord[2])):null;
+                return live?json({ok:true,...live}):errorResponse(404,'Record no longer exists.');
+            }
+            if(request.method==='GET'&&url.pathname==='/api/navigation/search')
+                return json({ok:true,results:await searchRecords(env.umbra_studio_production,url.searchParams.get('q')||'')});
+            if(request.method==='GET'&&url.pathname==='/api/imports')
+                return json({ok:true,results:await importResults(env.umbra_studio_production,user.id)});
+            const reviewImport=url.pathname.match(/^\/api\/imports\/([^/]+)\/review$/);
+            if(request.method==='PUT'&&reviewImport){
+                const b=await readJsonBody(request),id=decodeURIComponent(reviewImport[1]);
+                const event=await env.umbra_studio_production.prepare('SELECT entity_type,entity_id FROM studio_import_results WHERE id=?').bind(id).first<{entity_type:string;entity_id:string}>();
+                const type=event?entityType(event.entity_type):null;
+                if(!event||!type||!await resolveRecord(env.umbra_studio_production,type,event.entity_id))return errorResponse(404,'Imported record no longer exists.');
+                if(b.reviewed===false)await env.umbra_studio_production.prepare('DELETE FROM studio_import_reviews WHERE import_id=? AND user_id=?').bind(id,user.id).run();
+                else await env.umbra_studio_production.prepare('INSERT INTO studio_import_reviews(import_id,user_id,reviewed_at) VALUES(?,?,?) ON CONFLICT(import_id,user_id) DO UPDATE SET reviewed_at=excluded.reviewed_at').bind(id,user.id,new Date().toISOString()).run();
+                return json({ok:true});
+            }
+            if(request.method==='POST'&&url.pathname==='/api/imports/submit'){
+                requireRole(user,['primary_admin','admin','editor']);
+                const response=await submitImport(request,env.umbra_studio_production,user.id,r=>studioHandler.fetch(r,env));
+                return new Response(response.body,{status:response.status,headers:{...corsHeaders,'Content-Type':'application/json'}});
+            }
+
                   // MY ACCOUNT PASSWORD
                   if(request.method==="PATCH"&&url.pathname==="/api/me/password"){
                           const b=await readJsonBody(request);
@@ -1439,6 +1466,7 @@ requireRole(user,["primary_admin","admin","editor"]);
 const id=decodeURIComponent(prodMatch[2]);
 const b=await readJsonBody(request);
 const table=productionTables[prodMatch[1]];
+if(!await env.umbra_studio_production.prepare(`SELECT id FROM ${table} WHERE id=?`).bind(id).first())return errorResponse(404,"Production record does not exist.");
 const now=new Date().toISOString();
 
 if(Object.keys(b).length===1&&b.status!==undefined){
@@ -1609,8 +1637,18 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 				requireRole(user,["primary_admin","admin","editor"]);const id=decodeURIComponent(reviewMatch[1]),now=new Date().toISOString();
 				await env.umbra_studio_production.prepare(`UPDATE studio_review_comments SET status='resolved',resolved_by=?,resolved_at=? WHERE id=?`).bind(user.id,now,id).run();return json({ok:true,id});
 			}
-			if(request.method==="POST"&&url.pathname==="/api/production/assignments"){
-				requireRole(user,["primary_admin","admin","editor"]);const b=await readJsonBody(request),id=crypto.randomUUID(),now=new Date().toISOString();
+			const assignmentStatusMatch=url.pathname.match(/^\/api\/production\/assignments\/([^/]+)$/);
+            if(request.method==='PATCH'&&assignmentStatusMatch){
+                const id=decodeURIComponent(assignmentStatusMatch[1]);
+                const assignment=await env.umbra_studio_production.prepare('SELECT assigned_to FROM studio_assignments WHERE id=?').bind(id).first<{assigned_to:string}>();
+                if(!assignment)return errorResponse(404,'Assignment does not exist.');
+                if(user.role==='editor'&&assignment.assigned_to!==user.id)return errorResponse(403,'You can update only your own assignments.');
+                const b=await readJsonBody(request),status=String(b.status||'');
+                if(!['open','todo','in_progress','review','done','cancelled'].includes(status))return errorResponse(400,'Unsupported assignment status.');
+                await env.umbra_studio_production.prepare('UPDATE studio_assignments SET status=?,updated_at=? WHERE id=?').bind(status,new Date().toISOString(),id).run();return json({ok:true,id});
+            }
+            if(request.method==="POST"&&url.pathname==="/api/production/assignments"){
+				requireRole(user,["primary_admin","admin"]);const b=await readJsonBody(request),id=crypto.randomUUID(),now=new Date().toISOString();
 				await env.umbra_studio_production.prepare(`INSERT INTO studio_assignments(id,title,description,entity_type,entity_id,assigned_to,assigned_by,priority,status,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
 				.bind(id,String(b.title??""),nullableString(b.description),nullableString(b.entity_type),nullableString(b.entity_id),String(b.assigned_to),user.id,String(b.priority??"normal"),"open",nullableString(b.due_at),now,now).run();return json({ok:true,id},201);
 			}
@@ -1766,8 +1804,9 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 
 			if(request.method==="GET"&&url.pathname==="/api/explorer"){
 				const atlas=await env.umbra_studio_production.prepare(`SELECT * FROM studio_world_atlas LIMIT 1`).first<any>();
-				let favorites:any[]=[];
-				try{favorites=await getAll(env,`SELECT entity_type AS item_type,entity_id AS item_id FROM studio_favorites WHERE user_id=?`,[user.id]);}catch{favorites=[];}
+				await cleanFavorites(env.umbra_studio_production,user.id);
+                let favorites:any[]=[];
+				favorites=await getAll(env,`SELECT entity_type AS item_type,entity_id AS item_id FROM studio_favorites WHERE user_id=?`,[user.id]);
 				return json({ok:true,atlas:atlas??null,favorites});
 			}
 			if(request.method==="PUT"&&url.pathname==="/api/explorer/atlas"){
@@ -1797,6 +1836,8 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
                                 }
 
                                 if(enabled){
+                                        const canonicalType=entityType(type==='event'?'timeline':type);
+                                        if(!canonicalType||!await resolveRecord(env.umbra_studio_production,canonicalType,entityId))return errorResponse(404,'Cannot favorite a record that does not exist.');
                                         const existing=await env.umbra_studio_production.prepare(
                                                 `SELECT rowid FROM studio_favorites WHERE user_id=? AND entity_type=? AND entity_id=? LIMIT 1`
                                         ).bind(user.id,type,entityId).first<any>();
@@ -1920,3 +1961,4 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 		}
 	},
 } satisfies ExportedHandler<Env>;
+export default studioHandler;
