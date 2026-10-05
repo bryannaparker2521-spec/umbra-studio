@@ -1,4 +1,5 @@
 import { entityType, resolveRecord, cleanFavorites, searchRecords, importResults, submitImport } from './navigation';
+import { lifecycleRequest } from './lifecycle';
 interface Env {
 	umbra_studio_production: D1Database;
 	umbra_studio_media: R2Bucket;
@@ -343,6 +344,8 @@ const studioHandler = {
 			}
 
 			const user = await authenticate(request, env);
+            const lifecycle = await lifecycleRequest(request, env.umbra_studio_production, user);
+            if (lifecycle) return new Response(lifecycle.body,{status:lifecycle.status,headers:{...corsHeaders,'Content-Type':'application/json'}});
             const navRecord = url.pathname.match(/^\/api\/navigation\/records\/([^/]+)\/([^/]+)$/);
             if (request.method === 'GET' && navRecord) {
                 const type=entityType(decodeURIComponent(navRecord[1]));
@@ -593,6 +596,7 @@ const studioHandler = {
 					`
 						SELECT *
 						FROM studio_characters
+						${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"}
 						ORDER BY name COLLATE NOCASE ASC
 					`,
 				);
@@ -617,6 +621,7 @@ const studioHandler = {
 					`
 						SELECT *
 						FROM studio_world_records
+						${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"}
 						ORDER BY name COLLATE NOCASE ASC
 					`,
 				);
@@ -641,6 +646,7 @@ const studioHandler = {
 					`
 						SELECT *
 						FROM studio_world_locations
+						${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"}
 						ORDER BY name COLLATE NOCASE ASC
 					`,
 				);
@@ -665,6 +671,7 @@ const studioHandler = {
 					`
 						SELECT *
 						FROM studio_timeline_events
+						${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"}
 						ORDER BY created_at DESC
 					`,
 				);
@@ -1240,16 +1247,16 @@ const studioHandler = {
 			// ------------------------------------------------------------
 			if(request.method==="GET"&&url.pathname==="/api/production"){
 const [projects,arcs,chapters,scenes,beats,links,comments,assignments,notifications,journey,changes]=await Promise.all([
-getAll(env,`SELECT * FROM studio_story_projects ORDER BY updated_at DESC`),
-getAll(env,`SELECT * FROM studio_story_arcs ORDER BY sort_order ASC,updated_at DESC`),
-getAll(env,`SELECT * FROM studio_story_chapters ORDER BY sort_order ASC,updated_at DESC`),
-getAll(env,`SELECT * FROM studio_story_scenes ORDER BY sort_order ASC,updated_at DESC`),
-getAll(env,`SELECT * FROM studio_story_beats ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_projects ${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"} ORDER BY updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_arcs ${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"} ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_chapters ${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"} ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_scenes ${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"} ORDER BY sort_order ASC,updated_at DESC`),
+getAll(env,`SELECT * FROM studio_story_beats ${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"} ORDER BY sort_order ASC,updated_at DESC`),
 getAll(env,`SELECT * FROM studio_story_entity_links ORDER BY created_at DESC`),
 getAll(env,`SELECT * FROM studio_review_comments ORDER BY created_at DESC LIMIT 300`),
 getAll(env,`SELECT * FROM studio_assignments ORDER BY updated_at DESC LIMIT 300`),
 getAll(env,`SELECT * FROM studio_notifications WHERE recipient_user_id=? ORDER BY created_at DESC LIMIT 300`,[user.id]),
-getAll(env,`SELECT * FROM studio_character_journey ORDER BY sort_order ASC,created_at DESC LIMIT 500`),
+getAll(env,`SELECT * FROM studio_character_journey ${url.searchParams.get("include_archived")==="1"?"":"WHERE archived_at IS NULL"} ORDER BY sort_order ASC,created_at DESC LIMIT 500`),
 getAll(env,`SELECT id,actor_user_id,COALESCE(actor_name,actor_email,'Studio Member') actor_name,action,entity_type,entity_id,entity_label,created_at FROM studio_activity_log ORDER BY created_at DESC LIMIT 100`)
 ]);
 
@@ -1687,7 +1694,7 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 			// ------------------------------------------------------------
 			if(request.method==="GET"&&url.pathname==="/api/world-database"){
 				const [types,records,collections,tags,links,media,backups,colItems,tagItems,revisions,locks,templates,attachments,references,canon,issues,publicRows]=await Promise.all([
-					getAll(env,`SELECT * FROM studio_record_types ORDER BY name`),getAll(env,`SELECT * FROM studio_database_records ORDER BY updated_at DESC`),
+					getAll(env,`SELECT * FROM studio_record_types ORDER BY name`),getAll(env,`SELECT r.*,s.slug import_slug FROM studio_database_records r LEFT JOIN studio_entity_slugs s ON s.entity_type='database' AND s.entity_id=r.id ORDER BY r.updated_at DESC`),
 					getAll(env,`SELECT * FROM studio_collections ORDER BY name`),getAll(env,`SELECT id,name,created_at FROM studio_tags ORDER BY name`),
 					getAll(env,`SELECT * FROM studio_universal_links ORDER BY created_at DESC LIMIT 500`),getAll(env,`SELECT * FROM studio_media_assets ORDER BY updated_at DESC`),
 					getAll(env,`SELECT id,created_by,label,snapshot,created_at FROM studio_backup_snapshots ORDER BY created_at DESC LIMIT 50`),
@@ -1717,7 +1724,8 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 			}
 			if(dbRecordMatch&&request.method==="PATCH"){
 				requireRole(user,["primary_admin","admin","editor"]);const id=decodeURIComponent(dbRecordMatch[1]),b=await readJsonBody(request);
-				if("archived_at" in b)await env.umbra_studio_production.prepare(`UPDATE studio_database_records SET archived_at=?,updated_at=? WHERE id=?`).bind(nullableString(b.archived_at),new Date().toISOString(),id).run();
+				const live=await env.umbra_studio_production.prepare('SELECT id FROM studio_database_records WHERE id=?').bind(id).first();if(!live)return errorResponse(404,'Record no longer exists.');
+                if("archived_at" in b)await env.umbra_studio_production.prepare(`UPDATE studio_database_records SET archived_at=?,updated_at=? WHERE id=?`).bind(nullableString(b.archived_at),new Date().toISOString(),id).run();
 				else if("workflow_status" in b)await env.umbra_studio_production.prepare(`UPDATE studio_database_records SET workflow_status=?,updated_at=? WHERE id=?`).bind(String(b.workflow_status),new Date().toISOString(),id).run();
 				return json({ok:true,id});
 			}
@@ -1737,7 +1745,7 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 			if(lockMatch&&request.method==="POST"){const rid=decodeURIComponent(lockMatch[1]),now=new Date(),exp=new Date(now.getTime()+15*60000).toISOString();const existing=await env.umbra_studio_production.prepare(`SELECT locked_by,expires_at FROM studio_database_locks WHERE record_id=?`).bind(rid).first<any>();if(existing&&existing.locked_by!==user.id&&String(existing.expires_at)>now.toISOString())return errorResponse(409,"This record is currently being edited by another Studio admin.");await env.umbra_studio_production.prepare(`INSERT OR REPLACE INTO studio_database_locks(record_id,locked_by,locked_by_email,locked_at,expires_at) VALUES(?,?,?,?,?)`).bind(rid,user.id,user.email,now.toISOString(),exp).run();return json({ok:true});}
 			if(lockMatch&&request.method==="DELETE"){await env.umbra_studio_production.prepare(`DELETE FROM studio_database_locks WHERE record_id=? AND locked_by=?`).bind(decodeURIComponent(lockMatch[1]),user.id).run();return json({ok:true});}
 			const revRestore=url.pathname.match(/^\/api\/world-database\/revisions\/([^/]+)\/restore$/);
-			if(revRestore&&request.method==="POST"){requireRole(user,["primary_admin","admin"]);const rev=await env.umbra_studio_production.prepare(`SELECT * FROM studio_database_revisions WHERE id=?`).bind(decodeURIComponent(revRestore[1])).first<any>();if(!rev)return errorResponse(404,"Revision not found.");let snap:any={};try{snap=JSON.parse(rev.snapshot)}catch{return errorResponse(400,"Revision snapshot is invalid.");}const rid=String(rev.record_id);const cur=await env.umbra_studio_production.prepare(`SELECT * FROM studio_database_records WHERE id=?`).bind(rid).first<any>();if(cur)await env.umbra_studio_production.prepare(`INSERT INTO studio_database_revisions(id,record_id,record_code,record_name,changed_by,changed_by_email,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),rid,cur.record_code,cur.name,user.id,user.email,JSON.stringify(cur),new Date().toISOString()).run();await env.umbra_studio_production.prepare(`UPDATE studio_database_records SET name=?,subtitle=?,summary=?,details=?,image_url=?,notes=?,workflow_status=?,archived_at=?,updated_by=?,updated_at=? WHERE id=?`).bind(snap.name,snap.subtitle,snap.summary,typeof snap.details==="string"?snap.details:JSON.stringify(snap.details??{}),snap.image_url,snap.notes,snap.workflow_status,snap.archived_at,user.id,new Date().toISOString(),rid).run();return json({ok:true,id:rid});}
+			if(revRestore&&request.method==="POST"){requireRole(user,["primary_admin","admin"]);const rev=await env.umbra_studio_production.prepare(`SELECT * FROM studio_database_revisions WHERE id=?`).bind(decodeURIComponent(revRestore[1])).first<any>();if(!rev)return errorResponse(404,"Revision not found.");let snap:any={};try{snap=JSON.parse(rev.snapshot)}catch{return errorResponse(400,"Revision snapshot is invalid.");}const rid=String(rev.record_id);const cur=await env.umbra_studio_production.prepare(`SELECT * FROM studio_database_records WHERE id=?`).bind(rid).first<any>();if(!cur)return errorResponse(404,'The original record was deleted. Revisions cannot recreate it.');if(cur)await env.umbra_studio_production.prepare(`INSERT INTO studio_database_revisions(id,record_id,record_code,record_name,changed_by,changed_by_email,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),rid,cur.record_code,cur.name,user.id,user.email,JSON.stringify(cur),new Date().toISOString()).run();await env.umbra_studio_production.prepare(`UPDATE studio_database_records SET name=?,subtitle=?,summary=?,details=?,image_url=?,notes=?,workflow_status=?,archived_at=?,updated_by=?,updated_at=? WHERE id=?`).bind(snap.name,snap.subtitle,snap.summary,typeof snap.details==="string"?snap.details:JSON.stringify(snap.details??{}),snap.image_url,snap.notes,snap.workflow_status,snap.archived_at,user.id,new Date().toISOString(),rid).run();return json({ok:true,id:rid});}
 
 
 			// ------------------------------------------------------------
@@ -1794,7 +1802,7 @@ if(request.method==="POST"&&url.pathname==="/api/production/links"){
 			const continuityMatch=url.pathname.match(/^\/api\/world-database\/continuity\/([^/]+)$/);if(continuityMatch&&request.method==="PATCH"){const id=decodeURIComponent(continuityMatch[1]),b=await readJsonBody(request),status=String(b.status??"open"),now=new Date().toISOString();await env.umbra_studio_production.prepare(`UPDATE studio_continuity_issues SET status=?,resolved_by=?,resolved_at=?,updated_at=? WHERE id=?`).bind(status,status==="resolved"?user.id:null,status==="resolved"?now:null,now,id).run();return json({ok:true,id});}
 			if(request.method==="PUT"&&url.pathname==="/api/public-settings"){requireRole(user,["primary_admin"]);const b=await readJsonBody(request);const current=await env.umbra_studio_production.prepare(`SELECT id,title,subtitle,introduction,hero_image_url,is_enabled FROM studio_public_settings LIMIT 1`).first<any>();if(!current)return errorResponse(404,"Public settings are not initialized.");await env.umbra_studio_production.prepare(`UPDATE studio_public_settings SET title=?,subtitle=?,introduction=?,hero_image_url=?,is_enabled=?,updated_by=?,updated_at=? WHERE id=?`).bind(String(b.title??current.title??"Umbra Encyclopedia"),b.subtitle===undefined?current.subtitle:nullableString(b.subtitle),b.introduction===undefined?current.introduction:nullableString(b.introduction),b.hero_image_url===undefined?current.hero_image_url:nullableString(b.hero_image_url),b.is_enabled===undefined?Number(current.is_enabled??0):boolInt(b.is_enabled),user.id,new Date().toISOString(),current.id).run();return json({ok:true});}
 			if(request.method==="GET"&&url.pathname==="/api/public-encyclopedia"){
-				const settings=await env.umbra_studio_production.prepare(`SELECT * FROM studio_public_settings LIMIT 1`).first<any>();if(!settings?.is_enabled)return errorResponse(409,"The public Umbra Encyclopedia is not enabled yet.");const [records,types,characters,codex,locations,timeline]=await Promise.all([getAll(env,`SELECT * FROM studio_database_records WHERE is_public=1 AND workflow_status='published' AND archived_at IS NULL ORDER BY name`),getAll(env,`SELECT * FROM studio_record_types ORDER BY name`),getAll(env,`SELECT * FROM studio_characters WHERE is_public=1 AND is_complete=1 ORDER BY updated_at DESC`),getAll(env,`SELECT * FROM studio_world_records WHERE is_public=1 ORDER BY name`),getAll(env,`SELECT * FROM studio_world_locations WHERE is_public=1 AND archived_at IS NULL ORDER BY name`),getAll(env,`SELECT * FROM studio_timeline_events WHERE is_public=1 AND archived_at IS NULL ORDER BY sort_order`)]);return json({ok:true,settings,records,types,characters,codex,locations,timeline});
+				const settings=await env.umbra_studio_production.prepare(`SELECT * FROM studio_public_settings LIMIT 1`).first<any>();if(!settings?.is_enabled)return errorResponse(409,"The public Umbra Encyclopedia is not enabled yet.");const [records,types,characters,codex,locations,timeline]=await Promise.all([getAll(env,`SELECT * FROM studio_database_records WHERE is_public=1 AND workflow_status='published' AND archived_at IS NULL ORDER BY name`),getAll(env,`SELECT * FROM studio_record_types ORDER BY name`),getAll(env,`SELECT * FROM studio_characters WHERE is_public=1 AND is_complete=1 AND archived_at IS NULL ORDER BY updated_at DESC`),getAll(env,`SELECT * FROM studio_world_records WHERE is_public=1 AND archived_at IS NULL ORDER BY name`),getAll(env,`SELECT * FROM studio_world_locations WHERE is_public=1 AND archived_at IS NULL ORDER BY name`),getAll(env,`SELECT * FROM studio_timeline_events WHERE is_public=1 AND archived_at IS NULL ORDER BY sort_order`)]);return json({ok:true,settings,records,types,characters,codex,locations,timeline});
 			}
 
 			if(request.method==="POST"&&url.pathname==="/api/world-relations"){

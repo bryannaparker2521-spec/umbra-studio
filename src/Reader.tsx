@@ -2,9 +2,9 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export function prose(value: unknown): string {
-  if (typeof value === 'string') return value.replace(/https?:\/\/\S+/g, '').replace(/^\s*#{1,6}\s+/gm, '').replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+  if (typeof value === 'string') return value.replace(/^\s*===\s*UMBRA_RECORD_(?:BEGIN|END)\s*===\s*$/gim, '').replace(/^\s*(?:NAME|TYPE|DESTINATION|SLUG|CANON_STATUS|IMPORT_ACTION|CANONICAL_ID|ID)\s*:.*$/gm, '').replace(/^([A-Z][A-Z_ ]{1,60}):/gm, (_, label: string) => label.replace(/_/g, ' ').toLowerCase() + ':').replace(/https?:\/\/\S+/g, '').replace(/^\s*#{1,6}\s+/gm, '').replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
   if (Array.isArray(value)) return value.map(prose).filter(Boolean).join('\n\n');
-  if (value && typeof value === 'object') return Object.entries(value).filter(([k]) => !/(^id$|_id$|url|slug|imported_at|classification|source_heading)/i.test(k)).map(([, v]) => prose(v)).filter(Boolean).join('\n\n');
+  if (value && typeof value === 'object') return Object.entries(value).filter(([k]) => !/(^id$|_id$|url|slug|_at$|^status$|workflow_status|canon_status|is_public|is_complete|classification|source_heading|smart_ingest|import_metadata|source_text|imported_source|structured_sections|unresolved_relationships)/i.test(k)).map(([, v]) => prose(v)).filter(Boolean).join('\n\n');
   return '';
 }
 export function readingSections(text: string): string[] {
@@ -80,5 +80,5 @@ export default function ReaderProvider({ children }: { children: ReactNode }) {
   </ReaderContext.Provider>;
 }
 function voiceScore(voice: SpeechSynthesisVoice) {
-  return (/^en[-_]/i.test(voice.lang) ? 100 : 0) + (voice.localService ? 60 : 0) + (/natural|neural|premium|enhanced/i.test(voice.name) ? 40 : 0) + (voice.default ? 5 : 0);
+  return (/^en[-_]/i.test(voice.lang) ? 100 : 0) + (voice.localService ? 30 : 0) + (/natural|neural|premium|enhanced/i.test(voice.name) ? 70 : 0) + (voice.default ? 5 : 0);
 }
