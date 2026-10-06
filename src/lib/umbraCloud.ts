@@ -1,4 +1,5 @@
 export const UMBRA_CLOUD_URL =
+  import.meta.env.VITE_UMBRA_CLOUD_URL?.trim().replace(/\/$/, "") ||
   "https://umbra-studio-cloud.bryannaparker2521-d60.workers.dev";
 
 export interface UmbraCloudUser {
